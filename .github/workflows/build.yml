@@ -20,10 +20,15 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Gradle 8.2 (AGP 8.2 needs Gradle 8.x, runners ship Gradle 9)
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.2'
+
       - name: Build release APK
         run: |
           gradle --version
-          gradle assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx3g"
+          gradle assembleRelease --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g"
 
       - name: Rename APK
         run: |
