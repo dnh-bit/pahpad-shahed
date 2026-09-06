@@ -13,7 +13,11 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
-        resourceConfigurations += listOf("fa")
+    }
+
+    androidResources {
+        // فقط فارسی — locale filter (AGP 8.1+)، جایگزین resourceConfigurations
+        localeFilters += listOf("fa")
     }
 
     buildTypes {
