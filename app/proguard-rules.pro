@@ -1,0 +1,2 @@
+-keep class ir.shahed.pahpad.MainActivity { *; }
+-dontwarn kotlin.**
