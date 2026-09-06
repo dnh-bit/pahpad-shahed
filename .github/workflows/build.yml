@@ -25,15 +25,27 @@ jobs:
         with:
           gradle-version: '8.2'
 
+      - name: Decode signing key
+        env:
+          KEY_B64: ${{ secrets.PAHPAD_UPLOAD_KEYSTORE_B64 }}
+          KEY_PASS: ${{ secrets.PAHPAD_KEYSTORE_PASSWORD }}
+        run: |
+          echo "$KEY_B64" | base64 --decode > app/upload.jks
+          printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=hoda-upload\nkeyPassword=%s\n' "$KEY_PASS" "$KEY_PASS" > app/keystore.properties
+
       - name: Build release APK
         run: |
           gradle --version
           gradle assembleRelease --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g"
 
+      - name: Locate APK
+        run: find app/build/outputs -name "*.apk"
+
       - name: Rename APK
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk out/pahpad-shahed-v1.0.0.apk
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          cp "$APK" out/pahpad-shahed-v1.0.0.apk
 
       - name: Release
         uses: softprops/action-gh-release@v1
