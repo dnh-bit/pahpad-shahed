@@ -75,8 +75,17 @@ class BriefingScreen(
         Deco.resources(this, c)
 
         val title = if (mode == MissionMode.STORY) "ماموریت " + Fa.num(level.code) + " · " + level.title else level.title
-        ui.text(c, title, vw / 2f, dp(28f), dp(20f), Theme.TEXT, bold = true)
-        ui.text(c, "بریفینگ ماموریت", vw / 2f, dp(50f), dp(12f), Theme.TEXT_DIM)
+        // بنر تصویری منطقه در بالای ستون اطلاعات
+        val envName = when (level.env.name) {
+            "DESERT" -> "env_desert"; "URBAN" -> "env_urban"
+            "NAVAL" -> "env_naval"; else -> "env_special"
+        }
+        val bx = vw * 0.47f
+        val bw2 = vw - bx - dp(16f)
+        val bh2 = dp(54f)
+        ui.image(ui.context, c, envName, bx, dp(12f), bw2, bh2, radius = dp(10f))
+        ui.text(c, title, vw / 2f - dp(30f), dp(12f) + bh2 / 2f + dp(5f), dp(17f), Theme.TEXT, bold = true)
+        ui.text(c, "بریفینگ ماموریت", vw / 2f, dp(12f) + bh2 + dp(20f), dp(12f), Theme.TEXT_DIM)
 
         drawMap(c)
         drawInfo(c)
@@ -163,7 +172,7 @@ class BriefingScreen(
         val x = vw * 0.47f
         val w = vw - x - dp(16f)
         val right = x + w
-        var y = vh * 0.16f
+        var y = vh * 0.16f + dp(38f)
 
         ui.panel(c, x, y, w, dp(112f))
         ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + dp(20f), dp(15f), Theme.AMBER,
@@ -196,9 +205,14 @@ class BriefingScreen(
         }
         y += dp(84f)
 
-        // پهباد انتخابی
+        // پهباد انتخابی (با تصویر)
         val model = DroneModels.byId(save.selectedDroneId) ?: DroneModels.all.first()
         ui.panel(c, x, y, w, dp(96f))
+        val sideName = when (model.id) {
+            "shahed136" -> "drone_136_side"; "shahed238" -> "drone_238_side"; "shahedx" -> "drone_x_side"
+            else -> "drone_131_side"
+        }
+        ui.imageFit(ui.context, c, sideName, x + dp(10f), y + dp(8f), dp(110f), dp(80f))
         ui.text(c, "پهباد انتخابی: " + model.name, right - dp(14f), y + dp(18f), dp(13.5f), model.color,
             bold = true, align = Paint.Align.RIGHT)
         val stats = listOf(

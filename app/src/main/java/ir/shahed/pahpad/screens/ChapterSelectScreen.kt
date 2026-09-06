@@ -74,10 +74,16 @@ class ChapterSelectScreen(game: MainActivity) : BaseScreen(game) {
                 Theme.withAlpha(b.accent, if (unlocked) 0.6f else 0.2f), dp(16f))
 
             val cx = r.centerX()
-            Deco.droneIcon(this, c, cx, r.top + dp(44f), dp(15f), if (unlocked) b.accent else Theme.TEXT_FAINT, 0f)
-            ui.text(c, ch.title, cx, r.top + dp(84f), dp(15f), if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
+            // بنر تصویری منطقه (کویر/شهر/دریا/عملیات ویژه)
+            val envName = when (ch.env.name) {
+                "DESERT" -> "env_desert"; "URBAN" -> "env_urban"
+                "NAVAL" -> "env_naval"; else -> "env_special"
+            }
+            ui.image(ui.context, c, envName, r.left + dp(10f), r.top + dp(10f),
+                r.width() - dp(20f), dp(96f), radius = dp(10f))
+            ui.text(c, ch.title, cx, r.top + dp(126f), dp(15f), if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
             for ((i, line) in ui.wrap(ch.subtitle, dp(11.5f), r.width() - dp(24f)).withIndex()) {
-                ui.text(c, line, cx, r.top + dp(104f) + i * dp(16f), dp(11.5f), Theme.TEXT_DIM)
+                ui.text(c, line, cx, r.top + dp(146f) + i * dp(16f), dp(11.5f), Theme.TEXT_DIM)
             }
 
             if (unlocked) {

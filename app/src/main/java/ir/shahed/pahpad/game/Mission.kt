@@ -155,7 +155,7 @@ class Mission(
         speedMps = 0f
         throttle = 0.72f
         boost = false
-        fuelLeft = maxRange
+        fuelLeft = maxRange * 1.15f // ۱۵٪ ذخیره برای پیچ و مانور
         signalLoss = 0f
         phase = Phase.READY
     }
@@ -239,10 +239,12 @@ class Mission(
         y += moveY * dt
         z += moveZ * dt
 
-        // ---- سوخت
+        // ---- سوخت (فقط مسافت پیموده‌شده توسط خود پهباد؛ باد سوخت نمی‌سوزاند)
         val used = Math.sqrt(
-            ((x - prevX) * (x - prevX) + (y - prevY) * (y - prevY) + (z - prevZ) * (z - prevZ)).toDouble()
-        ).toFloat() * (if (boost) 1.6f else 1f)
+            ((x - prevX - wx * dt) * (x - prevX - wx * dt) +
+             (y - prevY) * (y - prevY) +
+             (z - prevZ - wz * dt) * (z - prevZ - wz * dt)).toDouble()
+        ).toFloat() * (if (boost) 1.25f else 1f)
         fuelLeft -= used
         if (fuelLeft <= 0f) {
             fuelLeft = 0f

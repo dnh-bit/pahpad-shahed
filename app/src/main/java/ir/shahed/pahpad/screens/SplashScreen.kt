@@ -37,7 +37,20 @@ class SplashScreen(game: MainActivity) : BaseScreen(game) {
         ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.25f)
         ui.stroke.strokeWidth = dp(1.4f)
         c.drawLine(cx - vw * 0.55f, cy - dp(60f), cx + dx, cy - dp(60f), ui.stroke)
-        Deco.droneIcon(this, c, cx + dx, cy - dp(60f), dp(18f), Theme.MINT, 90f)
+        // اسپرایت پهباد در حال پرواز
+        val bmp = ui.imageGet(ui.context, "drone_136")
+        if (bmp != null) {
+            val sz = dp(56f)
+            val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
+            c.save()
+            c.rotate(90f, cx + dx, cy - dp(60f))
+            c.drawBitmap(bmp, null,
+                android.graphics.RectF(cx + dx - sz / 2f, cy - dp(60f) - sz / 2f, cx + dx + sz / 2f, cy - dp(60f) + sz / 2f),
+                paint)
+            c.restore()
+        } else {
+            Deco.droneIcon(this, c, cx + dx, cy - dp(60f), dp(18f), Theme.MINT, 90f)
+        }
 
         ui.text(c, "پهباد شاهد", cx, cy + dp(10f), dp(40f), Theme.TEXT, bold = true)
         ui.text(c, "شبیه‌ساز اپراتور پهباد", cx, cy + dp(48f), dp(14f), Theme.TEXT_DIM)

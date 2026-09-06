@@ -1,6 +1,8 @@
 package ir.shahed.pahpad.core
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -33,7 +35,7 @@ class UiButton(
 }
 
 /** ابزار رسم رابط کاربری: متن فارسی، پنل، دکمه، نوار و ستاره */
-class Ui(context: Context, val density: Float) {
+class Ui(val context: Context, val density: Float) {
 
     val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -166,6 +168,47 @@ class Ui(context: Context, val density: Float) {
     ) {
         tmp.set(x, y, x + w, y + h)
         panel(c, tmp, fillColor, strokeColor, radius)
+    }
+
+    // --------------------------------------------------------------- تصویر
+    private val bmpPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val bmpCache = HashMap<String, Bitmap?>()
+
+    /** تصویر از assets/gfx با حافظه‌ی نهان */
+    fun image(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float, radius: Float = dp(12f)) {
+        val bmp = bmpCache.getOrPut(name) {
+            try { context.assets.open("gfx/$name.png").use { BitmapFactory.decodeStream(it) } }
+            catch (e: Exception) { null }
+        } ?: return
+        val save = c.save()
+        val clip = Path()
+        clip.addRoundRect(RectF(x, y, x + w, y + h), radius, radius, Path.Direction.CW)
+        c.clipPath(clip)
+        // پوشاندن کامل ناحیه (center-crop)
+        val bw = bmp.width.toFloat(); val bh = bmp.height.toFloat()
+        val scale = Math.max(w / bw, h / bh)
+        val dw = bw * scale; val dh = bh * scale
+        val dx = x + (w - dw) / 2f; val dy = y + (h - dh) / 2f
+        c.drawBitmap(bmp, null, RectF(dx, dy, dx + dw, dy + dh), bmpPaint)
+        c.restoreToCount(save)
+    }
+
+    /** دسترسی خام به تصویر با حافظه‌ی نهان */
+    fun imageGet(context: Context, name: String): Bitmap? = bmpCache.getOrPut(name) {
+        try { context.assets.open("gfx/$name.png").use { BitmapFactory.decodeStream(it) } }
+        catch (e: Exception) { null }
+    }
+
+    /** تصویر با حفظ تناسب داخل مستطیل (letterbox) */
+    fun imageFit(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float) {
+        val bmp = bmpCache.getOrPut(name) {
+            try { context.assets.open("gfx/$name.png").use { BitmapFactory.decodeStream(it) } }
+            catch (e: Exception) { null }
+        } ?: return
+        val bw = bmp.width.toFloat(); val bh = bmp.height.toFloat()
+        val scale = Math.min(w / bw, h / bh)
+        val dw = bw * scale; val dh = bh * scale
+        c.drawBitmap(bmp, null, RectF(x + (w - dw) / 2f, y + (h - dh) / 2f, x + (w - dw) / 2f + dw, y + (h - dh) / 2f + dh), bmpPaint)
     }
 
     // --------------------------------------------------------------- دکمه

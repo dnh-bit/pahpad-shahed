@@ -100,11 +100,11 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
 
     override fun layoutUi(w: Float, h: Float) {
         val lw = w * 0.28f
-        val lh = dp(56f)
+        val lh = dp(74f)
         var y = h * 0.19f
         for (b in droneButtons) {
             b.set(dp(20f), y, lw, lh)
-            y += lh + dp(8f)
+            y += lh + dp(9f)
         }
         val rx = w * 0.34f
         val rw = w - rx - dp(20f)
@@ -135,8 +135,17 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
             val r = b.rect
             ui.panel(c, r, if (b.pressed) Theme.PANEL_HI else Theme.PANEL,
                 Theme.withAlpha(m.color, if (m.id == selected.id) 0.95f else 0.3f), dp(12f))
-            Deco.droneIcon(this, c, r.left + dp(26f), r.centerY(), dp(11f),
-                if (unlocked) m.color else Theme.TEXT_FAINT, 0f)
+            val sideName = when (m.id) {
+                "shahed136" -> "drone_136_side"; "shahed238" -> "drone_238_side"; "shahedx" -> "drone_x_side"
+                else -> "drone_131_side"
+            }
+            val imgAlpha = if (unlocked) 255 else 110
+            if (unlocked) {
+                ui.imageFit(ui.context, c, sideName, r.left + dp(6f), r.top + dp(6f), dp(64f), r.height() - dp(12f))
+            } else {
+                ui.imageFit(ui.context, c, sideName, r.left + dp(6f), r.top + dp(6f), dp(64f), r.height() - dp(12f))
+                ui.iconLock(c, r.left + dp(26f), r.centerY() + dp(2f), dp(10f))
+            }
             ui.text(c, m.name, r.right - dp(12f), r.top + dp(18f), dp(14f),
                 if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true, align = Paint.Align.RIGHT)
             val sub = if (unlocked) {
@@ -146,7 +155,6 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
             }
             ui.text(c, sub, r.right - dp(12f), r.top + dp(38f), dp(11f),
                 if (unlocked) Theme.MINT else Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
-            if (!unlocked) ui.iconLock(c, r.left + dp(26f), r.centerY() + dp(2f), dp(10f))
         }
 
         // ---- مشخصات و ارتقاها

@@ -4,17 +4,24 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import android.graphics.Paint
+import ir.shahed.pahpad.core.Gfx
 import ir.shahed.pahpad.core.Theme
 
 /**
  * رسم صحنه‌ی سه‌بعدی ماموریت با سبک Low-Poly.
  */
-class WorldRenderer {
+class WorldRenderer(
+    private val gfxContext: android.content.Context
+) {
 
     val scene = Scene3D()
     val fx = Fx()
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val spritePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val spriteProps = ArrayList<Prop>()
     private val proj = FloatArray(3)
     private var skyShader: Shader? = null
     private var fogShader: Shader? = null
@@ -91,15 +98,15 @@ class WorldRenderer {
         val camZ = scene.cam.z
         val maxD2 = 1500f * 1500f
 
-        // ---- عوارض محیط
+        // ---- عوارض محیط (درخت/صخره به‌صورت اسپرایت در پاسِ بعد از flush رسم می‌شوند)
+        spriteProps.clear()
         for (p in world.props) {
             val dx = p.x - camX
             val dz = p.z - camZ
             if (dx * dx + dz * dz > maxD2) continue
             when (p.kind) {
-                PropKind.TREE -> {
-                    scene.box(p.x, 0f, p.z, p.w * 0.25f, p.h * 0.5f, p.w * 0.25f, 0xFF5A4632.toInt(), p.rot)
-                    scene.box(p.x, p.h * 0.45f, p.z, p.w, p.h * 0.6f, p.d, p.color, p.rot)
+                PropKind.TREE, PropKind.ROCK -> {
+                    spriteProps.add(p)
                 }
                 PropKind.SHIP -> {
                     scene.box(p.x, 0f, p.z, p.w, p.h * 0.5f, p.d, p.color, p.rot)
@@ -147,12 +154,32 @@ class WorldRenderer {
             scene.box(m.x, m.y, m.z, 1.2f, 1.2f, 4f, Theme.AMBER, 0f)
         }
 
-        // ---- پهباد در نمای سوم شخص
-        if (!mission.fpv && mission.phase != Mission.Phase.ENDED) {
-            drawDrone(mission)
+        scene.flush(c)
+
+        // ---- درخت‌ها و صخره‌ها به‌صورت اسپرایت (مرتب‌شده از دور به نزدیک)
+        spriteProps.sortBy { pr ->
+            val dxp = pr.x - scene.cam.x; val dzp = pr.z - scene.cam.z
+            -(dxp * dxp + dzp * dzp)
+        }
+        for (p in spriteProps) {
+            val isTree = p.kind == PropKind.TREE
+            val bmp = Gfx.get(gfxContext, if (isTree) (if (p.h % 2f < 1f) "prop_tree1" else "prop_tree2")
+                             else (if (p.w % 2f < 1f) "prop_rock1" else "prop_rock2")) ?: continue
+            val sp = project(p.x, p.h * (if (isTree) 0.55f else 0.5f), p.z) ?: continue
+            val hgt = p.h * 6.5f * scene.cam.focal / 620f
+            val wid = hgt * (bmp.width.toFloat() / bmp.height.toFloat())
+            spritePaint.alpha = 235
+            c.drawBitmap(bmp, null,
+                android.graphics.RectF(sp[0] - wid * 0.5f, sp[1] - hgt * 0.55f, sp[0] + wid * 0.5f, sp[1] + hgt * 0.45f),
+                spritePaint)
+            spritePaint.alpha = 255
         }
 
-        scene.flush(c)
+        // ---- پهباد در نمای سوم شخص (اسپرایت، بالای صحنه)
+        if (!mission.fpv && mission.phase != Mission.Phase.ENDED) {
+            drawDrone(c, mission)
+        }
+
         fx.draw(c, scene)
     }
 
@@ -233,19 +260,40 @@ class WorldRenderer {
         }
     }
 
-    private fun drawDrone(m: Mission) {
-        val yaw = m.yaw
-        val body = m.model.color
-        // بدنه
-        scene.box(m.x, m.y - 0.8f, m.z, 1.6f, 1.6f, 6.5f, body, yaw)
-        // بال دلتا
-        scene.box(m.x, m.y - 0.4f, m.z, 9.5f, 0.5f, 2.2f, Theme.shade(body, 0.9f), yaw)
-        // دم
-        scene.box(m.x - Math.sin(yaw.toDouble()).toFloat() * 3f, m.y - 0.2f,
-            m.z - Math.cos(yaw.toDouble()).toFloat() * 3f, 3.4f, 0.5f, 1.4f, Theme.shade(body, 0.8f), yaw)
-        // سرجنگی
-        scene.box(m.x + Math.sin(yaw.toDouble()).toFloat() * 3.4f, m.y - 0.6f,
-            m.z + Math.cos(yaw.toDouble()).toFloat() * 3.4f, 1.3f, 1.3f, 1.6f, Theme.RED, yaw)
+    private fun drawDrone(c: Canvas, m: Mission) {
+        val droneBmp = droneBitmap(m.model.id) ?: return
+        // --- سایه روی زمین
+        val sp = project(m.x, 0.35f, m.z)
+        if (sp != null) {
+            val alt = (m.y - 0.35f).coerceAtLeast(0f)
+            val sAlpha = (200f - alt * 2.0f).coerceIn(50f, 160f).toInt()
+            val sR = (40f - alt * 0.045f).coerceAtLeast(13f) * scene.cam.focal / 620f
+            shadowPaint.color = Theme.withAlpha(0xFF060A08.toInt(), sAlpha / 255f)
+            c.drawOval(
+                android.graphics.RectF(sp[0] - sR, sp[1] - sR * 0.4f, sp[0] + sR, sp[1] + sR * 0.4f),
+                shadowPaint
+            )
+        }
+        // --- اسپرایت پهباد با چرخش yaw
+        val pp = project(m.x, m.y, m.z) ?: return
+        val size = 120f * scene.cam.focal / 620f
+        val rot = Math.toDegrees(m.yaw.toDouble()).toFloat() + 180f
+        c.save()
+        c.rotate(rot, pp[0], pp[1])
+        c.drawBitmap(
+            droneBmp, null,
+            android.graphics.RectF(pp[0] - size * 0.55f, pp[1] - size * 0.55f, pp[0] + size * 0.55f, pp[1] + size * 0.55f),
+            spritePaint
+        )
+        c.restore()
+    }
+
+    private fun droneBitmap(modelId: String): android.graphics.Bitmap? {
+        val file = when (modelId) {
+            "shahed136" -> "drone_136"; "shahed238" -> "drone_238"; "shahedx" -> "drone_x"
+            else -> "drone_131"
+        }
+        return Gfx.get(gfxContext, file)
     }
 
     /** موقعیت صفحه‌ای یک نقطه‌ی جهان؛ برای نشانگرهای HUD */

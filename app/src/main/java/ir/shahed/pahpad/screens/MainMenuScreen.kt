@@ -64,11 +64,18 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
         ui.background(c, vw, vh)
         Deco.resources(this, c)
 
+        // بنر تصویری بالای ستون عنوان (پهباد بر فراز کویر در غروب)
+        val heroW = vw * 0.44f
+        val heroH = heroW * 300f / 640f
+        val heroX = vw * 0.26f - heroW / 2f
+        val heroY = vh * 0.26f - dp(58f)
+        ui.image(ui.context, c, "menu_hero", heroX, heroY, heroW, heroH, radius = dp(16f))
+
         // ستون چپ: لوگو و وضعیت بازیکن
         val lx = vw * 0.26f
-        Deco.droneIcon(this, c, lx, vh * 0.26f, dp(26f), Theme.MINT, 15f * Math.sin((time * 0.8f).toDouble()).toFloat())
-        ui.text(c, "پهباد شاهد", lx, vh * 0.42f, dp(34f), Theme.TEXT, bold = true)
-        ui.text(c, "اپراتور پهباد؛ ماموریت‌های دقیق", lx, vh * 0.49f, dp(13f), Theme.TEXT_DIM)
+        val titleY = heroY + heroH + dp(34f)
+        ui.text(c, "پهباد شاهد", lx, titleY, dp(34f), Theme.TEXT, bold = true)
+        ui.text(c, "اپراتور پهباد؛ ماموریت‌های دقیق", lx, titleY + dp(26f), dp(13f), Theme.TEXT_DIM)
 
         val panelW = vw * 0.34f
         val panelH = dp(96f)
@@ -85,6 +92,6 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
             px + panelW - dp(14f), py + dp(78f), dp(12f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
 
         drawButtons(c)
-        ui.text(c, "نسخه " + Fa.num("1.0.0"), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
+        ui.text(c, "نسخه " + Fa.num("0.0.2"), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
     }
 }

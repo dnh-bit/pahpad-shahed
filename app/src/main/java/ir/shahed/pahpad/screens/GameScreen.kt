@@ -31,7 +31,7 @@ class GameScreen(
 ) : BaseScreen(game), SensorEventListener {
 
     private val mission = Mission(level, save, mode, seed)
-    private val renderer = WorldRenderer()
+    private val renderer = WorldRenderer(game)
     private val rnd = Random()
 
     private val sensorManager = game.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
@@ -402,6 +402,14 @@ class GameScreen(
             c.drawLine(p[0] + size * 0.6f, p[1], p[0] + size * 1.4f, p[1], ui.stroke)
             c.drawLine(p[0], p[1] - size * 1.4f, p[0], p[1] - size * 0.6f, ui.stroke)
             c.drawLine(p[0], p[1] + size * 0.6f, p[0], p[1] + size * 1.4f, ui.stroke)
+            val bmp = ui.imageGet(ui.context, "hud_target")
+            if (bmp != null) {
+                val isz = dp(16f)
+                val mp = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
+                mp.alpha = 220
+                c.drawBitmap(bmp, null,
+                    android.graphics.RectF(p[0] - isz / 2f, p[1] - size - isz - dp(10f), p[0] + isz / 2f, p[1] - size - dp(10f)), mp)
+            }
             ui.text(c, t.label, p[0], p[1] - size - dp(14f), dp(11.5f), Theme.RED, bold = true)
         } else {
             // فلش جهت هدف در لبه صفحه
