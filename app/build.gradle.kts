@@ -15,11 +15,6 @@ android {
         versionName = "1.0.0"
     }
 
-    androidResources {
-        // فقط فارسی — locale filter (AGP 8.1+)، جایگزین resourceConfigurations
-        localeFilters += listOf("fa")
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true
