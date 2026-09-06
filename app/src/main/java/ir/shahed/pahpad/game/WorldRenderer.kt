@@ -4,7 +4,6 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
-import android.graphics.Paint
 import ir.shahed.pahpad.core.Gfx
 import ir.shahed.pahpad.core.Theme
 
