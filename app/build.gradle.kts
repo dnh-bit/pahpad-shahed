@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -37,6 +40,25 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // امضای release با keystore اختصاصی (فایل‌ها از CI تزریق می‌شوند)
+    val keystorePropsFile = rootProject.file("app/keystore.properties")
+    if (keystorePropsFile.exists()) {
+        val keystoreProps = Properties().apply { load(FileInputStream(keystorePropsFile)) }
+        signingConfigs {
+            create("upload") {
+                storeFile = file(keystoreProps["storeFile"] as String)
+                storePassword = keystoreProps["storePassword"] as String
+                keyAlias = keystoreProps["keyAlias"] as String
+                keyPassword = keystoreProps["keyPassword"] as String
+            }
+        }
+        buildTypes {
+            getByName("release") {
+                signingConfig = signingConfigs.getByName("upload")
+            }
+        }
     }
 
     packaging {
