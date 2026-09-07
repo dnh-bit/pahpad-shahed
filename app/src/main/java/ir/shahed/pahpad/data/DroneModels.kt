@@ -48,7 +48,7 @@ object DroneModels {
         private val armorBonus: Int,
         val hasEcm: Boolean
     ) {
-        fun rangeAt(level: Int) = DroneModels.anchored(level, 900f, 1600f, 2600f) * rangeMul
+        fun rangeAt(level: Int) = DroneModels.anchored(level, 1200f, 1900f, 2800f) * rangeMul
         fun speedAt(level: Int) = DroneModels.anchored(level, 150f, 250f, 400f) * speedMul
         fun guidanceAt(level: Int) = DroneModels.anchored(level, 1.0f, 1.5f, 2.2f) * guidanceMul
         fun blastAt(level: Int) = DroneModels.anchored(level, 18f, 30f, 45f) * blastMul

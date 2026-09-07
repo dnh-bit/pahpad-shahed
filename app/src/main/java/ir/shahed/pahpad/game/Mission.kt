@@ -155,7 +155,9 @@ class Mission(
         speedMps = 0f
         throttle = 0.72f
         boost = false
-        fuelLeft = maxRange * 1.15f // ۱۵٪ ذخیره برای پیچ و مانور
+        // سوخت تضمینی: حتی با پهپاد بی‌ارتقا، برد کافی برای رسیدن به هدف وجود دارد
+        // (بیشینهٔ برد مدل یا ۱٫۴۵ برابر فاصلهٔ ماموریت) + ۱۵٪ ذخیره برای پیچ و مانور
+        fuelLeft = max(maxRange, level.distance * 1.45f) * 1.15f
         signalLoss = 0f
         phase = Phase.READY
     }

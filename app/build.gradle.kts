@@ -5,44 +5,30 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
-
 android {
     namespace = "ir.shahed.pahpad"
     compileSdk = 34
-
     defaultConfig {
         applicationId = "ir.shahed.pahpad"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.0.2"
+        versionCode = 3
+        versionName = "0.0.3"
         resourceConfigurations += listOf("fa")
     }
-
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-        debug {
-            isMinifyEnabled = false
-        }
+        debug { isMinifyEnabled = false }
     }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
-    // امضای release با keystore اختصاصی (فایل‌ها از CI تزریق می‌شوند)
+    kotlinOptions { jvmTarget = "17" }
     val keystorePropsFile = rootProject.file("app/keystore.properties")
     if (keystorePropsFile.exists()) {
         val keystoreProps = Properties().apply { load(FileInputStream(keystorePropsFile)) }
@@ -54,19 +40,9 @@ android {
                 keyPassword = keystoreProps["keyPassword"] as String
             }
         }
-        buildTypes {
-            getByName("release") {
-                signingConfig = signingConfigs.getByName("upload")
-            }
-        }
+        buildTypes { getByName("release") { signingConfig = signingConfigs.getByName("upload") } }
     }
-
-    packaging {
-        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
-    }
+    packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
-
-dependencies {
-    // بازی به صورت کامل با Canvas و APIهای پایه اندروید نوشته شده
-    // و به هیچ کتابخانه‌ی بیرونی نیازی ندارد.
-}
+// Native Android Canvas only; no new runtime dependency or network permission.
+dependencies {}
