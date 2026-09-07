@@ -3,6 +3,7 @@ package ir.shahed.pahpad.game
 import ir.shahed.pahpad.core.SaveManager
 import ir.shahed.pahpad.data.DroneModels
 import ir.shahed.pahpad.data.LevelDef
+import ir.shahed.pahpad.data.StarRules
 import ir.shahed.pahpad.data.UpgradeKind
 import java.util.Random
 
@@ -11,6 +12,8 @@ enum class MissionMode { STORY, ENDLESS, DAILY }
 /** نتیجه نهایی ماموریت */
 class MissionResult(
     val success: Boolean,
+    /** ماموریت با فرمان خود بازیکن لغو شد؛ در این حالت پاداشی ثبت نمی‌شود */
+    val aborted: Boolean,
     val reason: String,
     val accuracy: Int,
     val timeScore: Int,
@@ -21,9 +24,26 @@ class MissionResult(
     val stars: Int,
     val coins: Int,
     val xp: Int,
-    val targetsDestroyed: Int
+    val targetsDestroyed: Int,
+    val targetsTotal: Int,
+    /** میانگین دقت برخورد بین ۰ و ۱؛ مبنای ستاره‌ی دوم */
+    val avgAccuracy: Float,
+    /** تعداد آسیب‌های پدافندی؛ مبنای ستاره‌ی سوم */
+    val damage: Int,
+    /** زمان مرجع ماموریت بر حسب ثانیه */
+    val parTime: Float,
+    /**
+     * امتیاز نهایی. صریح ذخیره می‌شود تا مقدار نمایش‌داده‌شده با مقدار ثبت‌شده در
+     * رکوردها یکی باشد (در حالت بی‌نهایت قبلاً دو عدد متفاوت بودند).
+     */
+    val scoreTotal: Int
 ) {
-    val total: Int get() = accuracy + timeScore + defense + fuelScore + bonusScore
+    val total: Int get() = scoreTotal
+
+    /** قوانین ستاره با اندازه‌ی واقعی این ماموریت */
+    fun starRules(): List<StarRules.Rule> = StarRules.evaluate(
+        success, targetsDestroyed, targetsTotal, avgAccuracy, damage, elapsed, parTime
+    )
 }
 
 /**
@@ -71,6 +91,10 @@ class Mission(
     // پهباد
     var x = 0f; var y = 0f; var z = 0f
     var prevX = 0f; var prevY = 0f; var prevZ = 0f
+    /** سرعت لحظه‌ای بر حسب متر بر ثانیه؛ مستقل از نرخ فریم */
+    private var velX = 0f
+    private var velY = 0f
+    private var velZ = 0f
     var yaw = 0f
     var pitch = 0f
     var roll = 0f
@@ -106,6 +130,8 @@ class Mission(
         private set
 
     private var accuracyPoints = 0f
+    /** جمع دقت خام برخوردها برای محاسبه‌ی میانگین دقت (مبنای ستاره‌ی دوم) */
+    private var precisionSum = 0f
     private var fuelRatioSum = 0f
     private var impacts = 0
     private var bonusesCollected = 0
@@ -153,6 +179,7 @@ class Mission(
         pitch = 0f
         roll = 0f
         speedMps = 0f
+        velX = 0f; velY = 0f; velZ = 0f
         throttle = 0.72f
         boost = false
         // سوخت تضمینی: حتی با پهپاد بی‌ارتقا، برد کافی برای رسیدن به هدف وجود دارد
@@ -240,6 +267,7 @@ class Mission(
         x += moveX * dt
         y += moveY * dt
         z += moveZ * dt
+        velX = moveX; velY = moveY; velZ = moveZ
 
         // ---- سوخت (فقط مسافت پیموده‌شده توسط خود پهباد؛ باد سوخت نمی‌سوزاند)
         val used = Math.sqrt(
@@ -262,7 +290,7 @@ class Mission(
             if (!checkTargetImpact(true)) explodeDrone("پهباد به زمین برخورد کرد")
             return
         }
-        if (world.hitsProp(x, y, z)) {
+        if (world.hitsPropSwept(prevX, prevY, prevZ, x, y, z)) {
             if (!checkTargetImpact(true)) explodeDrone("برخورد با مانع")
             return
         }
@@ -299,6 +327,7 @@ class Mission(
             if (dist > a.range) continue
             underThreat = true
             a.barrelYaw = Math.atan2(ddx.toDouble(), ddz.toDouble()).toFloat()
+            a.barrelPitch = Math.atan2((y - a.muzzleHeight).toDouble(), dist.toDouble()).toFloat()
             val rate = if (radarLock) 2.0f else 1f
             a.cooldown -= dt * rate
             if (a.cooldown <= 0f) {
@@ -323,9 +352,11 @@ class Mission(
         val lockBonus = if (radarLock) 1.35f else 1f
         val accuracy = (0.25f + 0.6f * altFactor) * speedFactor * lockBonus
         val flightTime = dist / 230f
-        val leadX = x + (x - prevX) / 0.016f * flightTime * 0.35f
-        val leadY = y + (y - prevY) / 0.016f * flightTime * 0.35f
-        val leadZ = z + (z - prevZ) / 0.016f * flightTime * 0.35f
+        // پیش‌بینی از سرعت واقعی (متر بر ثانیه) محاسبه می‌شود، نه از اختلاف دو فریم
+        // با گام ثابت ۰٫۰۱۶؛ رفتار پدافند دیگر به نرخ فریم دستگاه وابسته نیست.
+        val leadX = x + velX * flightTime * 0.35f
+        val leadY = y + velY * flightTime * 0.35f
+        val leadZ = z + velZ * flightTime * 0.35f
         val errScale = (1f - accuracy.coerceIn(0f, 0.95f)) * 130f
         val tx = leadX + (rnd.nextFloat() * 2f - 1f) * errScale
         val ty = (leadY + (rnd.nextFloat() * 2f - 1f) * errScale * 0.6f).coerceAtLeast(4f)
@@ -404,6 +435,7 @@ class Mission(
         val perTarget = 1000f / level.targets.coerceAtLeast(1).toFloat()
         val precision = (1f - (dist / (t.hitRadius + blastRadius * 0.35f)).coerceIn(0f, 1f))
         lastImpactAccuracy = precision
+        precisionSum += precision
         accuracyPoints += perTarget * (0.2f + 0.8f * Math.pow(precision.toDouble(), 1.15).toFloat())
         fuelRatioSum += (fuelLeft / maxRange).coerceIn(0f, 1f)
         flash = 1f
@@ -460,14 +492,18 @@ class Mission(
 
     // ------------------------------------------------------------ پایان و امتیاز
 
-    private fun finish(success: Boolean, reason: String) {
+    private fun finish(success: Boolean, reason: String, aborted: Boolean = false) {
         if (phase == Phase.ENDED) return
         phase = Phase.ENDED
 
+        val targetsTotal = if (mode == MissionMode.ENDLESS) targetsDestroyed.coerceAtLeast(1)
+        else level.targets.coerceAtLeast(1)
+        val avgAccuracy = if (impacts > 0) (precisionSum / impacts).coerceIn(0f, 1f) else 0f
+        val cruise = maxSpeedKmh * 0.8f / 3.6f
+        val par = StarRules.parTime(level.distance, cruise, level.targets)
+
         val acc = Math.round(accuracyPoints).coerceIn(0, 1000)
-        val cruise = (maxSpeedKmh * 0.8f / 3.6f).coerceAtLeast(20f)
-        val par = (level.distance / cruise) * 1.6f * level.targets.coerceAtLeast(1)
-        val timeScore = if (!success) 0
+        val timeScore = if (!success || par <= 0f) 0
         else Math.round(500f * (1f - (elapsed / par).coerceIn(0f, 1f))).coerceIn(0, 500)
         val defense = if (success && damage == 0) 300 else 0
         val fuelAvg = if (impacts > 0) fuelRatioSum / impacts else 0f
@@ -475,22 +511,29 @@ class Mission(
         val bonusScore = if (totalBonuses <= 0) 0
         else Math.round(500f * bonusesCollected.toFloat() / totalBonuses.toFloat()).coerceIn(0, 500)
 
-        var total = acc + timeScore + defense + fuelScore + bonusScore
-        if (mode == MissionMode.ENDLESS) total = Math.round(accuracyPoints) + bonusScore + targetsDestroyed * 150
+        // امتیاز نهایی یک عدد واحد است و همان عدد هم نمایش داده و هم ذخیره می‌شود
+        val scoreTotal = if (mode == MissionMode.ENDLESS)
+            Math.round(accuracyPoints) + bonusScore + targetsDestroyed * 150
+        else acc + timeScore + defense + fuelScore + bonusScore
 
-        val stars = when {
-            !success -> 0
-            total >= 2200 && damage == 0 -> 3
-            total >= 1500 -> 2
-            else -> 1
-        }
+        val stars = StarRules.stars(success, avgAccuracy, damage, elapsed, par)
 
         val coinMul = if (mode == MissionMode.DAILY) 2f else 1f
-        val coins = Math.round((40f + total / 12f + stars * 25f) * coinMul)
-        val xp = Math.round(total / 4f + stars * 40f)
+        // لغو ماموریت هیچ پاداشی ندارد؛ شکست فقط پاداش تسلی‌بخش می‌گیرد
+        val coins = when {
+            aborted -> 0
+            success -> Math.round((40f + scoreTotal / 12f + stars * 25f) * coinMul)
+            else -> Math.round((10f + scoreTotal / 40f) * coinMul)
+        }
+        val xp = when {
+            aborted -> 0
+            success -> Math.round(scoreTotal / 4f + stars * 40f)
+            else -> Math.round(scoreTotal / 16f)
+        }
 
         val res = MissionResult(
             success = success,
+            aborted = aborted,
             reason = reason,
             accuracy = acc,
             timeScore = timeScore,
@@ -501,27 +544,46 @@ class Mission(
             stars = stars,
             coins = coins,
             xp = xp,
-            targetsDestroyed = targetsDestroyed
+            targetsDestroyed = targetsDestroyed,
+            targetsTotal = targetsTotal,
+            avgAccuracy = avgAccuracy,
+            damage = damage,
+            parTime = par,
+            scoreTotal = scoreTotal
         )
         result = res
 
         // ثبت در حافظه
-        save.addCoins(coins)
-        save.addXp(xp)
-        when (mode) {
-            MissionMode.STORY -> save.recordResult(level.id, stars, total, elapsed)
-            MissionMode.ENDLESS -> if (total > save.endlessBest) save.endlessBest = total
-            MissionMode.DAILY -> if (total > save.dailyBest) save.dailyBest = total
+        if (coins > 0) save.addCoins(coins)
+        if (xp > 0) save.addXp(xp)
+        if (!aborted) {
+            when (mode) {
+                // فقط ماموریت موفق در رکورد مرحله ثبت می‌شود تا زمان بهترین رکورد
+                // با یک شکست سریع خراب نشود
+                MissionMode.STORY -> if (success) save.recordResult(level.id, stars, scoreTotal, elapsed)
+                MissionMode.ENDLESS -> if (scoreTotal > save.endlessBest) save.endlessBest = scoreTotal
+                MissionMode.DAILY -> if (scoreTotal > save.dailyBest) save.dailyBest = scoreTotal
+            }
         }
         onFinish?.invoke(res)
     }
 
     fun abort() {
         if (phase == Phase.ENDED) return
-        finish(false, "ماموریت لغو شد")
+        finish(false, "ماموریت لغو شد", aborted = true)
     }
 
     // ------------------------------------------------------------ اطلاعات HUD
+
+    /** میانگین دقت برخوردهای انجام‌شده تا این لحظه */
+    val averageAccuracy: Float
+        get() = if (impacts > 0) (precisionSum / impacts).coerceIn(0f, 1f) else 0f
+
+    /** زمان مرجع ماموریت؛ همان عددی که در بریفینگ نشان داده می‌شود */
+    val parTime: Float
+        get() = StarRules.parTime(level.distance, maxSpeedKmh * 0.8f / 3.6f, level.targets)
+
+    val damageTaken: Int get() = damage
 
     val altitude: Float get() = y
     val speedKmh: Float get() = speedMps * 3.6f

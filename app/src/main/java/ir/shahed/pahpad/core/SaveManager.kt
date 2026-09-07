@@ -30,9 +30,16 @@ class SaveManager(context: Context) {
 
     val rank: Ranks.Rank get() = Ranks.forXp(xp)
 
-    fun addCoins(amount: Int) { coins += amount }
+    /** جمع در Long انجام می‌شود تا در مقادیر بزرگ سرریز Int رخ ندهد. */
+    fun addCoins(amount: Int) {
+        if (amount <= 0) return
+        coins = (coins.toLong() + amount.toLong()).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
 
-    fun addXp(amount: Int) { xp += amount }
+    fun addXp(amount: Int) {
+        if (amount <= 0) return
+        xp = (xp.toLong() + amount.toLong()).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
 
     fun spendCoins(amount: Int): Boolean {
         if (coins < amount) return false

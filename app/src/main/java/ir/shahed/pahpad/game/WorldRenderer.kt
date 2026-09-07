@@ -4,158 +4,303 @@ import android.content.Context
 import android.graphics.Canvas
 import ir.shahed.pahpad.core.Gfx
 import ir.shahed.pahpad.core.Theme
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.sin
 
-/** Native Canvas visual upgrade. Existing levels, controls and saves stay compatible. */
-class WorldRenderer(private val gfxContext:Context) {
-    val scene=Scene3D();val fx=Fx()
-    private val art=SceneryArt(gfxContext);private val drone=DroneArt(gfxContext)
-    private val proj=FloatArray(3)
-    private var exhaustTimer=0f
-    private var wreckTimer=0f
-    private var sparkTimer=0f
-    fun update(dt:Float,mission:Mission){
-        drone.update(dt,mission)
+/**
+ * لایه‌ی نمایش دنیا. مراحل، کنترل‌ها و ذخیره‌ها بدون تغییر می‌مانند.
+ *
+ * سخت‌افزار نظامی از `Vehicles` می‌آید: هندسه‌ی رویه‌ای با ابعاد واقعی، سه سطح جزئیات
+ * بر اساس فاصله‌ی دوربین، و بافت‌های اختصاصی (استتار، ورق فلز، عرشه، زنجیر، فلز سوخته).
+ */
+class WorldRenderer(private val gfxContext: Context) {
+
+    val scene = Scene3D()
+    val fx = Fx()
+
+    private val art = SceneryArt(gfxContext)
+    private val drone = DroneArt(gfxContext)
+    private val hardware = Vehicles(gfxContext)
+    private val rig = Rig(scene)
+
+    private val proj = FloatArray(3)
+    private var exhaustTimer = 0f
+    private var wreckTimer = 0f
+    private var sparkTimer = 0f
+
+    companion object {
+        /** مرز سطح جزئیات کامل و متوسط بر حسب متر */
+        private const val NEAR_LOD = 250f
+        private const val MID_LOD = 820f
+        private const val CULL = 1700f
+    }
+
+    private fun lod(d2: Float): Int = when {
+        d2 < NEAR_LOD * NEAR_LOD -> 0
+        d2 < MID_LOD * MID_LOD -> 1
+        else -> 2
+    }
+
+    /**
+     * ساختمان‌های شهری صدها عدد هستند، پس آستانه‌ی جزئیات آن‌ها بسیار تنگ‌تر است؛
+     * وگرنه تعداد وجه‌های یک فریم به چند هزار می‌رسد و نرخ فریم می‌افتد.
+     */
+    private fun buildingLod(d2: Float): Int = when {
+        d2 < 175f * 175f -> 0
+        d2 < 420f * 420f -> 1
+        else -> 2
+    }
+
+    fun update(dt: Float, mission: Mission) {
+        drone.update(dt, mission)
         fx.update(dt)
-        if(mission.fpv)fx.clearEngineSmoke()
-        if(mission.phase==Mission.Phase.FLYING&&!mission.fpv){
-            exhaustTimer+=dt
-            val interval=if(mission.boost).075f else .12f
-            if(exhaustTimer>=interval){
-                exhaustTimer%=interval
-                val cp=cos(mission.pitch)
-                fx.engineSmoke(mission.x-sin(mission.yaw)*cp*5.5f,
-                    mission.y-sin(mission.pitch)*5.5f-.2f,
-                    mission.z-cos(mission.yaw)*cp*5.5f,mission.boost)
+        if (mission.fpv) fx.clearEngineSmoke()
+        if (mission.phase == Mission.Phase.FLYING && !mission.fpv) {
+            exhaustTimer += dt
+            val interval = if (mission.boost) .075f else .12f
+            if (exhaustTimer >= interval) {
+                exhaustTimer %= interval
+                val cp = cos(mission.pitch)
+                fx.engineSmoke(
+                    mission.x - sin(mission.yaw) * cp * 5.5f,
+                    mission.y - sin(mission.pitch) * 5.5f - .2f,
+                    mission.z - cos(mission.yaw) * cp * 5.5f, mission.boost
+                )
             }
-        }else exhaustTimer=0f
-        wreckTimer+=dt;sparkTimer+=dt
-        if(wreckTimer>=.12f){
-            wreckTimer%=.12f
-            for(t in mission.world.targets)if(t.destroyed&&t.burn<6f)fx.smoke(t.x,t.h*.6f,t.z,2f)
+        } else exhaustTimer = 0f
+        wreckTimer += dt
+        sparkTimer += dt
+        if (wreckTimer >= .12f) {
+            wreckTimer %= .12f
+            for (t in mission.world.targets) if (t.destroyed && t.burn < 6f) fx.smoke(t.x, t.h * .6f, t.z, 2f)
         }
-        if(sparkTimer>=.045f){
-            sparkTimer%=.045f
-            for(a in mission.world.aaSites)if(a.alive&&a.flash>0f)
-                fx.spark(a.x+sin(a.barrelYaw)*8f,6f,a.z+cos(a.barrelYaw)*8f,Theme.AMBER)
-        }
-    }
-    fun release(){fx.clear();scene.clear();art.clear()}
-    private fun material(building:Boolean=true){
-        scene.wallTexture=Gfx.get(gfxContext,if(building)"material_wall" else "material_concrete")
-        scene.roofTexture=Gfx.get(gfxContext,"material_roof")
-    }
-    private fun plain(){scene.wallTexture=null;scene.roofTexture=null}
-    fun draw(c:Canvas,mission:Mission,w:Float,h:Float){
-        val world=mission.world
-        scene.fogStart=300f;scene.fogEnd=1650f;scene.begin()
-        art.draw(c,scene,world,w,h)
-        fx.drawGround(c,scene)
-        art.roads(scene,world)
-        val camX=scene.cam.x;val camZ=scene.cam.z
-        val maxD2=1600f*1600f
-        for(p in world.props){
-            val dx=p.x-camX;val dz=p.z-camZ;val d2=dx*dx+dz*dz
-            if(d2>maxD2)continue
-            if(d2<550f*550f)art.shadow(c,scene,p.x-p.h*scene.sunX/scene.sunY,p.z-p.h*scene.sunZ/scene.sunY,p.w*.8f,p.d*.75f,.65f)
-            when(p.kind){
-                PropKind.TREE,PropKind.ROCK->{
-                    val tree=p.kind==PropKind.TREE
-                    val file=if(tree)if(p.h%2f<1f)"prop_tree1" else "prop_tree2" else if(p.w%2f<1f)"prop_rock1" else "prop_rock2"
-                    val bitmap=Gfx.get(gfxContext,file)
-                    if(bitmap!=null){
-                        // Project using real camera depth, not the former fixed screen size.
-                        val width=if(tree)max(p.w,p.h*.95f) else p.w
-                        scene.billboard(p.x,0f,p.z,width,p.h,bitmap)
-                    }else{plain();scene.box(p.x,0f,p.z,p.w,p.h,p.d,p.color,p.rot)}
+        if (sparkTimer >= .045f) {
+            sparkTimer %= .045f
+            for (a in mission.world.aaSites) {
+                if (a.alive && a.flash > 0f) {
+                    fx.spark(
+                        a.x + sin(a.barrelYaw) * 8f, a.muzzleHeight,
+                        a.z + cos(a.barrelYaw) * 8f, Theme.AMBER
+                    )
                 }
-                PropKind.SHIP->ship(p.x,p.z,p.w,p.h,p.d,p.rot,false)
-                PropKind.TOWER_MAST->{plain();scene.box(p.x,0f,p.z,p.w*.28f,p.h,p.d*.28f,p.color,p.rot)}
-                PropKind.BUILDING->{
-                    material();scene.box(p.x,0f,p.z,p.w,p.h,p.d,0xFF9E9E90.toInt(),p.rot)
-                    if(d2<500f*500f){
-                        material(false)
-                        scene.box(p.x-p.w*.16f,p.h,p.z,p.w*.2f,2.1f,p.d*.2f,0xFF9A9E95.toInt(),p.rot)
-                        scene.box(p.x+p.w*.24f,p.h,p.z+p.d*.18f,p.w*.13f,1.6f,p.d*.3f,0xFF777E77.toInt(),p.rot)
+            }
+        }
+    }
+
+    fun release() {
+        fx.clear()
+        scene.clear()
+        art.clear()
+    }
+
+    private fun material(building: Boolean = true) {
+        scene.wallTexture = Gfx.get(gfxContext, if (building) "material_wall" else "material_concrete")
+        scene.roofTexture = Gfx.get(gfxContext, "material_roof")
+    }
+
+    private fun plain() {
+        scene.wallTexture = null
+        scene.roofTexture = null
+    }
+
+    fun draw(c: Canvas, mission: Mission, w: Float, h: Float) {
+        val world = mission.world
+        scene.fogStart = 300f
+        scene.fogEnd = 1650f
+        scene.begin()
+        art.draw(c, scene, world, w, h)
+        fx.drawGround(c, scene)
+        art.roads(scene, world)
+        plain()
+
+        val camX = scene.cam.x
+        val camZ = scene.cam.z
+        val maxD2 = CULL * CULL
+
+        // ----------------------------------------------------------- موانع صحنه
+        for (p in world.props) {
+            val dx = p.x - camX
+            val dz = p.z - camZ
+            val d2 = dx * dx + dz * dz
+            if (d2 > maxD2) continue
+            val detail = lod(d2)
+            val shadowRange = if (p.kind == PropKind.BUILDING) 320f else 550f
+            if (d2 < shadowRange * shadowRange && p.kind != PropKind.SHIP && p.kind != PropKind.FREIGHTER) {
+                art.shadow(
+                    c, scene, p.x - p.h * scene.sunX / scene.sunY, p.z - p.h * scene.sunZ / scene.sunY,
+                    p.w * .8f, p.d * .75f, .65f
+                )
+            }
+            when (p.kind) {
+                PropKind.TREE, PropKind.PALM, PropKind.BUSH, PropKind.ROCK -> billboard(p)
+                // ناوهای پس‌زمینه یک پله ساده‌تر از هدف اصلی رندر می‌شوند
+                PropKind.SHIP -> hardware.warship(rig, p.x, p.z, p.rot, p.w, p.h, p.d, false,
+                    (detail + 1).coerceAtMost(2))
+                PropKind.FREIGHTER -> hardware.freighter(rig, p.x, p.z, p.rot, p.w, p.h, p.d)
+                PropKind.TOWER_MAST -> {
+                    plain()
+                    scene.box(p.x, 0f, p.z, p.w * .28f, p.h, p.d * .28f, p.color, p.rot)
+                }
+                PropKind.BUILDING -> {
+                    val bd = buildingLod(d2)
+                    if (bd == 2) {
+                        material()
+                        scene.box(p.x, 0f, p.z, p.w, p.h, p.d, 0xFF9E9E90.toInt(), p.rot)
+                        plain()
+                    } else {
+                        hardware.building(rig, p.x, p.z, p.w, p.h, p.d, p.rot, false, bd)
                     }
                 }
             }
         }
-        for(r in world.radars)zone(c,r.x,r.z,r.radius,Theme.BLUE)
-        for(e in world.ewZones)zone(c,e.x,e.z,e.radius,Theme.VIOLET)
-        plain()
-        for(a in world.aaSites){
-            if(!a.alive)continue
-            val dx=a.x-camX;val dz=a.z-camZ;if(dx*dx+dz*dz>maxD2)continue
-            zone(c,a.x,a.z,a.range,Theme.RED)
-            scene.box(a.x,0f,a.z,9f,3.5f,12f,0xFF50584B.toInt())
-            scene.box(a.x,3.5f,a.z,5.5f,3f,6f,0xFF69705B.toInt(),a.barrelYaw)
-            val bx=sin(a.barrelYaw);val bz=cos(a.barrelYaw)
-            scene.box(a.x+bx*4f,5.2f,a.z+bz*4f,1.2f,1.2f,8f,0xFF7E8370.toInt(),a.barrelYaw)
+
+        // ----------------------------------------------- مناطق رادار و اخلال
+        for (r in world.radars) {
+            zone(c, r.x, r.z, r.radius, Theme.BLUE)
+            val dx = r.x - camX
+            val dz = r.z - camZ
+            val d2 = dx * dx + dz * dz
+            // ایستگاه رادار بزرگ‌تر از مقیاس واقعی است تا از ارتفاع پرواز خوانا بماند
+            if (d2 <= maxD2) hardware.radarStation(rig, r.x, r.z, r.spin, 2.2f, lod(d2))
         }
-        for(t in world.targets){
-            val dx=t.x-camX;val dz=t.z-camZ;if(dx*dx+dz*dz>maxD2)continue
-            target(t)
+        for (e in world.ewZones) zone(c, e.x, e.z, e.radius, Theme.VIOLET)
+
+        // ------------------------------------------------------ پدافند زمینی
+        for (a in world.aaSites) {
+            if (!a.alive) continue
+            val dx = a.x - camX
+            val dz = a.z - camZ
+            val d2 = dx * dx + dz * dz
+            if (d2 > maxD2) continue
+            zone(c, a.x, a.z, a.range, Theme.RED)
+            val detail = lod(d2)
+            if (d2 < 550f * 550f) art.shadow(c, scene, a.x + 3f, a.z - 2f, 7f, 9f, .5f)
+            if (a.kind == AASite.KIND_GUN) {
+                hardware.aaGun(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, a.flash, detail)
+            } else {
+                hardware.samLauncher(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, detail)
+            }
         }
+
+        // ------------------------------------------------------------- اهداف
+        for (t in world.targets) {
+            val dx = t.x - camX
+            val dz = t.z - camZ
+            val d2 = dx * dx + dz * dz
+            if (d2 > maxD2) continue
+            target(t, lod(d2))
+        }
+
         plain()
-        for(b in world.bonuses)if(!b.collected)scene.box(b.x,b.y,b.z,4.5f,4.5f,4.5f,Theme.AMBER,b.spin)
-        for(m in world.missiles)scene.box(m.x,m.y,m.z,1.2f,1.2f,4f,Theme.AMBER)
-        if(!mission.fpv&&mission.phase!=Mission.Phase.ENDED){
-            val alt=mission.y.coerceAtLeast(0f)
-            if(alt<220f)art.shadow(c,scene,mission.x-alt*scene.sunX/scene.sunY,mission.z-alt*scene.sunZ/scene.sunY,7f+alt*.035f,7f+alt*.035f,(.40f-alt*.0015f).coerceAtLeast(.06f))
-            drone.draw(scene,mission)
+        for (b in world.bonuses) if (!b.collected) scene.box(b.x, b.y, b.z, 4.5f, 4.5f, 4.5f, Theme.AMBER, b.spin)
+        for (m in world.missiles) missile(m)
+
+        if (!mission.fpv && mission.phase != Mission.Phase.ENDED) {
+            val alt = mission.y.coerceAtLeast(0f)
+            if (alt < 220f) {
+                art.shadow(
+                    c, scene, mission.x - alt * scene.sunX / scene.sunY, mission.z - alt * scene.sunZ / scene.sunY,
+                    7f + alt * .035f, 7f + alt * .035f, (.40f - alt * .0015f).coerceAtLeast(.06f)
+                )
+            }
+            drone.draw(scene, mission)
         }
         scene.flush(c)
-        fx.draw(c,scene,mission.fpv)
+        fx.draw(c, scene, mission.fpv)
     }
-    private fun zone(c:Canvas,x:Float,z:Float,radius:Float,color:Int){
-        val segments=48;var px=x+radius;var pz=z
-        for(i in 1..segments){val a=i*2f*PI.toFloat()/segments;val nx=x+cos(a)*radius;val nz=z+sin(a)*radius
-            scene.line(px,.6f,pz,nx,.6f,nz,c,Theme.withAlpha(color,.36f),1.4f);px=nx;pz=nz}
-    }
-    private fun ship(x:Float,z:Float,w:Float,h:Float,d:Float,rot:Float,destroyed:Boolean){
-        material(false)
-        val hull=if(destroyed)0xFF4C4940.toInt() else 0xFF687B7E.toInt()
-        scene.box(x,0f,z,w,h*.45f,d,hull,rot)
-        scene.box(x,h*.45f,z,w*.6f,h*.65f,d*.28f,0xFFB8BDB3.toInt(),rot)
-        plain()
-        scene.box(x,h*1.1f,z,1.4f,h*.6f,1.4f,0xFF696F69.toInt(),rot)
-        scene.box(x,h*1.5f,z,w*.45f,.5f,1f,0xFFB7BDB4.toInt(),rot)
-        // Dark bridge glazing adds readable scale instead of a featureless cube.
-        scene.box(x,h*.82f,z,w*.64f,h*.12f,d*.29f,0xFF364F59.toInt(),rot)
-    }
-    private fun target(t:Target){
-        val base=if(t.destroyed)0xFF514B40.toInt() else 0xFFA6A28F.toInt()
-        val accent=if(t.destroyed)0xFF3C3931.toInt() else 0xFF817E6D.toInt()
-        material(t.shape==TargetShape.BUILDING||t.shape==TargetShape.TOWER)
-        when(t.shape){
-            TargetShape.BUNKER->{
-                scene.box(t.x,0f,t.z,t.w,t.h,t.d,base,t.heading)
-                scene.box(t.x,t.h,t.z,t.w*.6f,2.5f,t.d*.6f,accent,t.heading)
-                plain();scene.box(t.x,0f,t.z-t.d*.505f,t.w*.25f,t.h*.6f,.25f,0xFF383E38.toInt())
-            }
-            TargetShape.BUILDING->{scene.box(t.x,0f,t.z,t.w,t.h,t.d,base,t.heading);material(false);scene.box(t.x,t.h,t.z,t.w*.45f,4f,t.d*.45f,accent,t.heading)}
-            TargetShape.TOWER->{scene.box(t.x,0f,t.z,t.w,t.h*.85f,t.d,base,t.heading);scene.box(t.x,t.h*.85f,t.z,t.w*1.4f,t.h*.15f,t.d*1.4f,accent,t.heading)}
-            TargetShape.SHIP->ship(t.x,t.z,t.w,t.h,t.d,t.heading,t.destroyed)
-            TargetShape.VEHICLE->{plain();scene.box(t.x,0f,t.z,t.w,t.h*.6f,t.d,0xFF657052.toInt(),t.heading);scene.box(t.x,t.h*.6f,t.z,t.w*.85f,t.h*.5f,t.d*.45f,accent,t.heading)}
-            TargetShape.BRIDGE->{
-                scene.box(t.x,t.h*.7f,t.z,t.w,3.5f,t.d,base,t.heading)
-                for(i in -2..2)scene.box(t.x+i*t.w*.2f,0f,t.z,5f,t.h*.7f,5f,Theme.shade(base,.85f),t.heading)
-                plain();scene.box(t.x,t.h*.7f+3.5f,t.z,t.w,.2f,t.d*.75f,0xFF606866.toInt(),t.heading)
-            }
-            TargetShape.ANTENNA->{
-                plain();scene.box(t.x,0f,t.z,t.w*.35f,t.h,t.d*.35f,base,t.heading)
-                scene.box(t.x,t.h*.55f,t.z,t.w*1.6f,1.5f,t.d*.2f,accent,t.heading)
-                scene.box(t.x,t.h*.8f,t.z,t.w*1.2f,1.5f,t.d*.2f,accent,t.heading)
-                scene.box(t.x,0f,t.z,t.w*1.4f,3f,t.d*1.4f,Theme.shade(base,.8f),t.heading)
-            }
-            TargetShape.TRAIN->{
-                for(i in -2..2){val off=i*30f;val ox=sin(t.heading)*off;val oz=cos(t.heading)*off
-                    scene.box(t.x+ox,0f,t.z+oz,t.w,t.h,26f,if(i==0)accent else 0xFF72796F.toInt(),t.heading)}
-            }
-            TargetShape.TUNNEL->{scene.box(t.x,0f,t.z,t.w*2.2f,t.h*1.8f,t.d*2.2f,0xFF8D8469.toInt(),t.heading);plain();scene.box(t.x,0f,t.z-t.d*1.05f,t.w,t.h,2f,0xFF292F2A.toInt(),t.heading)}
+
+    // ------------------------------------------------------------------ اجزا
+
+    private fun billboard(p: Prop) {
+        val file = when (p.kind) {
+            PropKind.PALM -> "prop_palm"
+            PropKind.BUSH -> "prop_bush"
+            PropKind.TREE -> if (p.h % 2f < 1f) "prop_tree1" else "prop_tree2"
+            else -> if (p.w % 2f < 1f) "prop_rock1" else "prop_rock2"
+        }
+        val bitmap = Gfx.get(gfxContext, file)
+        if (bitmap != null) {
+            val leafy = p.kind != PropKind.ROCK
+            val width = if (leafy) max(p.w, p.h * .95f) else p.w
+            scene.billboard(p.x, 0f, p.z, width, p.h, bitmap)
+        } else {
+            plain()
+            scene.box(p.x, 0f, p.z, p.w, p.h, p.d, p.color, p.rot)
         }
     }
-    /** Shared unrolled coordinates: retains the original HUD contract. */
-    fun project(x:Float,y:Float,z:Float):FloatArray?=if(scene.cam.project(x,y,z,proj))proj else null
+
+    /** موشک پدافند: بدنه‌ی استوانه‌ای با شعله‌ی موتور، جای مکعب قبلی. */
+    private fun missile(m: Missile) {
+        val vx = m.vx
+        val vy = m.vy
+        val vz = m.vz
+        val len = Math.sqrt((vx * vx + vy * vy + vz * vz).toDouble()).toFloat().coerceAtLeast(1f)
+        val ux = vx / len
+        val uy = vy / len
+        val uz = vz / len
+        rig.place(m.x, m.y, m.z, 0f, 1f)
+        rig.tube(-ux * 2.1f, -uy * 2.1f, -uz * 2.1f, ux * 1.5f, uy * 1.5f, uz * 1.5f, 0.34f, 6, 0xFFB9BCB4.toInt())
+        rig.tube(-ux * 4.6f, -uy * 4.6f, -uz * 4.6f, -ux * 2.0f, -uy * 2.0f, -uz * 2.0f, 0.26f, 6, Theme.ORANGE, false)
+    }
+
+    private fun zone(c: Canvas, x: Float, z: Float, radius: Float, color: Int) {
+        val segments = 48
+        var px = x + radius
+        var pz = z
+        for (i in 1..segments) {
+            val a = i * 2f * PI.toFloat() / segments
+            val nx = x + cos(a) * radius
+            val nz = z + sin(a) * radius
+            scene.line(px, .6f, pz, nx, .6f, nz, c, Theme.withAlpha(color, .36f), 1.4f)
+            px = nx
+            pz = nz
+        }
+    }
+
+    private fun target(t: Target, detail: Int) {
+        when (t.shape) {
+            TargetShape.BUNKER -> hardware.bunker(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
+            TargetShape.BUILDING -> hardware.building(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
+            TargetShape.TOWER -> hardware.gantry(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
+            TargetShape.SHIP -> hardware.warship(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)
+            TargetShape.CARRIER -> hardware.carrier(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)
+            TargetShape.VEHICLE -> convoy(t, detail)
+            TargetShape.BRIDGE -> hardware.bridgeSpan(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
+            TargetShape.ANTENNA -> hardware.latticeMast(rig, t.x, t.z, t.h, t.destroyed, detail)
+            TargetShape.TRAIN -> train(t, detail)
+            TargetShape.TUNNEL -> hardware.tunnelMouth(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
+        }
+    }
+
+    /** کاروان زرهی: تانک اصلی به‌عنوان هدف، با نفربر و کامیون همراه. */
+    private fun convoy(t: Target, detail: Int) {
+        val s = sin(t.heading)
+        val c = cos(t.heading)
+        // تانک روی مرکز هدف قرار می‌گیرد تا نقطه‌ی برخورد با تصویر بخواند
+        hardware.tank(rig, t.x, t.z, t.heading, 1.15f, t.heading - 0.35f, t.destroyed, detail)
+        if (detail <= 1) {
+            hardware.apc(rig, t.x + s * 14f, t.z + c * 14f, t.heading, 1.1f, t.destroyed, detail)
+            hardware.truck(rig, t.x - s * 15f, t.z - c * 15f, t.heading, 1.1f, t.destroyed, detail)
+        }
+    }
+
+    /** قطار: لکوموتیو، واگن مهمات هدف و واگن‌های همراه. */
+    private fun train(t: Target, detail: Int) {
+        val s = sin(t.heading)
+        val c = cos(t.heading)
+        hardware.locomotive(rig, t.x + s * 56f, t.z + c * 56f, t.heading, t.destroyed, detail)
+        for (i in -2..1) {
+            val off = i * 24f
+            hardware.wagon(
+                rig, t.x + s * off, t.z + c * off, t.heading,
+                if (i == 0) 0 else (i + 3) % 3, t.destroyed, detail
+            )
+        }
+    }
+
+    /** مختصات مشترک و بدون چرخش: همان قرارداد قبلی HUD. */
+    fun project(x: Float, y: Float, z: Float): FloatArray? =
+        if (scene.cam.project(x, y, z, proj)) proj else null
 }

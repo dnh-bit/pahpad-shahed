@@ -10,6 +10,7 @@ import ir.shahed.pahpad.core.Theme
 import ir.shahed.pahpad.core.UiButton
 import ir.shahed.pahpad.data.DroneModels
 import ir.shahed.pahpad.data.LevelDef
+import ir.shahed.pahpad.data.StarRules
 import ir.shahed.pahpad.data.UpgradeKind
 import ir.shahed.pahpad.game.MissionMode
 import ir.shahed.pahpad.game.Seeds
@@ -172,73 +173,117 @@ class BriefingScreen(
         val x = vw * 0.47f
         val w = vw - x - dp(16f)
         val right = x + w
-        var y = vh * 0.16f + dp(38f)
+        val bottom = vh - dp(74f)
+        var y = dp(84f)
+        val gap = dp(8f)
 
-        ui.panel(c, x, y, w, dp(112f))
-        ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + dp(20f), dp(15f), Theme.AMBER,
-            bold = true, align = Paint.Align.RIGHT)
-        var ty = y + dp(44f)
-        for (line in ui.wrap(level.briefing, dp(12.5f), w - dp(28f))) {
-            ui.text(c, line, right - dp(14f), ty, dp(12.5f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
-            ty += dp(18f)
+        fun fits(height: Float): Boolean = y + height <= bottom
+
+        // ---------------------------------------------------------- بریفینگ
+        val briefLines = ui.wrap(level.briefing, dp(11.5f), w - dp(28f))
+        val briefH = dp(34f) + briefLines.size * dp(16f)
+        if (fits(briefH)) {
+            ui.panel(c, x, y, w, briefH)
+            ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + dp(18f), dp(14f), Theme.AMBER,
+                bold = true, align = Paint.Align.RIGHT)
+            var ty = y + dp(40f)
+            for (line in briefLines) {
+                ui.text(c, line, right - dp(14f), ty, dp(11.5f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
+                ty += dp(16f)
+            }
+            y += briefH + gap
         }
-        y += dp(122f)
 
-        // چالش‌ها
-        ui.panel(c, x, y, w, dp(74f))
-        ui.text(c, "چالش این ماموریت", right - dp(14f), y + dp(18f), dp(12.5f), Theme.TEXT, bold = true, align = Paint.Align.RIGHT)
-        var cxChip = right - dp(56f)
-        val chipY = y + dp(44f)
-        val chips = ArrayList<Pair<String, Int>>()
-        chips.add(Pair(level.newChallenge, Theme.difficultyColor(level.difficulty)))
-        if (level.aaSites > 0) chips.add(Pair("پدافند " + Fa.num(level.aaSites), Theme.RED))
-        if (level.radarZones > 0) chips.add(Pair("رادار", Theme.BLUE))
-        if (level.ewZones > 0) chips.add(Pair("جنگ الکترونیک", Theme.VIOLET))
-        if (level.movingTarget) chips.add(Pair("هدف متحرک", Theme.ORANGE))
-        if (level.wind > 0.3f) chips.add(Pair("باد شدید", Theme.TEXT_DIM))
-        if (level.timeLimit > 0f) chips.add(Pair("زمان " + Fa.num(level.timeLimit, 0) + " ثانیه", Theme.AMBER))
-        for (ch in chips) {
-            val cw = ui.measure(ch.first, dp(11.5f)) + dp(22f)
-            if (cxChip - cw < x + dp(10f)) break
-            ui.chip(c, cxChip - cw / 2f, chipY, ch.first, ch.second)
-            cxChip -= cw + dp(8f)
-        }
-        y += dp(84f)
-
-        // پهباد انتخابی (با تصویر)
+        // ------------------------------------------------------ شرط ستاره‌ها
         val model = DroneModels.byId(save.selectedDroneId) ?: DroneModels.all.first()
-        ui.panel(c, x, y, w, dp(96f))
-        val sideName = when (model.id) {
-            "shahed136" -> "drone_136_side"; "shahed238" -> "drone_238_side"; "shahedx" -> "drone_x_side"
-            else -> "drone_131_side"
-        }
-        ui.imageFit(ui.context, c, sideName, x + dp(10f), y + dp(8f), dp(110f), dp(80f))
-        ui.text(c, "پهباد انتخابی: " + model.name, right - dp(14f), y + dp(18f), dp(13.5f), model.color,
-            bold = true, align = Paint.Align.RIGHT)
-        val stats = listOf(
-            Pair("برد", UpgradeKind.RANGE),
-            Pair("سرعت", UpgradeKind.SPEED),
-            Pair("انفجار", UpgradeKind.BLAST),
-            Pair("مقاومت", UpgradeKind.ARMOR)
-        )
-        val colW = (w - dp(28f)) / stats.size
-        for ((i, s) in stats.withIndex()) {
-            val cxs = right - dp(14f) - colW * i - colW / 2f
-            ui.text(c, s.first, cxs, y + dp(44f), dp(11f), Theme.TEXT_FAINT)
-            val lvl = save.upgradeLevel(model.id, s.second)
-            ui.text(c, s.second.valueAt(lvl, model), cxs, y + dp(64f), dp(11.5f), Theme.TEXT)
-            ui.text(c, "سطح " + Fa.num(lvl), cxs, y + dp(82f), dp(10f), Theme.TEXT_DIM)
+        val cruise = model.speedAt(save.upgradeLevel(model.id, UpgradeKind.SPEED)) * 0.8f / 3.6f
+        val par = StarRules.parTime(level.distance, cruise, level.targets)
+        val preview = StarRules.preview(level.targets, par)
+        val starsH = dp(26f) + preview.size * dp(26f)
+        if (fits(starsH)) {
+            ui.panel(c, x, y, w, starsH, Theme.withAlpha(Theme.AMBER, 0.08f),
+                Theme.withAlpha(Theme.AMBER, 0.35f))
+            ui.text(c, "شرط ستاره‌ها", right - dp(12f), y + dp(15f), dp(12f), Theme.AMBER, bold = true,
+                align = Paint.Align.RIGHT)
+            ui.text(c, "ستاره‌ی خودت را قبل از پرواز بشناس", x + dp(12f), y + dp(15f), dp(10f),
+                Theme.TEXT_FAINT, align = Paint.Align.LEFT)
+            var sy = y + dp(36f)
+            for (rule in preview) {
+                ui.star(c, right - dp(16f), sy, dp(6.5f), true, Theme.withAlpha(Theme.AMBER, 0.75f))
+                ui.text(c, rule.requirement, right - dp(30f), sy, dp(10.5f), Theme.TEXT,
+                    align = Paint.Align.RIGHT)
+                sy += dp(26f)
+            }
+            y += starsH + gap
         }
 
-        level.tutorial?.let {
-            if (save.showHints) {
-                y += dp(104f)
-                val hintH = dp(46f)
-                ui.panel(c, x, y, w, hintH, Theme.withAlpha(Theme.MINT, 0.1f), Theme.withAlpha(Theme.MINT, 0.4f))
-                var hy = y + dp(18f)
-                for (line in ui.wrap("راهنما: $it", dp(11.5f), w - dp(24f))) {
-                    ui.text(c, line, right - dp(12f), hy, dp(11.5f), Theme.MINT, align = Paint.Align.RIGHT)
-                    hy += dp(16f)
+        // ------------------------------------------------------------ چالش‌ها
+        val chipsH = dp(62f)
+        if (fits(chipsH)) {
+            ui.panel(c, x, y, w, chipsH)
+            ui.text(c, "چالش این ماموریت", right - dp(14f), y + dp(16f), dp(12f), Theme.TEXT, bold = true,
+                align = Paint.Align.RIGHT)
+            var cxChip = right - dp(50f)
+            val chipY = y + dp(41f)
+            val chips = ArrayList<Pair<String, Int>>()
+            chips.add(Pair(level.newChallenge, Theme.difficultyColor(level.difficulty)))
+            if (level.aaSites > 0) chips.add(Pair("پدافند " + Fa.num(level.aaSites), Theme.RED))
+            if (level.radarZones > 0) chips.add(Pair("رادار", Theme.BLUE))
+            if (level.ewZones > 0) chips.add(Pair("جنگ الکترونیک", Theme.VIOLET))
+            if (level.movingTarget) chips.add(Pair("هدف متحرک", Theme.ORANGE))
+            if (level.wind > 0.3f) chips.add(Pair("باد شدید", Theme.TEXT_DIM))
+            if (level.timeLimit > 0f) chips.add(Pair("زمان " + Fa.num(level.timeLimit, 0) + " ثانیه", Theme.AMBER))
+            for (ch in chips) {
+                val cw = ui.measure(ch.first, dp(11f)) + dp(22f)
+                if (cxChip - cw < x + dp(10f)) break
+                ui.chip(c, cxChip - cw / 2f, chipY, ch.first, ch.second, dp(11f))
+                cxChip -= cw + dp(8f)
+            }
+            y += chipsH + gap
+        }
+
+        // ------------------------------------------------------ پهباد انتخابی
+        val droneH = dp(84f)
+        if (fits(droneH)) {
+            ui.panel(c, x, y, w, droneH)
+            val sideName = when (model.id) {
+                "shahed136" -> "drone_136_side"
+                "shahed238" -> "drone_238_side"
+                "shahedx" -> "drone_x_side"
+                else -> "drone_131_side"
+            }
+            ui.imageFit(ui.context, c, sideName, x + dp(8f), y + dp(6f), dp(96f), dp(70f))
+            ui.text(c, "پهباد انتخابی: " + model.name, right - dp(14f), y + dp(16f), dp(13f), model.color,
+                bold = true, align = Paint.Align.RIGHT)
+            val stats = listOf(
+                Pair("برد", UpgradeKind.RANGE),
+                Pair("سرعت", UpgradeKind.SPEED),
+                Pair("انفجار", UpgradeKind.BLAST),
+                Pair("مقاومت", UpgradeKind.ARMOR)
+            )
+            val colW = (w - dp(120f)) / stats.size
+            for ((i, st) in stats.withIndex()) {
+                val cxs = right - dp(14f) - colW * i - colW / 2f
+                ui.text(c, st.first, cxs, y + dp(38f), dp(10.5f), Theme.TEXT_FAINT)
+                val lvl = save.upgradeLevel(model.id, st.second)
+                ui.text(c, st.second.valueAt(lvl, model), cxs, y + dp(56f), dp(11f), Theme.TEXT)
+                ui.text(c, "سطح " + Fa.num(lvl), cxs, y + dp(72f), dp(9.5f), Theme.TEXT_DIM)
+            }
+            y += droneH + gap
+        }
+
+        // ----------------------------------------------------------- راهنما
+        val hint = level.tutorial
+        if (hint != null && save.showHints) {
+            val hintLines = ui.wrap("راهنما: " + hint, dp(11f), w - dp(24f))
+            val hintH = dp(16f) + hintLines.size * dp(15f)
+            if (fits(hintH)) {
+                ui.panel(c, x, y, w, hintH, Theme.withAlpha(Theme.MINT, 0.1f),
+                    Theme.withAlpha(Theme.MINT, 0.4f))
+                var hy = y + dp(15f)
+                for (line in hintLines) {
+                    ui.text(c, line, right - dp(12f), hy, dp(11f), Theme.MINT, align = Paint.Align.RIGHT)
+                    hy += dp(15f)
                 }
             }
         }

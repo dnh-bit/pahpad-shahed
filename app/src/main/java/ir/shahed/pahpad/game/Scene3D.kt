@@ -172,7 +172,7 @@ class Scene3D {
             if(bitmap!=null && matrix.setPolyToPoly(f.uv,0,f.dst,0,4)) {
                 val shader=shaders.getOrPut(bitmap){BitmapShader(bitmap,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP)}
                 shader.setLocalMatrix(matrix);paint.shader=shader
-                paint.alpha=if(f.transparent)(255*f.opacity*(1f-f.fog*.75f)).toInt() else (155*(1f-f.fog)).toInt()
+                paint.alpha=if(f.transparent)(255*f.opacity*(1f-f.fog*.75f)).toInt() else (208*(1f-f.fog)).toInt()
                 canvas.drawPath(path,paint);paint.shader=null;paint.alpha=255
             }
             if(f.hasOutline){stroke.color=f.outlineColor;stroke.strokeWidth=1f;canvas.drawPath(path,stroke)}

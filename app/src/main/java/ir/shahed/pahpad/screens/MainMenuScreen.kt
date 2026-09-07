@@ -92,6 +92,6 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
             px + panelW - dp(14f), py + dp(78f), dp(12f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
 
         drawButtons(c)
-        ui.text(c, "نسخه " + Fa.num("0.0.4"), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
+        ui.text(c, "نسخه " + Fa.num("0.0.5"), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
     }
 }
