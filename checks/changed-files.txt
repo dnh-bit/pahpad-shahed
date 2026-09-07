@@ -1,0 +1,25 @@
+.github/workflows/build.yml
+README.md
+app/build.gradle.kts
+app/src/main/assets/gfx/drone_131.png
+app/src/main/assets/gfx/drone_131_side.png
+app/src/main/assets/gfx/drone_136.png
+app/src/main/assets/gfx/drone_136_side.png
+app/src/main/assets/gfx/drone_238.png
+app/src/main/assets/gfx/drone_238_side.png
+app/src/main/assets/gfx/drone_x.png
+app/src/main/assets/gfx/drone_x_side.png
+app/src/main/assets/gfx/env_desert.png
+app/src/main/assets/gfx/env_naval.png
+app/src/main/assets/gfx/env_special.png
+app/src/main/assets/gfx/env_urban.png
+app/src/main/assets/gfx/menu_hero.png
+app/src/main/assets/gfx/prop_rock1.png
+app/src/main/assets/gfx/prop_rock2.png
+app/src/main/assets/gfx/prop_tree1.png
+app/src/main/assets/gfx/prop_tree2.png
+app/src/main/java/ir/shahed/pahpad/core/Gfx.kt
+app/src/main/java/ir/shahed/pahpad/game/Scene3D.kt
+app/src/main/java/ir/shahed/pahpad/game/WorldRenderer.kt
+
+Gameplay, levels, saves, controls and original particle code were compared byte-for-byte and are unchanged.
