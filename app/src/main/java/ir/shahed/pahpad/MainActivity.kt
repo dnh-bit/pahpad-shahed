@@ -9,6 +9,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.GameAudio
+import ir.shahed.pahpad.core.Gfx
 import ir.shahed.pahpad.core.SaveManager
 import ir.shahed.pahpad.core.Theme
 import ir.shahed.pahpad.screens.SplashScreen
@@ -79,18 +80,24 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        audio.resume()
         current?.onScreenResume()
     }
 
     override fun onPause() {
         super.onPause()
         current?.onScreenPause()
-        audio.stopEngine()
+        audio.pause()
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        current?.stopLoop()
+        current?.onExit()
+        current = null
+        root.removeAllViews()
         audio.release()
+        Gfx.clear()
+        super.onDestroy()
     }
 
     @Suppress("DEPRECATION")

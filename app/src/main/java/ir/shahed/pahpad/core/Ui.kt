@@ -2,7 +2,6 @@ package ir.shahed.pahpad.core
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -46,6 +45,11 @@ class Ui(val context: Context, val density: Float) {
     private val boldFace: Typeface = Fonts.bold(context)
     private val regularFace: Typeface = Fonts.regular(context)
     private val tmp = RectF()
+    private var bgGradient: LinearGradient? = null
+    private var bgGlow: android.graphics.RadialGradient? = null
+    private var bgWidth = -1f
+    private var bgHeight = -1f
+    private var bgAccent = 0
 
     fun dp(v: Float): Float = v * density
 
@@ -66,7 +70,7 @@ class Ui(val context: Context, val density: Float) {
     ) {
         textPaint.typeface = if (bold) boldFace else regularFace
         textPaint.textSize = size
-        textPaint.color = Theme.withAlpha(color, alpha)
+        textPaint.color = Theme.withAlpha(color, alpha * android.graphics.Color.alpha(color) / 255f)
         textPaint.textAlign = align
         c.drawText(str, cx, cy + size * 0.35f, textPaint)
     }
@@ -119,11 +123,18 @@ class Ui(val context: Context, val density: Float) {
     // --------------------------------------------------------------- سطوح
 
     fun background(c: Canvas, w: Float, h: Float, accent: Int = Theme.MINT) {
-        fill.shader = LinearGradient(
-            0f, 0f, w * 0.4f, h,
-            intArrayOf(Theme.BG_DEEP, Theme.BG, 0xFF10161D.toInt()),
-            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
-        )
+        if (w <= 0f || h <= 0f) return
+        if (bgGradient == null || bgWidth != w || bgHeight != h || bgAccent != accent) {
+            bgGradient = LinearGradient(0f, 0f, w * .4f, h,
+                intArrayOf(Theme.BG_DEEP, Theme.BG, 0xFF10161D.toInt()),
+                floatArrayOf(0f, .55f, 1f), Shader.TileMode.CLAMP)
+            bgGlow = android.graphics.RadialGradient(w * .5f, h * 1.15f, h * .9f,
+                intArrayOf(Theme.withAlpha(accent, .13f), Theme.withAlpha(accent, 0f)),
+                null, Shader.TileMode.CLAMP)
+            bgWidth = w; bgHeight = h; bgAccent = accent
+        }
+        fill.shader = bgGradient
+        fill.alpha = 255
         c.drawRect(0f, 0f, w, h, fill)
         fill.shader = null
         // شبکه تاکتیکی پس‌زمینه
@@ -135,11 +146,8 @@ class Ui(val context: Context, val density: Float) {
         var y = 0f
         while (y < h) { c.drawLine(0f, y, w, y, stroke); y += step }
         // درخشش گوشه
-        fill.shader = android.graphics.RadialGradient(
-            w * 0.5f, h * 1.15f, h * 0.9f,
-            intArrayOf(Theme.withAlpha(accent, 0.13f), Theme.withAlpha(accent, 0f)),
-            null, Shader.TileMode.CLAMP
-        )
+        fill.shader = bgGlow
+        fill.alpha = 255
         c.drawRect(0f, 0f, w, h, fill)
         fill.shader = null
     }
@@ -172,43 +180,38 @@ class Ui(val context: Context, val density: Float) {
 
     // --------------------------------------------------------------- تصویر
     private val bmpPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-    private val bmpCache = HashMap<String, Bitmap?>()
+    private val imageClip = Path()
+    private val imageRect = RectF()
 
     /** تصویر از assets/gfx با حافظه‌ی نهان */
     fun image(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float, radius: Float = dp(12f)) {
-        val bmp = bmpCache.getOrPut(name) {
-            try { context.assets.open("gfx/$name.png").use { BitmapFactory.decodeStream(it) } }
-            catch (e: Exception) { null }
-        } ?: return
+        val bmp = Gfx.get(context, name) ?: return
         val save = c.save()
-        val clip = Path()
-        clip.addRoundRect(RectF(x, y, x + w, y + h), radius, radius, Path.Direction.CW)
-        c.clipPath(clip)
+        imageClip.rewind()
+        imageRect.set(x, y, x + w, y + h)
+        imageClip.addRoundRect(imageRect, radius, radius, Path.Direction.CW)
+        c.clipPath(imageClip)
         // پوشاندن کامل ناحیه (center-crop)
         val bw = bmp.width.toFloat(); val bh = bmp.height.toFloat()
         val scale = Math.max(w / bw, h / bh)
         val dw = bw * scale; val dh = bh * scale
         val dx = x + (w - dw) / 2f; val dy = y + (h - dh) / 2f
-        c.drawBitmap(bmp, null, RectF(dx, dy, dx + dw, dy + dh), bmpPaint)
+        imageRect.set(dx, dy, dx + dw, dy + dh)
+        c.drawBitmap(bmp, null, imageRect, bmpPaint)
         c.restoreToCount(save)
     }
 
     /** دسترسی خام به تصویر با حافظه‌ی نهان */
-    fun imageGet(context: Context, name: String): Bitmap? = bmpCache.getOrPut(name) {
-        try { context.assets.open("gfx/$name.png").use { BitmapFactory.decodeStream(it) } }
-        catch (e: Exception) { null }
-    }
+    fun imageGet(context: Context, name: String): Bitmap? = Gfx.get(context, name)
 
     /** تصویر با حفظ تناسب داخل مستطیل (letterbox) */
     fun imageFit(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float) {
-        val bmp = bmpCache.getOrPut(name) {
-            try { context.assets.open("gfx/$name.png").use { BitmapFactory.decodeStream(it) } }
-            catch (e: Exception) { null }
-        } ?: return
+        val bmp = Gfx.get(context, name) ?: return
         val bw = bmp.width.toFloat(); val bh = bmp.height.toFloat()
         val scale = Math.min(w / bw, h / bh)
         val dw = bw * scale; val dh = bh * scale
-        c.drawBitmap(bmp, null, RectF(x + (w - dw) / 2f, y + (h - dh) / 2f, x + (w - dw) / 2f + dw, y + (h - dh) / 2f + dh), bmpPaint)
+        imageRect.set(x + (w - dw) / 2f, y + (h - dh) / 2f, x + (w - dw) / 2f + dw, y + (h - dh) / 2f + dh)
+        c.drawBitmap(bmp, null, imageRect, bmpPaint)
     }
 
     // --------------------------------------------------------------- دکمه

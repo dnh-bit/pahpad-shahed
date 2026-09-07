@@ -16,6 +16,8 @@ class LeaderboardScreen(game: MainActivity) : BaseScreen(game) {
     private var scroll = 0f
     private var dragging = false
     private var lastY = 0f
+    private var dragPointer = -1
+    private fun minScroll() = minOf(0f, vh - dp(62f) - vh * .18f - Levels.all.size * dp(38f))
 
     init {
         buttons.add(back)
@@ -28,22 +30,30 @@ class LeaderboardScreen(game: MainActivity) : BaseScreen(game) {
 
     override fun layoutUi(w: Float, h: Float) {
         back.set(dp(20f), h - dp(54f), dp(110f), dp(40f))
+        scroll = scroll.coerceIn(minScroll(), 0f)
     }
 
     override fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean {
+        if (x < vw * .36f || y < vh * .16f || y > vh - dp(62f) || dragPointer >= 0) return true
         dragging = true
+        dragPointer = pointerId
         lastY = y
         return true
     }
 
     override fun onTouchMove(x: Float, y: Float, pointerId: Int) {
-        if (!dragging) return
-        scroll = (scroll + (y - lastY)).coerceIn(-dp(220f), 0f)
+        if (!dragging || dragPointer != pointerId) return
+        scroll = (scroll + (y - lastY)).coerceIn(minScroll(), 0f)
         lastY = y
     }
 
     override fun onTouchUp(x: Float, y: Float, pointerId: Int) {
+        if (dragPointer == pointerId) onTouchCancel()
+    }
+
+    override fun onTouchCancel() {
         dragging = false
+        dragPointer = -1
     }
 
     override fun render(c: Canvas) {

@@ -33,6 +33,15 @@ class GameScreen(
     private val mission = Mission(level, save, mode, seed)
     private val renderer = WorldRenderer(game)
     private val rnd = Random()
+    private val markerPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply { alpha = 220 }
+    private val markerRect = RectF()
+    private val mapClip = android.graphics.Path()
+    private var explosionShake = 0f
+    private var shakeDuration = .3f
+    private var shakePower = 0f
+    private var visualFlash = 0f
+    private var registeredSensor = false
+    private val useTilt: Boolean get() = save.tiltControl && accelerometer != null
 
     private val sensorManager = game.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
     private val accelerometer: Sensor? = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
@@ -82,11 +91,18 @@ class GameScreen(
 
         mission.onExplosion = { x, y, z, p ->
             renderer.fx.explosion(x, y, z, p)
+            shakeDuration = (.18f + p * .06f).coerceIn(.2f, .38f)
+            explosionShake = shakeDuration
+            shakePower = kotlin.math.sqrt(p.coerceIn(.25f, 3f))
+            visualFlash = .05f
+            mission.shake = 0f
+            mission.flash = 0f
             renderer.fx.debris(x, y, z)
             audio.explosion(p)
             audio.vibrate(90)
         }
-        mission.onSmoke = { x, y, z -> renderer.fx.smoke(x, y, z, 0.9f) }
+        // The original Mission RNG still advances unchanged; visual emission is time-based.
+        mission.onSmoke = null
         mission.onTracer = { x, y, z -> renderer.fx.tracer(x, y, z) }
         mission.onLaunch = {
             audio.launch()
@@ -117,6 +133,8 @@ class GameScreen(
     override fun onExit() {
         unregisterSensor()
         audio.stopEngine()
+        cancelTouches()
+        renderer.release()
     }
 
     override fun onScreenPause() {
@@ -134,11 +152,13 @@ class GameScreen(
     private fun registerSensor() {
         val sm = sensorManager ?: return
         val s = accelerometer ?: return
-        if (save.tiltControl) sm.registerListener(this, s, SensorManager.SENSOR_DELAY_GAME)
+        if (useTilt && !registeredSensor)
+            registeredSensor = sm.registerListener(this, s, SensorManager.SENSOR_DELAY_GAME)
     }
 
     private fun unregisterSensor() {
         sensorManager?.unregisterListener(this)
+        registeredSensor = false
     }
 
     override fun onBack(): Boolean {
@@ -149,10 +169,14 @@ class GameScreen(
 
     private fun setPaused(value: Boolean) {
         paused = value
+        calibrated = false
         resume.visible = value
         retry.visible = value
         quit.visible = value
-        if (value) audio.stopEngine()
+        if (value) {
+            cancelTouches()
+            audio.stopEngine()
+        }
         else if (mission.phase == Mission.Phase.FLYING) audio.startEngine()
     }
 
@@ -226,16 +250,19 @@ class GameScreen(
         }
         if (camRect.contains(x, y)) {
             mission.fpv = !mission.fpv
+            if (mission.fpv) renderer.fx.clearEngineSmoke()
             audio.click()
             return true
         }
         if (boostRect.contains(x, y)) {
+            if (boostPointer >= 0) return true
             boostPointer = pointerId
             mission.boost = true
             return true
         }
         if (x < vw * 0.45f) {
-            if (save.tiltControl) return true
+            if (useTilt) return true
+            if (joyPointer >= 0) return true
             joyPointer = pointerId
             joyBaseX = x
             joyBaseY = y
@@ -243,6 +270,7 @@ class GameScreen(
             joyY = y
             return true
         }
+        if (throttlePointer >= 0) return true
         throttlePointer = pointerId
         throttleStartY = y
         throttleStart = mission.throttle
@@ -273,13 +301,21 @@ class GameScreen(
         }
     }
 
+    override fun onTouchCancel() {
+        joyPointer = -1; throttlePointer = -1; boostPointer = -1
+        joyX = joyBaseX; joyY = joyBaseY
+        mission.steerX = 0f; mission.steerY = 0f; mission.boost = false
+    }
+
     // ------------------------------------------------------------ به‌روزرسانی
 
     override fun update(dt: Float) {
         if (paused) return
+        explosionShake = (explosionShake - dt).coerceAtLeast(0f)
+        visualFlash = (visualFlash - dt).coerceAtLeast(0f)
 
         if (mission.phase == Mission.Phase.FLYING) {
-            if (save.tiltControl) {
+            if (useTilt) {
                 mission.steerX = tiltX
                 mission.steerY = -tiltY
             } else if (joyPointer >= 0) {
@@ -290,14 +326,15 @@ class GameScreen(
                 mission.steerX = 0f
                 mission.steerY = 0f
             }
-            audio.setEngineIntensity(mission.throttle * (if (mission.boost) 1f else 0.85f))
+            audio.setEngineIntensity((mission.speedKmh / (mission.maxSpeedKmh * 1.28f)).coerceIn(0f, 1f))
         } else {
             mission.steerX = 0f
             mission.steerY = 0f
         }
 
+        renderer.update(dt, mission)
         mission.update(dt)
-        renderer.fx.update(dt)
+        if (mission.phase != Mission.Phase.FLYING) audio.stopEngine()
 
         if (finished) {
             finishTimer += dt
@@ -305,7 +342,7 @@ class GameScreen(
                 val res = result
                 if (res != null) {
                     leaving = true
-                    post { game.show(ResultScreen(game, level, mode, res, seed)) }
+                    post { if (game.currentScreen() === this) game.show(ResultScreen(game, level, mode, res, seed)) }
                 }
             }
         }
@@ -315,7 +352,6 @@ class GameScreen(
 
     private fun setupCamera() {
         val cam = renderer.scene.cam
-        cam.viewport(vw, vh)
         if (mission.fpv) {
             cam.fov = 82f
             cam.x = mission.x
@@ -343,31 +379,32 @@ class GameScreen(
     override fun render(c: Canvas) {
         setupCamera()
 
-        val shake = mission.shake
+        val fade = (explosionShake / shakeDuration).coerceIn(0f, 1f)
+        val shake = if (paused) 0f else maxOf(mission.shake * .65f, fade * fade * shakePower)
         c.save()
         if (shake > 0f) {
-            val amp = dp(9f) * shake
-            c.translate((rnd.nextFloat() * 2f - 1f) * amp, (rnd.nextFloat() * 2f - 1f) * amp)
+            val amp = dp(7f) * shake
+            c.translate(kotlin.math.sin(time * 91f) * amp, kotlin.math.sin(time * 113f + .6f) * amp)
         }
         // چرخش تصویر برای حس بنک
         val rollDeg = Math.toDegrees(renderer.scene.cam.roll.toDouble()).toFloat()
         c.save()
         c.rotate(rollDeg, vw / 2f, vh / 2f)
         renderer.draw(c, mission, vw, vh)
+        drawTargetMarkers(c)
         c.restore()
         c.restore()
 
+        if (visualFlash > 0f) {
+            ui.fill.color = Theme.withAlpha(0xFFFFEAC8.toInt(), visualFlash / .05f * .48f)
+            ui.fill.shader = null
+            c.drawRect(0f, 0f, vw, vh, ui.fill)
+        }
         drawSignalNoise(c)
-        drawTargetMarkers(c)
         drawHud(c)
         drawControls(c)
         drawToasts(c)
 
-        if (mission.flash > 0f) {
-            ui.fill.color = Theme.withAlpha(0xFFFFFFFF.toInt(), mission.flash * 0.75f)
-            ui.fill.shader = null
-            c.drawRect(0f, 0f, vw, vh, ui.fill)
-        }
         if (mission.phase == Mission.Phase.READY) drawPreLaunch(c)
         if (paused) drawPauseOverlay(c)
         if (finished) drawFinishBanner(c)
@@ -405,10 +442,8 @@ class GameScreen(
             val bmp = ui.imageGet(ui.context, "hud_target")
             if (bmp != null) {
                 val isz = dp(16f)
-                val mp = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG or android.graphics.Paint.ANTI_ALIAS_FLAG)
-                mp.alpha = 220
-                c.drawBitmap(bmp, null,
-                    android.graphics.RectF(p[0] - isz / 2f, p[1] - size - isz - dp(10f), p[0] + isz / 2f, p[1] - size - dp(10f)), mp)
+                markerRect.set(p[0] - isz / 2f, p[1] - size - isz - dp(10f), p[0] + isz / 2f, p[1] - size - dp(10f))
+                c.drawBitmap(bmp, null, markerRect, markerPaint)
             }
             ui.text(c, t.label, p[0], p[1] - size - dp(14f), dp(11.5f), Theme.RED, bold = true)
         } else {
@@ -439,6 +474,8 @@ class GameScreen(
 
         // ===== بالا راست: ارتفاع و سرعت
         val rx = vw - dp(70f)
+        ui.panel(c, rx - dp(108f), pad - dp(5f), dp(118f), dp(105f),
+            Theme.withAlpha(Theme.BG_DEEP, .76f), Theme.withAlpha(Theme.TEXT_DIM, .28f), dp(12f))
         ui.text(c, "ارتفاع", rx, pad + dp(8f), dp(10.5f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
         ui.text(c, Fa.num(mission.altitude, 0) + " م", rx, pad + dp(26f), dp(17f), Theme.TEXT,
             bold = true, align = Paint.Align.RIGHT)
@@ -450,7 +487,7 @@ class GameScreen(
         // ===== وسط بالا: فاصله تا هدف و زمان
         val topCx = vw / 2f
         ui.panel(c, topCx - dp(90f), dp(10f), dp(180f), dp(42f),
-            Theme.withAlpha(Theme.BG_DEEP, 0.55f), Theme.withAlpha(Theme.MINT, 0.35f), dp(10f))
+            Theme.withAlpha(Theme.BG_DEEP, 0.76f), Theme.withAlpha(Theme.TEXT_DIM, 0.28f), dp(12f))
         ui.text(c, "فاصله تا هدف", topCx, dp(21f), dp(10f), Theme.TEXT_DIM)
         ui.text(c, Fa.meters(mission.distanceToTarget()), topCx, dp(39f), dp(15f), Theme.MINT, bold = true)
 
@@ -464,6 +501,8 @@ class GameScreen(
         val fw = dp(220f)
         val fx0 = topCx - fw / 2f
         val fy = vh - dp(30f)
+        ui.panel(c, fx0 - dp(12f), fy - dp(29f), fw + dp(24f), dp(59f),
+            Theme.withAlpha(Theme.BG_DEEP, .76f), Theme.withAlpha(Theme.TEXT_DIM, .28f), dp(12f))
         val fuel = mission.fuel01
         val fuelColor = when {
             fuel < 0.18f -> Theme.RED
@@ -537,8 +576,9 @@ class GameScreen(
         val range = 700f
         val scale = r / range
         c.save()
-        val clip = RectF(cx - r, cy - r, cx + r, cy + r)
-        c.clipRect(clip)
+        mapClip.rewind()
+        mapClip.addCircle(cx, cy, r, android.graphics.Path.Direction.CW)
+        c.clipPath(mapClip)
         c.rotate(Math.toDegrees(mission.yaw.toDouble()).toFloat(), cx, cy)
 
         fun mapX(wx: Float) = cx + (wx - mission.x) * scale
@@ -579,7 +619,7 @@ class GameScreen(
     // ---- کنترل‌ها
     private fun drawControls(c: Canvas) {
         // جوی‌استیک
-        if (!save.tiltControl) {
+        if (!useTilt) {
             val baseX = if (joyPointer >= 0) joyBaseX else dp(90f)
             val baseY = if (joyPointer >= 0) joyBaseY else vh - dp(90f)
             val r = dp(58f)
@@ -640,7 +680,7 @@ class GameScreen(
         ui.text(c, "آماده پرتاب", cx, vh * 0.36f, dp(26f), Theme.MINT, bold = true)
         ui.text(c, "هدف: " + (mission.world.activeTarget()?.label ?: level.targetName),
             cx, vh * 0.44f, dp(14f), Theme.TEXT)
-        val hint = if (save.tiltControl) "با تیلت گوشی هدایت کنید" else "با جوی‌استیک سمت چپ هدایت کنید"
+        val hint = if (useTilt) "با تیلت گوشی هدایت کنید" else "با جوی‌استیک سمت چپ هدایت کنید"
         ui.text(c, hint, cx, vh * 0.51f, dp(12.5f), Theme.TEXT_DIM)
         val a = 0.4f + 0.6f * ((Math.sin((time * 3.4f).toDouble()).toFloat() + 1f) / 2f)
         ui.text(c, "برای پرتاب ضربه بزنید", cx, vh * 0.62f, dp(17f), Theme.AMBER, bold = true, alpha = a)

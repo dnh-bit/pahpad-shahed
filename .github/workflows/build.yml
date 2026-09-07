@@ -41,17 +41,32 @@ jobs:
       - name: Locate APK
         run: find app/build/outputs -name "*.apk"
 
+      - name: Check APK size budget (<10MB)
+        shell: bash
+        run: |
+          shopt -s nullglob
+          apks=(app/build/outputs/apk/release/*.apk)
+          (( ${#apks[@]} > 0 )) || { echo 'No release APK was produced'; exit 1; }
+          for apk in "${apks[@]}"; do
+            bytes=$(stat -c '%s' "$apk")
+            echo "$(basename "$apk"): $bytes bytes"
+            if (( bytes >= 10000000 )); then
+              echo 'APK must remain below 10,000,000 bytes'
+              exit 1
+            fi
+          done
+
       - name: Rename APK
         run: |
           mkdir -p out
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$APK" out/pahpad-shahed-v0.0.3.apk
+          cp "$APK" out/pahpad-shahed-v0.0.4.apk
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v0.0.3
-          name: "0.0.3"
-          files: out/pahpad-shahed-v0.0.3.apk
+          tag_name: v0.0.4
+          name: "0.0.4"
+          files: out/pahpad-shahed-v0.0.4.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

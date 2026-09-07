@@ -18,6 +18,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
 
     protected val buttons = ArrayList<UiButton>()
     private var pressedButton: UiButton? = null
+    private var buttonPointer = -1
 
     private var lastFrame = 0L
     private var looping = false
@@ -57,6 +58,20 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
 
     fun stopLoop() {
         looping = false
+        lastFrame = 0L
+        cancelTouches()
+    }
+
+    protected fun cancelTouches() {
+        pressedButton?.pressed = false
+        pressedButton = null
+        buttonPointer = -1
+        onTouchCancel()
+    }
+
+    override fun onDetachedFromWindow() {
+        stopLoop()
+        super.onDetachedFromWindow()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -72,9 +87,9 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         val dt = if (lastFrame == 0L) 1f / 60f else ((now - lastFrame) / 1_000_000_000f)
         lastFrame = now
         val clamped = dt.coerceIn(0.001f, 0.05f)
-        time += clamped
+        if (looping) time += clamped
         if (laidOut) {
-            update(clamped)
+            if (looping) update(clamped)
             render(canvas)
         }
         if (looping) postInvalidateOnAnimation()
@@ -86,10 +101,12 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                cancelTouches()
                 val b = findButton(event.x, event.y)
-                if (b != null) {
+                if (b != null && pressedButton == null) {
                     b.pressed = true
                     pressedButton = b
+                    buttonPointer = event.getPointerId(event.actionIndex)
                     return true
                 }
                 return onTouchDown(event.x, event.y, event.getPointerId(0))
@@ -97,27 +114,39 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val i = event.actionIndex
                 val b = findButton(event.getX(i), event.getY(i))
-                if (b != null) {
+                if (b != null && pressedButton == null) {
                     b.pressed = true
                     pressedButton = b
+                    buttonPointer = event.getPointerId(event.actionIndex)
                     return true
                 }
                 return onTouchDown(event.getX(i), event.getY(i), event.getPointerId(i))
             }
             MotionEvent.ACTION_MOVE -> {
-                pressedButton?.let { it.pressed = it.contains(event.x, event.y) }
+                val bi = event.findPointerIndex(buttonPointer)
+                pressedButton?.let {
+                    it.pressed = bi >= 0 && it.contains(event.getX(bi), event.getY(bi))
+                }
                 for (i in 0 until event.pointerCount) {
-                    onTouchMove(event.getX(i), event.getY(i), event.getPointerId(i))
+                    if (event.getPointerId(i) != buttonPointer)
+                        onTouchMove(event.getX(i), event.getY(i), event.getPointerId(i))
                 }
                 return true
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_CANCEL -> {
+                for (i in 0 until event.pointerCount)
+                    onTouchUp(event.getX(i), event.getY(i), event.getPointerId(i))
+                cancelTouches()
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val i = if (event.actionMasked == MotionEvent.ACTION_POINTER_UP) event.actionIndex else 0
                 val b = pressedButton
-                if (b != null) {
+                if (b != null && event.getPointerId(i) == buttonPointer) {
                     val hit = b.pressed && b.contains(event.getX(i), event.getY(i))
                     b.pressed = false
                     pressedButton = null
+                    buttonPointer = -1
                     if (hit && event.actionMasked != MotionEvent.ACTION_CANCEL) {
                         audio.click()
                         b.onClick()
@@ -142,6 +171,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
     open fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean = true
     open fun onTouchMove(x: Float, y: Float, pointerId: Int) {}
     open fun onTouchUp(x: Float, y: Float, pointerId: Int) {}
+    open fun onTouchCancel() {}
 
     protected fun drawButtons(c: Canvas) {
         for (b in buttons) ui.button(c, b)

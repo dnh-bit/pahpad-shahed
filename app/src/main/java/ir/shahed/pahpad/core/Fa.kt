@@ -27,7 +27,7 @@ object Fa {
 
     fun num(value: Float, decimals: Int): String {
         val fixed = if (decimals <= 0) Math.round(value).toString()
-        else String.format("%.${decimals}f", value)
+        else String.format(java.util.Locale.US, "%.${decimals}f", value)
         return num(fixed)
     }
 
@@ -49,7 +49,7 @@ object Fa {
         val total = Math.max(0, Math.round(seconds))
         val m = total / 60
         val s = total % 60
-        return num(String.format("%02d:%02d", m, s))
+        return num(String.format(java.util.Locale.US, "%02d:%02d", m, s))
     }
 
     fun meters(value: Float): String = num(Math.round(value)) + " متر"

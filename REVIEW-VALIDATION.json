@@ -1,0 +1,1171 @@
+{
+  "build_and_lint": "NOT RUN: Gradle, Android SDK and Kotlin compiler unavailable; no internet access in sandbox",
+  "runtime_device_tests": "NOT RUN",
+  "reviewed_kotlin_files": 32,
+  "passed_checks": 200,
+  "checks": [
+    {
+      "name": "byte_identical:app/build.gradle.kts",
+      "passed": true,
+      "details": "e56c9777b18b6e3755ef5eaf62766ec4f46443d144a6964cddec6c66bfd81a51"
+    },
+    {
+      "name": "byte_identical:build.gradle.kts",
+      "passed": true,
+      "details": "818f6dd0c6214b9d70b8737ddc3db6f847efd33ed71daeaf92b6db63bf58d2fc"
+    },
+    {
+      "name": "byte_identical:settings.gradle.kts",
+      "passed": true,
+      "details": "0e1a4ec7994027db3f8fbff9fcdc41290d9aede93ce66e3d61f5f232ed61725c"
+    },
+    {
+      "name": "byte_identical:gradle.properties",
+      "passed": true,
+      "details": "844ee22d0e8c75b99390377af55f575f96e0997733c07c738553259c500b0004"
+    },
+    {
+      "name": "byte_identical:gradle/wrapper/gradle-wrapper.properties",
+      "passed": true,
+      "details": "60c98ada3f8541fbf406b78431a3608a317fc2bbc78a3b4e6eaf233656240e50"
+    },
+    {
+      "name": "byte_identical:app/src/main/AndroidManifest.xml",
+      "passed": true,
+      "details": "357ef2d57f79763d2e328d9b45be5b9297083c28a990c54fdf0aed89c4b53695"
+    },
+    {
+      "name": "byte_identical:app/src/main/java/ir/shahed/pahpad/core/SaveManager.kt",
+      "passed": true,
+      "details": "a043437ee1df4b378b7391b851704122e31c227ab6227b2a3d35f3c14d785f28"
+    },
+    {
+      "name": "byte_identical:app/src/main/java/ir/shahed/pahpad/game/Mission.kt",
+      "passed": true,
+      "details": "17c83a2ac4ac42beca27a1c28bd52376673ce4ccff0f092e86ec0747329959ee"
+    },
+    {
+      "name": "byte_identical:app/src/main/java/ir/shahed/pahpad/game/World.kt",
+      "passed": true,
+      "details": "e3e0bda05daf92bede0f40f1eb0db6af2a44d69c899fca0c4494e98bbe802cb8"
+    },
+    {
+      "name": "byte_identical:app/src/main/java/ir/shahed/pahpad/data/Levels.kt",
+      "passed": true,
+      "details": "c86d3a7e62b9524fb2d613524c4f06cd177ea33a7d63e4321ca5979e66652fbd"
+    },
+    {
+      "name": "byte_identical:app/src/main/java/ir/shahed/pahpad/data/DroneModels.kt",
+      "passed": true,
+      "details": "96a309ca69c3a0b54dc5664d7f7edc51c65adc18345c6d063ccbb1ba90e01499"
+    },
+    {
+      "name": "byte_identical:app/src/main/java/ir/shahed/pahpad/data/Ranks.kt",
+      "passed": true,
+      "details": "bc93b0965c76d90c94bbc7f5ce2336def3db9fc8ae610e46138969c7877d4c25"
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/fonts/#U0631#U0627#U0647#U0646#U0645#U0627.txt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/fonts/راهنما.txt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_131.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_131_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_136.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_136_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_238.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_238_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_x.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/drone_x_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/env_desert.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/env_naval.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/env_special.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/env_urban.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/hud_target.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/material_concrete.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/material_roof.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/material_wall.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/menu_hero.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/prop_rock1.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/prop_rock2.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/prop_tree1.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/prop_tree2.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/shadow_soft.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/terrain_desert.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/terrain_naval.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/terrain_special.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "asset_identical:app/src/main/assets/gfx/terrain_urban.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/drawable/ic_launcher_foreground.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-hdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-hdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-mdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-mdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-xhdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/values/colors.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/values/strings.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "resource_identical:app/src/main/res/values/themes.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "all_xml_well_formed",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/MainActivity.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/Gfx.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/SaveManager.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/Theme.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/EngineWave.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/GameAudio.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/BaseScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/Fa.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/Fonts.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/core/Ui.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/data/DroneModels.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/data/Levels.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/data/Ranks.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/Mission.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/Seeds.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/World.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/Fx.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/Scene3D.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/WorldRenderer.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/SceneryArt.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/game/DroneArt.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/BriefingScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/Deco.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/ChapterSelectScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/LevelSelectScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/MainMenuScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/ResultScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/SettingsScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/ShopScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/SplashScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/GameScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "lexical_balance:app/src/main/java/ir/shahed/pahpad/screens/LeaderboardScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:.gitignore",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:README.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:README-ORIGINAL-0.0.2.md",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:build.gradle.kts",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:gradle.properties",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:settings.gradle.kts",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/build.gradle.kts",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/proguard-rules.pro",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:.github/workflows/build.yml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/AndroidManifest.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/fonts/#U0631#U0627#U0647#U0646#U0645#U0627.txt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/fonts/راهنما.txt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_131.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_131_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_136.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_136_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_238.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_238_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_x.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/drone_x_side.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/env_desert.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/env_naval.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/env_special.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/env_urban.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/hud_target.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/material_concrete.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/material_roof.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/material_wall.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/menu_hero.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/prop_rock1.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/prop_rock2.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/prop_tree1.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/prop_tree2.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/shadow_soft.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/terrain_desert.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/terrain_naval.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/terrain_special.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/assets/gfx/terrain_urban.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/MainActivity.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/BaseScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/Fa.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/Fonts.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/GameAudio.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/Gfx.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/SaveManager.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/Theme.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/core/Ui.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/data/DroneModels.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/data/Levels.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/data/Ranks.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/DroneArt.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/Fx.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/Mission.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/Scene3D.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/SceneryArt.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/Seeds.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/World.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/game/WorldRenderer.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/BriefingScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/Deco.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/ChapterSelectScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/GameScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/LeaderboardScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/LevelSelectScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/MainMenuScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/ResultScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/SettingsScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/ShopScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/java/ir/shahed/pahpad/screens/SplashScreen.kt",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/drawable/ic_launcher_foreground.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-hdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-hdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-mdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-mdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-xhdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/values/colors.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/values/strings.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:app/src/main/res/values/themes.xml",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "present:gradle/wrapper/gradle-wrapper.properties",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "excluded_paths_absent",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "no_apk_or_build_output",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "engine_formula_periodic",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "engine_no_pcm_clipping",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "engine_near_zero_dc",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "engine_loop_slope_continuity",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "engine_dominant_nominal_100Hz",
+      "passed": true,
+      "details": 100
+    },
+    {
+      "name": "engine_pitch_range",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "exhaust_cadence:20fps/0.12s",
+      "passed": true,
+      "details": 83
+    },
+    {
+      "name": "exhaust_cadence:20fps/0.075s",
+      "passed": true,
+      "details": 133
+    },
+    {
+      "name": "exhaust_cadence:30fps/0.12s",
+      "passed": true,
+      "details": 83
+    },
+    {
+      "name": "exhaust_cadence:30fps/0.075s",
+      "passed": true,
+      "details": 133
+    },
+    {
+      "name": "exhaust_cadence:60fps/0.12s",
+      "passed": true,
+      "details": 83
+    },
+    {
+      "name": "exhaust_cadence:60fps/0.075s",
+      "passed": true,
+      "details": 133
+    },
+    {
+      "name": "exhaust_cadence:90fps/0.12s",
+      "passed": true,
+      "details": 83
+    },
+    {
+      "name": "exhaust_cadence:90fps/0.075s",
+      "passed": true,
+      "details": 133
+    },
+    {
+      "name": "exhaust_cadence:120fps/0.12s",
+      "passed": true,
+      "details": 83
+    },
+    {
+      "name": "exhaust_cadence:120fps/0.075s",
+      "passed": true,
+      "details": 133
+    },
+    {
+      "name": "propeller_update_wired",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "renderer_update_wired",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "old_random_smoke_callback_disabled",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "fpv_engine_smoke_guard",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "audio_static_state_checked_after_write",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "input_geometry_unchanged",
+      "passed": true,
+      "details": null
+    },
+    {
+      "name": "no_new_persian_UI_wording",
+      "passed": true,
+      "details": []
+    }
+  ],
+  "audio_numeric_test": {
+    "method": "Independent Python numerical reproduction; Kotlin and AudioTrack NOT executed",
+    "samples": 22050,
+    "sample_rate_hz": 22050,
+    "peak_pcm": 19000,
+    "mean_pcm": 0.0,
+    "rms_pcm": 10559.06394152767,
+    "dominant_hz": 100,
+    "wrap_step_pcm": 976,
+    "next_step_pcm": 976,
+    "formula_value_at_t_1": 2.212101420607637e-15
+  },
+  "emission_numeric_test": {
+    "20fps/0.12s": 83,
+    "20fps/0.075s": 133,
+    "30fps/0.12s": 83,
+    "30fps/0.075s": 133,
+    "60fps/0.12s": 83,
+    "60fps/0.075s": 133,
+    "90fps/0.12s": 83,
+    "90fps/0.075s": 133,
+    "120fps/0.12s": 83,
+    "120fps/0.075s": 133
+  },
+  "assets_total_bytes": 3996289,
+  "changed_files": [
+    "REVIEW-VALIDATION.json",
+    "CHANGES-0.0.4.md",
+    ".github/workflows/build.yml",
+    "app/src/main/java/ir/shahed/pahpad/MainActivity.kt",
+    "app/src/main/java/ir/shahed/pahpad/core/EngineWave.kt",
+    "app/src/main/java/ir/shahed/pahpad/core/GameAudio.kt",
+    "app/src/main/java/ir/shahed/pahpad/core/BaseScreen.kt",
+    "app/src/main/java/ir/shahed/pahpad/core/Fa.kt",
+    "app/src/main/java/ir/shahed/pahpad/core/Fonts.kt",
+    "app/src/main/java/ir/shahed/pahpad/core/Ui.kt",
+    "app/src/main/java/ir/shahed/pahpad/game/Fx.kt",
+    "app/src/main/java/ir/shahed/pahpad/game/Scene3D.kt",
+    "app/src/main/java/ir/shahed/pahpad/game/WorldRenderer.kt",
+    "app/src/main/java/ir/shahed/pahpad/game/SceneryArt.kt",
+    "app/src/main/java/ir/shahed/pahpad/game/DroneArt.kt",
+    "app/src/main/java/ir/shahed/pahpad/screens/GameScreen.kt",
+    "app/src/main/java/ir/shahed/pahpad/screens/LeaderboardScreen.kt"
+  ],
+  "ci_size_guard_test": {
+    "method": "Bash executed against temporary synthetic size-only files, not real APKs",
+    "cases": [
+      {
+        "synthetic_file_bytes": null,
+        "expected_exit": 1,
+        "actual_exit": 1
+      },
+      {
+        "synthetic_file_bytes": 9999999,
+        "expected_exit": 0,
+        "actual_exit": 0
+      },
+      {
+        "synthetic_file_bytes": 10000000,
+        "expected_exit": 1,
+        "actual_exit": 1
+      },
+      {
+        "synthetic_file_bytes": 10000001,
+        "expected_exit": 1,
+        "actual_exit": 1
+      }
+    ]
+  },
+  "workflow_syntax": {
+    "yaml_parsed": true,
+    "steps": 9
+  },
+  "source_manifest_sha256": {
+    ".gitignore": "e848f63b98a28a394726f3ae19089fe7cf496a54534aff3ae9de98324a1258a2",
+    "README.md": "7000568e8e91a208f5eb5ae95cd2c5ca47f9780d04cce6139fff90b45b44ebce",
+    "README-ORIGINAL-0.0.2.md": "284507177192237236aedc16e73b997ef0217983b4c3fae33ebc3f5dde496ee5",
+    "build.gradle.kts": "818f6dd0c6214b9d70b8737ddc3db6f847efd33ed71daeaf92b6db63bf58d2fc",
+    "gradle.properties": "844ee22d0e8c75b99390377af55f575f96e0997733c07c738553259c500b0004",
+    "settings.gradle.kts": "0e1a4ec7994027db3f8fbff9fcdc41290d9aede93ce66e3d61f5f232ed61725c",
+    "CHANGES-0.0.4.md": "3f211fd15deff23557995fe74d1e0d28866dfa475586f7168bc5e35d87286824",
+    "app/build.gradle.kts": "e56c9777b18b6e3755ef5eaf62766ec4f46443d144a6964cddec6c66bfd81a51",
+    "app/proguard-rules.pro": "908eeefaa86d8bfc670f74e7ad98e7a078ef003b803146d2c200544b37ceacb5",
+    ".github/workflows/build.yml": "7bf4fb2fba9c413fac3684c3f6e1c345335c79de9303e89754c948f670017e6f",
+    "app/src/main/AndroidManifest.xml": "357ef2d57f79763d2e328d9b45be5b9297083c28a990c54fdf0aed89c4b53695",
+    "app/src/main/assets/fonts/#U0631#U0627#U0647#U0646#U0645#U0627.txt": "9bb2ec83fca49eaeba7e248f063fd1fa16e4e34a91982493bf4d7d0d27607345",
+    "app/src/main/assets/fonts/راهنما.txt": "9bb2ec83fca49eaeba7e248f063fd1fa16e4e34a91982493bf4d7d0d27607345",
+    "app/src/main/assets/gfx/drone_131.png": "8b47f4ac57520c0238d9b1ed48a2eea9b9d159c1f97b5467fb39856483acc5fe",
+    "app/src/main/assets/gfx/drone_131_side.png": "6a61af22c12bcd74b5534bd665fb690bdd92384884b3fef2cd856ff2b942fcc4",
+    "app/src/main/assets/gfx/drone_136.png": "a8bb94ed3dc6590e3295021ee888defcfab61ef61c9a2451734b4e952f1a6330",
+    "app/src/main/assets/gfx/drone_136_side.png": "0b8e6fa4fccf962465fca294ad29f0da2caddb88bbecb02647212d12cf5dd70f",
+    "app/src/main/assets/gfx/drone_238.png": "2f585f0fe2d3dd6761987c7f8df3bda1b0886bead75faf5f2e18fa1d7357c541",
+    "app/src/main/assets/gfx/drone_238_side.png": "74c76047db5daf270f0e47e46c68fddb1e7a6202e89e15901decf220fbb10ae9",
+    "app/src/main/assets/gfx/drone_x.png": "4d66465ec851e6d31aad646488d89799ba2f5d97e50cfe3b46b0b9de7572d8af",
+    "app/src/main/assets/gfx/drone_x_side.png": "dbf75625fdec94cbf0dcfe30dba6ca1582c762c0e79f99e0135f6bcdf8ecbf76",
+    "app/src/main/assets/gfx/env_desert.png": "fe03fb3023c1351487a5e1a19ae1057bd448021ea89521bdb11b3b454f6b867e",
+    "app/src/main/assets/gfx/env_naval.png": "9821eba7bc78492a0008762c9f1bc4acb42d868522b25413118b80b08c80469a",
+    "app/src/main/assets/gfx/env_special.png": "c967c87dbd60665e8940043263313edef8e45016054ba26e084785eafa325004",
+    "app/src/main/assets/gfx/env_urban.png": "279c43772d8f0cf2f019281fa4252b97c7157188e704ddd2616f4cf85710400c",
+    "app/src/main/assets/gfx/hud_target.png": "92d9126460e58b8d202dd1184a40a3972214130c6f18bb1e671d559669b2968d",
+    "app/src/main/assets/gfx/material_concrete.png": "fc718bb51aa2a26a070b348ad623f8b1799c004558bba69ed00c658e3b1031f5",
+    "app/src/main/assets/gfx/material_roof.png": "48b655ed39989753a158ad77714eb33dc8d6f7cc01306fac0137089f151dadab",
+    "app/src/main/assets/gfx/material_wall.png": "1e9dbc39c2d227236938cbba8bb0c8153460b2d2d7286bc7967d16c786d2e0e5",
+    "app/src/main/assets/gfx/menu_hero.png": "73c258faf582e6d98cd8e3d7a32f88411163a0ffce4f2b0646af160908d72b67",
+    "app/src/main/assets/gfx/prop_rock1.png": "d8b245b19b3211ac6d859ba65cbebfe94902d88fa0ed768d6897ce672f9d55fb",
+    "app/src/main/assets/gfx/prop_rock2.png": "4d3b17c16fd6a6d17a2ebf2e1159521e5a8110e459b0af41771ce9800abc6c50",
+    "app/src/main/assets/gfx/prop_tree1.png": "28a9c0c119471363f01f91177aaaf80861338f843e1ed03f68da44a381c4426c",
+    "app/src/main/assets/gfx/prop_tree2.png": "32231e7207f3401bf1f6aecd78d3207d0d36518eec5fffcd341c6438827321c7",
+    "app/src/main/assets/gfx/shadow_soft.png": "2a1622c543afecab35f70d2e5ee6e8f6e659cccb4dc2bf2546d57bb9eda1e2e8",
+    "app/src/main/assets/gfx/terrain_desert.png": "b42d4f542bb13ec8304e88a963cd62055ab4ce0dbe72789001b4e3be92c3410b",
+    "app/src/main/assets/gfx/terrain_naval.png": "f27c21a09eaaa662af696bf00eb087eec0b1c54283fc27cfbfcfaff54df7f6d2",
+    "app/src/main/assets/gfx/terrain_special.png": "90333701dd781e046fe3ec925911c77ac228e2cf3316a5d7ac14a1cd79bbfc75",
+    "app/src/main/assets/gfx/terrain_urban.png": "339aa9337d4fee5c9cd90e24274eacd4bce49a63ee21284beee5a795241d7cf5",
+    "app/src/main/java/ir/shahed/pahpad/MainActivity.kt": "a627b25317c9374d6fe22160f507af0e8cfe98676ede40f53d0e77feb0bb34c1",
+    "app/src/main/java/ir/shahed/pahpad/core/Gfx.kt": "7da108e244ef82dceecab5ed90bf0fc875a0a7992b2cf72759edc2a4399b1e6f",
+    "app/src/main/java/ir/shahed/pahpad/core/SaveManager.kt": "a043437ee1df4b378b7391b851704122e31c227ab6227b2a3d35f3c14d785f28",
+    "app/src/main/java/ir/shahed/pahpad/core/Theme.kt": "71918f6dcdcfdd13b95b7f953aa3bf47bfe531280e4499e223ff7c1ee033b777",
+    "app/src/main/java/ir/shahed/pahpad/core/EngineWave.kt": "f79b3e565c9141c16911949b35abdad8b37acb5cb2acf35ddb076e4b3f0fce26",
+    "app/src/main/java/ir/shahed/pahpad/core/GameAudio.kt": "7eece17e7d8acbcf360d04ac1808a9bc689b3797e9883088972eb4abdf8b6611",
+    "app/src/main/java/ir/shahed/pahpad/core/BaseScreen.kt": "991100c30d3f29b23b2c811d8fa5195f8f9d148e3c78a0f2a7c1f8b4f0b7e3ce",
+    "app/src/main/java/ir/shahed/pahpad/core/Fa.kt": "b0fcc4825b2b41f51173756d921d5a0d76a75a7f49b8404856f4a74646726f00",
+    "app/src/main/java/ir/shahed/pahpad/core/Fonts.kt": "fea45b3a7c5095712215a3536d09478d8430f5ca3f355719b4ccfa6e47ff4122",
+    "app/src/main/java/ir/shahed/pahpad/core/Ui.kt": "cc4940955f02a79386567841aca798b08ec85c7c1f8878dc032438a3c74c4d0d",
+    "app/src/main/java/ir/shahed/pahpad/data/DroneModels.kt": "96a309ca69c3a0b54dc5664d7f7edc51c65adc18345c6d063ccbb1ba90e01499",
+    "app/src/main/java/ir/shahed/pahpad/data/Levels.kt": "c86d3a7e62b9524fb2d613524c4f06cd177ea33a7d63e4321ca5979e66652fbd",
+    "app/src/main/java/ir/shahed/pahpad/data/Ranks.kt": "bc93b0965c76d90c94bbc7f5ce2336def3db9fc8ae610e46138969c7877d4c25",
+    "app/src/main/java/ir/shahed/pahpad/game/Mission.kt": "17c83a2ac4ac42beca27a1c28bd52376673ce4ccff0f092e86ec0747329959ee",
+    "app/src/main/java/ir/shahed/pahpad/game/Seeds.kt": "4f0cd315b2958cbaab4deca6dd897353056efe123ecd0936342f95c20a82177f",
+    "app/src/main/java/ir/shahed/pahpad/game/World.kt": "e3e0bda05daf92bede0f40f1eb0db6af2a44d69c899fca0c4494e98bbe802cb8",
+    "app/src/main/java/ir/shahed/pahpad/game/Fx.kt": "3424bee29b495e3c15b21ea5b3b2fc6a77ba4562161e0812c45499372c16e861",
+    "app/src/main/java/ir/shahed/pahpad/game/Scene3D.kt": "a5ae96e32480bdfaad3a54d1d32e6b2b244b894dc57fc474623c0ac93b329640",
+    "app/src/main/java/ir/shahed/pahpad/game/WorldRenderer.kt": "806a900aee524bdf2be0f562a6de06e4732b113df0dc68c803de25a45c2c7ce0",
+    "app/src/main/java/ir/shahed/pahpad/game/SceneryArt.kt": "8d4135df4619c093a8159edcf4d8496ae0ff32cd44735b1fc878dc8444ceb38a",
+    "app/src/main/java/ir/shahed/pahpad/game/DroneArt.kt": "1b4b462dca8e216fb1326f2a749a8c1ad93136040925a4dd3f94c7f5bd16ad8a",
+    "app/src/main/java/ir/shahed/pahpad/screens/BriefingScreen.kt": "5132bd2850b7a8a86d2fe34895cd126327d7bc3aeded48c4c0ce73e12d9c53b9",
+    "app/src/main/java/ir/shahed/pahpad/screens/Deco.kt": "8617134b9f6ac1592f9973871651f772c9da48d1cc926e83966d30845f2a2334",
+    "app/src/main/java/ir/shahed/pahpad/screens/ChapterSelectScreen.kt": "ca8744664fa5d31b483e2ee4ba09fc9f5ee6c489db72f62d832c8bf1adc5b635",
+    "app/src/main/java/ir/shahed/pahpad/screens/LevelSelectScreen.kt": "c88a46e8f19c8a66f6752d202d0274445c7ea900c1c25372f0129842d7f53494",
+    "app/src/main/java/ir/shahed/pahpad/screens/MainMenuScreen.kt": "dc690a2b8355333e6641296c4e77c420c6cf502d1be4d134919db4a700db8866",
+    "app/src/main/java/ir/shahed/pahpad/screens/ResultScreen.kt": "483536a956dd34b6c76c0ac21b0eb9857788c7e7091142a30b5a9128470e0315",
+    "app/src/main/java/ir/shahed/pahpad/screens/SettingsScreen.kt": "67a0792c452abaa49a5a9b864e14047dcb40a4c19518efd582ee28f524800e3b",
+    "app/src/main/java/ir/shahed/pahpad/screens/ShopScreen.kt": "723786bd6c43d1ca14059f71143cf9d08b411b156a9091adbab2143aec6656fa",
+    "app/src/main/java/ir/shahed/pahpad/screens/SplashScreen.kt": "d3e127615f6e36e457aed75174a1fc432f7a0d0dd35f3018f944f34b11bf4881",
+    "app/src/main/java/ir/shahed/pahpad/screens/GameScreen.kt": "0554a6b1fce23c67e06f1243291af692047d2ac5f6733ae530a23a6e73e90555",
+    "app/src/main/java/ir/shahed/pahpad/screens/LeaderboardScreen.kt": "d7bd00d862813f2b23a2d7d743664f30a9906e9768a35af9a068000c20bf3f7e",
+    "app/src/main/res/drawable/ic_launcher_foreground.xml": "740b2ef2fd8053132be0d7f74e5e618d301de12ca67be1fc613567e9e9df7d07",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "32715ff646f6b9fef7c321138e4a14556c4a1f98a87b06070b56f41643dad718",
+    "app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": "32715ff646f6b9fef7c321138e4a14556c4a1f98a87b06070b56f41643dad718",
+    "app/src/main/res/mipmap-hdpi/ic_launcher.png": "cad09b858d21d78a3b751f73b9abf9bdc181d51fd6dfe33898f989e2250e0dd2",
+    "app/src/main/res/mipmap-hdpi/ic_launcher_round.png": "fc2b78a69912368121bb3a99e6529edc07f76f6bfcd398801698002365ec2cf1",
+    "app/src/main/res/mipmap-mdpi/ic_launcher.png": "5cb09e524f93e18bf6648c0b763e860d01733741688402f95af3ed2465b8b4e8",
+    "app/src/main/res/mipmap-mdpi/ic_launcher_round.png": "3afe65173e9878fac5ba1482f035e88f3344edaf4d232f67bbb9900433d15f94",
+    "app/src/main/res/mipmap-xhdpi/ic_launcher.png": "2b9cfc3e398bff6d2bd5184f6e05e781772689a781e3c28279c61b45bd11dd07",
+    "app/src/main/res/mipmap-xhdpi/ic_launcher_round.png": "f7c7d6104ac142f76f30f5a79de24176af9e44b128b5fcb1025e71327cf4a227",
+    "app/src/main/res/mipmap-xxhdpi/ic_launcher.png": "480489330bbcd628d563cbab4de9cc188e0b2b23891108f5588000e9116f7ee8",
+    "app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png": "059a2ea9564ae17bf932f8469807d11d105ea82d31db80daef8e311130f55e98",
+    "app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": "2d5e31178d0860682a352a2d9bce2fcb0e5e9d22a12265c3c12c69bf45cd6efe",
+    "app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png": "127a587a95b7970ee5c0ef800ad7aef66e958a3db9167b0ea94b3264d5ce4d9f",
+    "app/src/main/res/values/colors.xml": "6913bc3e303d71da491625f886cf7b8174209381539b8a2c985b3664a0adfad3",
+    "app/src/main/res/values/strings.xml": "4638c450dd949ba03f27c1230dc9611173d692dec06b32d1bf1fe88cc0192bd4",
+    "app/src/main/res/values/themes.xml": "806eef3e5d0f4951fdd248773c1c0c49ae6df4b9958c991d317dd1751d440e7a",
+    "gradle/wrapper/gradle-wrapper.properties": "60c98ada3f8541fbf406b78431a3608a317fc2bbc78a3b4e6eaf233656240e50"
+  }
+}

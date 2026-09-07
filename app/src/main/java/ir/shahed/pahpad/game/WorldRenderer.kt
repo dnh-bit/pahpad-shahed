@@ -11,7 +11,36 @@ class WorldRenderer(private val gfxContext:Context) {
     val scene=Scene3D();val fx=Fx()
     private val art=SceneryArt(gfxContext);private val drone=DroneArt(gfxContext)
     private val proj=FloatArray(3)
-    private var smokeTime=-1f
+    private var exhaustTimer=0f
+    private var wreckTimer=0f
+    private var sparkTimer=0f
+    fun update(dt:Float,mission:Mission){
+        drone.update(dt,mission)
+        fx.update(dt)
+        if(mission.fpv)fx.clearEngineSmoke()
+        if(mission.phase==Mission.Phase.FLYING&&!mission.fpv){
+            exhaustTimer+=dt
+            val interval=if(mission.boost).075f else .12f
+            if(exhaustTimer>=interval){
+                exhaustTimer%=interval
+                val cp=cos(mission.pitch)
+                fx.engineSmoke(mission.x-sin(mission.yaw)*cp*5.5f,
+                    mission.y-sin(mission.pitch)*5.5f-.2f,
+                    mission.z-cos(mission.yaw)*cp*5.5f,mission.boost)
+            }
+        }else exhaustTimer=0f
+        wreckTimer+=dt;sparkTimer+=dt
+        if(wreckTimer>=.12f){
+            wreckTimer%=.12f
+            for(t in mission.world.targets)if(t.destroyed&&t.burn<6f)fx.smoke(t.x,t.h*.6f,t.z,2f)
+        }
+        if(sparkTimer>=.045f){
+            sparkTimer%=.045f
+            for(a in mission.world.aaSites)if(a.alive&&a.flash>0f)
+                fx.spark(a.x+sin(a.barrelYaw)*8f,6f,a.z+cos(a.barrelYaw)*8f,Theme.AMBER)
+        }
+    }
+    fun release(){fx.clear();scene.clear();art.clear()}
     private fun material(building:Boolean=true){
         scene.wallTexture=Gfx.get(gfxContext,if(building)"material_wall" else "material_concrete")
         scene.roofTexture=Gfx.get(gfxContext,"material_roof")
@@ -21,13 +50,14 @@ class WorldRenderer(private val gfxContext:Context) {
         val world=mission.world
         scene.fogStart=300f;scene.fogEnd=1650f;scene.begin()
         art.draw(c,scene,world,w,h)
+        fx.drawGround(c,scene)
         art.roads(scene,world)
         val camX=scene.cam.x;val camZ=scene.cam.z
         val maxD2=1600f*1600f
         for(p in world.props){
             val dx=p.x-camX;val dz=p.z-camZ;val d2=dx*dx+dz*dz
             if(d2>maxD2)continue
-            if(d2<550f*550f)art.shadow(c,scene,p.x+p.h*.24f,p.z+p.h*.14f,p.w*.8f,p.d*.75f,.65f)
+            if(d2<550f*550f)art.shadow(c,scene,p.x-p.h*scene.sunX/scene.sunY,p.z-p.h*scene.sunZ/scene.sunY,p.w*.8f,p.d*.75f,.65f)
             when(p.kind){
                 PropKind.TREE,PropKind.ROCK->{
                     val tree=p.kind==PropKind.TREE
@@ -62,25 +92,21 @@ class WorldRenderer(private val gfxContext:Context) {
             scene.box(a.x,3.5f,a.z,5.5f,3f,6f,0xFF69705B.toInt(),a.barrelYaw)
             val bx=sin(a.barrelYaw);val bz=cos(a.barrelYaw)
             scene.box(a.x+bx*4f,5.2f,a.z+bz*4f,1.2f,1.2f,8f,0xFF7E8370.toInt(),a.barrelYaw)
-            if(a.flash>0f)fx.spark(a.x+bx*8f,6f,a.z+bz*8f,Theme.AMBER)
         }
-        val emitSmoke=mission.elapsed-smokeTime>.075f||mission.elapsed<smokeTime
-        if(emitSmoke)smokeTime=mission.elapsed
         for(t in world.targets){
             val dx=t.x-camX;val dz=t.z-camZ;if(dx*dx+dz*dz>maxD2)continue
             target(t)
-            if(emitSmoke&&t.destroyed&&t.burn<6f)fx.smoke(t.x,t.h*.6f,t.z,2f)
         }
         plain()
         for(b in world.bonuses)if(!b.collected)scene.box(b.x,b.y,b.z,4.5f,4.5f,4.5f,Theme.AMBER,b.spin)
         for(m in world.missiles)scene.box(m.x,m.y,m.z,1.2f,1.2f,4f,Theme.AMBER)
         if(!mission.fpv&&mission.phase!=Mission.Phase.ENDED){
             val alt=mission.y.coerceAtLeast(0f)
-            if(alt<220f)art.shadow(c,scene,mission.x+alt*.3f,mission.z+alt*.18f,7f+alt*.025f,7f+alt*.025f,(.65f-alt*.0025f).coerceAtLeast(.08f))
+            if(alt<220f)art.shadow(c,scene,mission.x-alt*scene.sunX/scene.sunY,mission.z-alt*scene.sunZ/scene.sunY,7f+alt*.035f,7f+alt*.035f,(.40f-alt*.0015f).coerceAtLeast(.06f))
             drone.draw(scene,mission)
         }
         scene.flush(c)
-        fx.draw(c,scene)
+        fx.draw(c,scene,mission.fpv)
     }
     private fun zone(c:Canvas,x:Float,z:Float,radius:Float,color:Int){
         val segments=48;var px=x+radius;var pz=z

@@ -50,7 +50,7 @@ class Camera {
 class Face {
     var count=0; val xs=FloatArray(8); val ys=FloatArray(8)
     var color=0; var depth=0f; var outlineColor=0; var hasOutline=false
-    var bitmap:Bitmap?=null; var transparent=false; var fog=0f
+    var bitmap:Bitmap?=null; var transparent=false; var fog=0f; var opacity=1f
     val uv=FloatArray(8); val dst=FloatArray(8)
 }
 
@@ -59,6 +59,11 @@ class Face {
  */
 class Scene3D {
     val cam=Camera()
+    // One world-space sun for procedural solids, fuselage and ground shadows.
+    val sunX=-.44f;val sunY=.36f;val sunZ=.82f
+    fun light(nx:Float,ny:Float,nz:Float):Float =
+        .66f+.46f*max(0f,nx*sunX+ny*sunY+nz*sunZ)
+    private val depthOrder=Comparator<Face>{a,b->b.depth.compareTo(a.depth)}
     var fogColor=Theme.DESERT.fog; var fogStart=260f; var fogEnd=1500f
     var wallTexture:Bitmap?=null; var roofTexture:Bitmap?=null
     private val pool=ArrayList<Face>(1800); private var used=0
@@ -71,12 +76,13 @@ class Scene3D {
     private val shaders=HashMap<Bitmap,BitmapShader>()
     private val corners=Array(4){FloatArray(3)}
     fun begin(){ used=0; order.clear(); cam.refresh() }
+    fun clear(){order.clear();pool.clear();shaders.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())
-        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false }
+        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f }
     }
     private fun fogFactor(depth:Float)=((depth-fogStart)/(fogEnd-fogStart)).coerceIn(0f,0.96f)
-    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean) {
+    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f) {
         val near=cam.near+0.002f
         var count=0
         for(i in 0 until n) {
@@ -95,7 +101,8 @@ class Scene3D {
         depth/=count.toFloat()
         if(depth>fogEnd*1.4f)return
         val f=next(); f.count=count; f.depth=depth; f.fog=fogFactor(depth)
-        f.color=Theme.mix(color,fogColor,f.fog); f.outlineColor=outline; f.hasOutline=outline!=0
+        f.opacity=opacity.coerceIn(0f,1f)
+        f.color=Theme.withAlpha(Theme.mix(color,fogColor,f.fog),Color.alpha(color)/255f); f.outlineColor=outline; f.hasOutline=outline!=0
         var minX=Float.POSITIVE_INFINITY;var maxX=Float.NEGATIVE_INFINITY
         var minY=Float.POSITIVE_INFINITY;var maxY=Float.NEGATIVE_INFINITY
         for(i in 0 until count) {
@@ -103,15 +110,15 @@ class Scene3D {
             minX=min(minX,f.xs[i]);maxX=max(maxX,f.xs[i]);minY=min(minY,f.ys[i]);maxY=max(maxY,f.ys[i])
         }
         // Expanded bounds accommodate the outer Canvas roll transform.
-        if(maxX < -cam.width || minX > cam.width*2 || maxY < -cam.height || minY > cam.height*2)return
-        if(texture!=null && n==4 && input.take(4).all{it[2]>near}) {
+        if(maxX < -cam.width || minX > cam.width*2 || maxY < -cam.height || minY > cam.height*2){used--;return}
+        if(texture!=null && n==4 && input[0][2]>near && input[1][2]>near && input[2][2]>near && input[3][2]>near) {
             f.bitmap=texture; f.transparent=transparent
             val tw=texture.width.toFloat();val th=texture.height.toFloat()
             f.uv[0]=0f;f.uv[1]=0f;f.uv[2]=tw;f.uv[3]=0f;f.uv[4]=tw;f.uv[5]=th;f.uv[6]=0f;f.uv[7]=th
             for(i in 0..3){f.dst[i*2]=f.xs[i];f.dst[i*2+1]=f.ys[i]}
         } else if(transparent) {
             // A clipped sprite must never become an opaque rectangular fallback.
-            return
+            used--;return
         }
         order.add(f)
     }
@@ -122,9 +129,9 @@ class Scene3D {
     fun triangle(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,color:Int) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);submit(3,color,0,null,false)
     }
-    fun imagePlane(points:Array<FloatArray>,bitmap:Bitmap) {
+    fun imagePlane(points:Array<FloatArray>,bitmap:Bitmap,opacity:Float=1f) {
         for(i in 0..3)cam.toCamera(points[i][0],points[i][1],points[i][2],input[i])
-        submit(4,0,0,bitmap,true)
+        submit(4,0,0,bitmap,true,opacity)
     }
     fun billboard(x:Float,baseY:Float,z:Float,width:Float,height:Float,bitmap:Bitmap) {
         val dx=cos(cam.yaw)*width/2f;val dz=-sin(cam.yaw)*width/2f
@@ -139,9 +146,11 @@ class Scene3D {
         val top=baseY+sy
         for(i in 0..3) {
             val j=(i+1)%4;val a=corners[i];val b=corners[j]
-            quad(a[0],top,a[2],b[0],top,b[2],b[0],baseY,b[2],a[0],baseY,a[2],if(i%2==0)sideColor else Theme.shade(sideColor,.84f),texture=wallTexture)
+            val nx=b[2]-a[2];val nz=a[0]-b[0]
+            val inv=1f/sqrt(nx*nx+nz*nz).coerceAtLeast(.001f)
+            quad(a[0],top,a[2],b[0],top,b[2],b[0],baseY,b[2],a[0],baseY,a[2],Theme.shade(sideColor,light(nx*inv,0f,nz*inv)/.78f),texture=wallTexture)
         }
-        quad(corners[0][0],top,corners[0][2],corners[1][0],top,corners[1][2],corners[2][0],top,corners[2][2],corners[3][0],top,corners[3][2],topColor,texture=roofTexture)
+        quad(corners[0][0],top,corners[0][2],corners[1][0],top,corners[1][2],corners[2][0],top,corners[2][2],corners[3][0],top,corners[3][2],Theme.shade(topColor,light(0f,1f,0f)/1.22f),texture=roofTexture)
     }
     fun line(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,canvas:Canvas,color:Int,width:Float) {
         cam.toCamera(x0,y0,z0,a);cam.toCamera(x1,y1,z1,b)
@@ -150,11 +159,11 @@ class Scene3D {
             val p=if(a[2]<=cam.near)a else b;val q=if(p===a)b else a;val t=(cam.near-p[2])/(q[2]-p[2])
             for(k in 0..2)p[k]+=(q[k]-p[k])*t
         }
-        stroke.color=Theme.mix(color,fogColor,fogFactor((a[2]+b[2])/2));stroke.strokeWidth=width
+        stroke.color=Theme.withAlpha(Theme.mix(color,fogColor,fogFactor((a[2]+b[2])/2)),Color.alpha(color)/255f);stroke.strokeWidth=width
         canvas.drawLine(cam.screenCx+cam.focal*a[0]/a[2],cam.screenCy-cam.focal*a[1]/a[2],cam.screenCx+cam.focal*b[0]/b[2],cam.screenCy-cam.focal*b[1]/b[2],stroke)
     }
     fun flush(canvas:Canvas) {
-        order.sortWith(compareByDescending<Face>{it.depth})
+        order.sortWith(depthOrder)
         for(f in order) {
             path.rewind();path.moveTo(f.xs[0],f.ys[0]);for(i in 1 until f.count)path.lineTo(f.xs[i],f.ys[i]);path.close()
             paint.shader=null;paint.alpha=255;paint.color=f.color
@@ -163,7 +172,7 @@ class Scene3D {
             if(bitmap!=null && matrix.setPolyToPoly(f.uv,0,f.dst,0,4)) {
                 val shader=shaders.getOrPut(bitmap){BitmapShader(bitmap,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP)}
                 shader.setLocalMatrix(matrix);paint.shader=shader
-                paint.alpha=if(f.transparent)(255*(1f-f.fog*.75f)).toInt() else (155*(1f-f.fog)).toInt()
+                paint.alpha=if(f.transparent)(255*f.opacity*(1f-f.fog*.75f)).toInt() else (155*(1f-f.fog)).toInt()
                 canvas.drawPath(path,paint);paint.shader=null;paint.alpha=255
             }
             if(f.hasOutline){stroke.color=f.outlineColor;stroke.strokeWidth=1f;canvas.drawPath(path,stroke)}

@@ -15,7 +15,9 @@ object Fonts {
 
     fun regular(context: Context): Typeface {
         regular?.let { return it }
-        val tf = load(context, "fonts/vazirmatn.ttf") ?: Typeface.create("sans-serif", Typeface.NORMAL)
+        val tf = load(context, "fonts/Vazirmatn-Regular.ttf")
+            ?: load(context, "fonts/vazirmatn.ttf")
+            ?: Typeface.create("sans-serif", Typeface.NORMAL)
         regular = tf
         return tf
     }
