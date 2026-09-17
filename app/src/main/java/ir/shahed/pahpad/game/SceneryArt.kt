@@ -71,11 +71,15 @@ class SceneryArt(private val context:Context) {
             bitmap
         }
         val bandH=h*.34f;val bandW=bandH*768f/180f
-        val offset=((cam.yaw/(2f*PI.toFloat())*bandW*4f)%bandW+bandW)%bandW
-        var bx=-w-offset
+        val scroll=cam.yaw/(2f*PI.toFloat())*bandW*4f
+        var tileIndex=floor((-w+scroll)/bandW).toInt()
+        var bx=tileIndex*bandW-scroll
         while(bx<w*2f){
-            rect.set(bx,horizon-bandH*.88f,bx+bandW+1f,horizon+bandH*.12f)
-            paint.alpha=145;c.drawBitmap(strip,null,rect,paint);bx+=bandW
+            rect.set(bx,horizon-bandH*.88f,bx+bandW,horizon+bandH*.12f)
+            c.save()
+            if((tileIndex and 1)!=0)c.scale(-1f,1f,rect.centerX(),0f)
+            paint.alpha=100;c.drawBitmap(strip,null,rect,paint)
+            c.restore();bx+=bandW;tileIndex++
         }
         paint.alpha=255
         val top=max(-h,horizon+1.5f);val bottom=h*2f
@@ -108,14 +112,17 @@ class SceneryArt(private val context:Context) {
     }
     fun roads(scene:Scene3D,world:World) {
         if(world.level.env!=Env.URBAN&&world.level.env!=Env.SPECIAL)return
-        val cam=scene.cam;val start=floor((cam.z-120f)/95f).toInt();val end=start+17
-        for(row in start..end){
-            val z=row*95f
-            scene.quad(-400f,.04f,z+27f,400f,.04f,z+27f,400f,.04f,z+43f,-400f,.04f,z+43f,0xFF555C5B.toInt())
+        val cam=scene.cam
+        val row0=floor((cam.z-120f-CityLayout.START_Z)/CityLayout.ROW_SPACING).toInt()-1
+        val row1=row0+19
+        for(row in row0..row1){
+            // Cross streets connect the centers between adjacent building rows.
+            val cross=CityLayout.crossZ(row)
+            scene.quad(-400f,.04f,cross-CityLayout.HALF_ROAD,400f,.04f,cross-CityLayout.HALF_ROAD,400f,.04f,cross+CityLayout.HALF_ROAD,-400f,.04f,cross+CityLayout.HALF_ROAD,0xFF555C5B.toInt())
             for(col in -4..4){
-                val x=col*78f+39f
-                scene.quad(x-8f,.05f,z,x+8f,.05f,z,x+8f,.05f,z+95f,x-8f,.05f,z+95f,0xFF555C5B.toInt())
-                for(i in 0..2){val zz=z+i*32f;scene.quad(x-.35f,.08f,zz,x+.35f,.08f,zz,x+.35f,.08f,zz+12f,x-.35f,.08f,zz+12f,0xFFB8BAA2.toInt())}
+                val x=col*CityLayout.COLUMN_SPACING+39f
+                scene.quad(x-CityLayout.HALF_ROAD,.05f,cross,x+CityLayout.HALF_ROAD,.05f,cross,x+CityLayout.HALF_ROAD,.05f,cross+CityLayout.ROW_SPACING,x-CityLayout.HALF_ROAD,.05f,cross+CityLayout.ROW_SPACING,0xFF555C5B.toInt())
+                for(i in 0..2){val zz=cross+i*32f;scene.quad(x-.35f,.08f,zz,x+.35f,.08f,zz,x+.35f,.08f,zz+12f,x-.35f,.08f,zz+12f,0xFFB8BAA2.toInt())}
             }
         }
     }

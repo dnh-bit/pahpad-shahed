@@ -2,7 +2,6 @@ package ir.shahed.pahpad.game
 
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import ir.shahed.pahpad.core.Theme
 import java.util.Random
 import kotlin.math.*
@@ -20,10 +19,7 @@ class Particle {
 class Fx(capacity: Int = 420) {
     private val pool=Array(capacity) { Particle() }
     private val rnd=Random()
-    private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
     private val proj=FloatArray(3)
-    private val drawOrder=ArrayList<Particle>(capacity)
-    private val depthOrder=Comparator<Particle> { a,b -> b.depth.compareTo(a.depth) }
     private class Blast {
         var x=0f;var y=0f;var z=0f;var power=1f;var age=1f
     }
@@ -41,7 +37,6 @@ class Fx(capacity: Int = 420) {
     fun clear() {
         for(p in pool)p.alive=false
         for(b in blasts)b.age=1f
-        drawOrder.clear()
     }
     fun clearEngineSmoke() { for(p in pool)if(p.engineSmoke)p.alive=false }
 
@@ -136,29 +131,22 @@ class Fx(capacity: Int = 420) {
             }
         }
     }
+    /** Enqueue effects before scene.flush; Canvas argument retained for callers. */
+    @Suppress("UNUSED_PARAMETER")
     fun draw(canvas:Canvas,scene:Scene3D,fpv:Boolean=false) {
-        drawOrder.clear()
         for(p in pool)if(p.alive&&!(fpv&&p.engineSmoke)) {
-            if(!scene.cam.project(p.x,p.y,p.z,proj))continue
-            p.depth=proj[2];drawOrder.add(p)
-        }
-        drawOrder.sortWith(depthOrder)
-        for(p in drawOrder) {
             if(!scene.cam.project(p.x,p.y,p.z,proj))continue
             val r=scene.cam.scaleAt(proj[2],p.size).coerceAtMost(scene.cam.height*.3f)
             if(r<.4f||proj[0]+r < -scene.cam.width||proj[0]-r>scene.cam.width*2f||proj[1]+r < -scene.cam.height||proj[1]-r>scene.cam.height*2f)continue
             val t=(p.life/p.maxLife).coerceIn(0f,1f)
             val fade=if(p.engineSmoke)t*t else t*.9f
-            paint.color=Theme.withAlpha(p.color,Color.alpha(p.color)/255f*fade)
-            canvas.drawCircle(proj[0],proj[1],r,paint)
+            scene.particle(proj[0],proj[1],proj[2],r,Theme.withAlpha(p.color,Color.alpha(p.color)/255f*fade))
         }
         for(b in blasts) {
             if(b.age>=.05f||!scene.cam.project(b.x,b.y,b.z,proj))continue
             val radius=scene.cam.scaleAt(proj[2],(10f+b.age*120f)*sqrt(b.power)).coerceAtMost(scene.cam.height*.3f)
-            paint.color=Theme.withAlpha(0xFFFFDCA0.toInt(),(1f-b.age/.05f)*.3f)
-            canvas.drawCircle(proj[0],proj[1],radius*1.8f,paint)
-            paint.color=Theme.withAlpha(0xFFFFF1D0.toInt(),(1f-b.age/.05f)*.85f)
-            canvas.drawCircle(proj[0],proj[1],radius,paint)
+            scene.particle(proj[0],proj[1],proj[2],radius*1.8f,Theme.withAlpha(0xFFFFDCA0.toInt(),(1f-b.age/.05f)*.3f))
+            scene.particle(proj[0],proj[1],proj[2],radius,Theme.withAlpha(0xFFFFF1D0.toInt(),(1f-b.age/.05f)*.85f))
         }
     }
 }

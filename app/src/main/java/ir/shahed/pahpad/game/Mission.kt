@@ -380,6 +380,10 @@ class Mission(
             m.y += m.vy * dt
             m.z += m.vz * dt
             m.life -= dt
+            if (world.projectileHitsProp(px, py, pz, m.x, m.y, m.z)) {
+                it.remove()
+                continue
+            }
             onTracer?.invoke(m.x, m.y, m.z)
             if (phase == Phase.FLYING) {
                 val d = distancePointSegment(x, y, z, px, py, pz, m.x, m.y, m.z)

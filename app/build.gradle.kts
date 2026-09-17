@@ -12,8 +12,8 @@ android {
         applicationId = "ir.shahed.pahpad"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.0.5"
+        versionCode = 6
+        versionName = "0.0.6"
         resourceConfigurations += listOf("fa")
     }
     buildTypes {
@@ -45,4 +45,7 @@ android {
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 // Native Android Canvas only; no new runtime dependency or network permission.
-dependencies {}
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.12.2")
+}

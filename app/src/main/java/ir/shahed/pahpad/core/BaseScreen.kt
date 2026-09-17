@@ -86,10 +86,19 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         val now = System.nanoTime()
         val dt = if (lastFrame == 0L) 1f / 60f else ((now - lastFrame) / 1_000_000_000f)
         lastFrame = now
-        val clamped = dt.coerceIn(0.001f, 0.05f)
-        if (looping) time += clamped
+        // Preserve ordinary slow-frame elapsed time with bounded physics substeps.
+        // A >1s stall is treated as a suspended frame, not an unbounded catch-up loop.
+        val frameDt = dt.coerceIn(0f, 1f)
+        if (looping) time += frameDt
         if (laidOut) {
-            if (looping) update(clamped)
+            if (looping) {
+                var remaining = frameDt
+                while (remaining > 0.000001f) {
+                    val step = minOf(remaining, 0.05f)
+                    update(step)
+                    remaining -= step
+                }
+            }
             render(canvas)
         }
         if (looping) postInvalidateOnAnimation()

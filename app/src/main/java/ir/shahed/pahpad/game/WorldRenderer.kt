@@ -30,27 +30,39 @@ class WorldRenderer(private val gfxContext: Context) {
     private var wreckTimer = 0f
     private var sparkTimer = 0f
 
+    // Identity keys survive movement/rotation without sharing history between objects.
+    private val lodStates = java.util.IdentityHashMap<Any, Int>()
+    private var lodWorld: World? = null
+
     companion object {
-        /** مرز سطح جزئیات کامل و متوسط بر حسب متر */
         private const val NEAR_LOD = 250f
         private const val MID_LOD = 820f
+        private const val BUILDING_NEAR_LOD = 175f
+        private const val BUILDING_MID_LOD = 420f
+        private const val LOD_HYSTERESIS = 0.10f
         private const val CULL = 1700f
     }
 
-    private fun lod(d2: Float): Int = when {
-        d2 < NEAR_LOD * NEAR_LOD -> 0
-        d2 < MID_LOD * MID_LOD -> 1
-        else -> 2
-    }
-
-    /**
-     * ساختمان‌های شهری صدها عدد هستند، پس آستانه‌ی جزئیات آن‌ها بسیار تنگ‌تر است؛
-     * وگرنه تعداد وجه‌های یک فریم به چند هزار می‌رسد و نرخ فریم می‌افتد.
-     */
-    private fun buildingLod(d2: Float): Int = when {
-        d2 < 175f * 175f -> 0
-        d2 < 420f * 420f -> 1
-        else -> 2
+    /** Schmitt trigger: retain detail inside a +/-10% distance band. */
+    private fun lod(key: Any, distance2: Float, building: Boolean = false): Int {
+        val near = if (building) BUILDING_NEAR_LOD else NEAR_LOD
+        val mid = if (building) BUILDING_MID_LOD else MID_LOD
+        var state = lodStates[key] ?: when {
+            distance2 < near * near -> 0
+            distance2 < mid * mid -> 1
+            else -> 2
+        }
+        // Loops also handle camera teleports across both thresholds in one frame.
+        while (state < 2) {
+            val boundary = (if (state == 0) near else mid) * (1f + LOD_HYSTERESIS)
+            if (distance2 > boundary * boundary) state++ else break
+        }
+        while (state > 0) {
+            val boundary = (if (state == 1) near else mid) * (1f - LOD_HYSTERESIS)
+            if (distance2 < boundary * boundary) state-- else break
+        }
+        lodStates[key] = state
+        return state
     }
 
     fun update(dt: Float, mission: Mission) {
@@ -93,11 +105,8 @@ class WorldRenderer(private val gfxContext: Context) {
         fx.clear()
         scene.clear()
         art.clear()
-    }
-
-    private fun material(building: Boolean = true) {
-        scene.wallTexture = Gfx.get(gfxContext, if (building) "material_wall" else "material_concrete")
-        scene.roofTexture = Gfx.get(gfxContext, "material_roof")
+        lodStates.clear()
+        lodWorld = null
     }
 
     private fun plain() {
@@ -107,6 +116,10 @@ class WorldRenderer(private val gfxContext: Context) {
 
     fun draw(c: Canvas, mission: Mission, w: Float, h: Float) {
         val world = mission.world
+        if (lodWorld !== world) {
+            lodStates.clear()
+            lodWorld = world
+        }
         scene.fogStart = 300f
         scene.fogEnd = 1650f
         scene.begin()
@@ -125,7 +138,7 @@ class WorldRenderer(private val gfxContext: Context) {
             val dz = p.z - camZ
             val d2 = dx * dx + dz * dz
             if (d2 > maxD2) continue
-            val detail = lod(d2)
+            val detail = lod(p, d2, p.kind == PropKind.BUILDING)
             val shadowRange = if (p.kind == PropKind.BUILDING) 320f else 550f
             if (d2 < shadowRange * shadowRange && p.kind != PropKind.SHIP && p.kind != PropKind.FREIGHTER) {
                 art.shadow(
@@ -143,16 +156,7 @@ class WorldRenderer(private val gfxContext: Context) {
                     plain()
                     scene.box(p.x, 0f, p.z, p.w * .28f, p.h, p.d * .28f, p.color, p.rot)
                 }
-                PropKind.BUILDING -> {
-                    val bd = buildingLod(d2)
-                    if (bd == 2) {
-                        material()
-                        scene.box(p.x, 0f, p.z, p.w, p.h, p.d, 0xFF9E9E90.toInt(), p.rot)
-                        plain()
-                    } else {
-                        hardware.building(rig, p.x, p.z, p.w, p.h, p.d, p.rot, false, bd)
-                    }
-                }
+                PropKind.BUILDING -> building(p.x, p.z, p.w, p.h, p.d, p.rot, p.color, false, detail)
             }
         }
 
@@ -163,7 +167,7 @@ class WorldRenderer(private val gfxContext: Context) {
             val dz = r.z - camZ
             val d2 = dx * dx + dz * dz
             // ایستگاه رادار بزرگ‌تر از مقیاس واقعی است تا از ارتفاع پرواز خوانا بماند
-            if (d2 <= maxD2) hardware.radarStation(rig, r.x, r.z, r.spin, 2.2f, lod(d2))
+            if (d2 <= maxD2) hardware.radarStation(rig, r.x, r.z, r.spin, 2.2f, lod(r, d2))
         }
         for (e in world.ewZones) zone(c, e.x, e.z, e.radius, Theme.VIOLET)
 
@@ -175,7 +179,7 @@ class WorldRenderer(private val gfxContext: Context) {
             val d2 = dx * dx + dz * dz
             if (d2 > maxD2) continue
             zone(c, a.x, a.z, a.range, Theme.RED)
-            val detail = lod(d2)
+            val detail = lod(a, d2)
             if (d2 < 550f * 550f) art.shadow(c, scene, a.x + 3f, a.z - 2f, 7f, 9f, .5f)
             if (a.kind == AASite.KIND_GUN) {
                 hardware.aaGun(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, a.flash, detail)
@@ -190,7 +194,7 @@ class WorldRenderer(private val gfxContext: Context) {
             val dz = t.z - camZ
             val d2 = dx * dx + dz * dz
             if (d2 > maxD2) continue
-            target(t, lod(d2))
+            target(t, lod(t, d2))
         }
 
         plain()
@@ -207,11 +211,36 @@ class WorldRenderer(private val gfxContext: Context) {
             }
             drone.draw(scene, mission)
         }
-        scene.flush(c)
         fx.draw(c, scene, mission.fpv)
+        scene.flush(c)
     }
 
     // ------------------------------------------------------------------ اجزا
+
+    /** Same footprint, height, roof cap and materials at every LOD; only facade decals drop out. */
+    private fun building(
+        x: Float, z: Float, w: Float, h: Float, d: Float, yaw: Float,
+        baseColor: Int, destroyed: Boolean, detail: Int
+    ) {
+        rig.place(x, 0f, z, yaw, 1f)
+        val color = if (destroyed) 0xFF393A36.toInt() else baseColor
+        val wall = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_wall")
+        val roof = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_roof")
+        val cap = max(.5f, h * .04f).coerceAtMost(h * .2f)
+        rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof)
+        rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof)
+        if (detail == 0) {
+            // Thin inset window panels: no roof machinery/awnings that pop the silhouette.
+            val glass = if (destroyed) 0xFF292C2A.toInt() else 0xFF435D64.toInt()
+            val y0 = h * .08f
+            val y1 = h * .22f
+            for (side in -1..1 step 2) {
+                val zz = side * (d * .5f + .015f)
+                rig.face(-w * .30f, y0, zz, w * .30f, y0, zz,
+                    w * .30f, y1, zz, -w * .30f, y1, zz, glass)
+            }
+        }
+    }
 
     private fun billboard(p: Prop) {
         val file = when (p.kind) {
@@ -262,7 +291,7 @@ class WorldRenderer(private val gfxContext: Context) {
     private fun target(t: Target, detail: Int) {
         when (t.shape) {
             TargetShape.BUNKER -> hardware.bunker(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
-            TargetShape.BUILDING -> hardware.building(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
+            TargetShape.BUILDING -> building(t.x, t.z, t.w, t.h, t.d, t.heading, 0xFFA8A492.toInt(), t.destroyed, detail)
             TargetShape.TOWER -> hardware.gantry(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
             TargetShape.SHIP -> hardware.warship(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)
             TargetShape.CARRIER -> hardware.carrier(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)

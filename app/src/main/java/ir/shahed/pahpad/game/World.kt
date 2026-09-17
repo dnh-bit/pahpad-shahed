@@ -5,6 +5,10 @@ import ir.shahed.pahpad.core.Theme
 import ir.shahed.pahpad.data.Env
 import ir.shahed.pahpad.data.LevelDef
 import java.util.Random
+import kotlin.math.min
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 
 enum class TargetShape { BUNKER, BUILDING, TOWER, SHIP, CARRIER, VEHICLE, BRIDGE, ANTENNA, TRAIN, TUNNEL }
 
@@ -83,6 +87,45 @@ class Prop(
 class Bonus(val x: Float, val y: Float, val z: Float, val value: Int) {
     var collected = false
     var spin = 0f
+}
+
+/**
+ * شبکهٔ مشترک شهر: مراکز ردیف‌ها و خیابان‌های عرضی یک‌جا تعریف می‌شوند تا
+ * چیدمان ساختمان‌ها و نقشهٔ خیابان‌ها هرگز روی هم نیفتند. خیابان عرضی دقیقاً
+ * میانهٔ فاصلهٔ دو ردیف است و لرزش جانبی ساختمان با ضخامت خودش محدود می‌شود
+ * تا هیچ پیهایی تا لبهٔ خیابان نرسد.
+ */
+object CityLayout {
+    /** z مرکز نخستین ردیف ساختمان‌ها */
+    const val START_Z = 220f
+    /** فاصلهٔ مراکز ستون‌ها بر محور x */
+    const val COLUMN_SPACING = 78f
+    /** فاصلهٔ مراکز ردیف‌ها بر محور z */
+    const val ROW_SPACING = 95f
+    /** نصف عرض خیابان */
+    const val HALF_ROAD = 8f
+    /** حداقل فاصلهٔ آزاد پی ساختمان تا لبهٔ خیابان */
+    const val CLEARANCE = 3f
+    fun rowZ(row: Int): Float = START_Z + row * ROW_SPACING
+    /** خیابان عرضی، میانهٔ فاصلهٔ ردیف row و ردیف row+1 */
+    fun crossZ(row: Int): Float = START_Z + (row + 0.5f) * ROW_SPACING
+    fun jitterLimit(width: Float): Float =
+        min(7f, 39f - HALF_ROAD - CLEARANCE - width * 0.5f).coerceAtLeast(0f)
+    fun blocksRoad(p: Prop): Boolean {
+        val hx = abs(cos(p.rot)) * p.w * .5f + abs(sin(p.rot)) * p.d * .5f
+        val hz = abs(sin(p.rot)) * p.w * .5f + abs(cos(p.rot)) * p.d * .5f
+        if (abs(p.x) - hx <= 400f && blocksRoad(p.z, hz * 2f)) return true
+        for (col in -4..4) {
+            val road = col * COLUMN_SPACING + COLUMN_SPACING * .5f
+            if (abs(p.x - road) - hx < HALF_ROAD + CLEARANCE) return true
+        }
+        return false
+    }
+    fun blocksRoad(z: Float, depth: Float): Boolean {
+        val n = Math.round((z - START_Z) / ROW_SPACING - 0.5f)
+        val road = crossZ(n)
+        return Math.abs(z - road) - depth * 0.5f < HALF_ROAD + CLEARANCE
+    }
 }
 
 /**
@@ -229,7 +272,12 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
         when (level.env) {
             Env.URBAN -> buildCity()
             Env.NAVAL -> buildSea()
-            Env.SPECIAL -> { buildDesert(); buildCity() }
+            Env.SPECIAL -> {
+                buildDesert()
+                // Scattered rotated props must respect the same road footprint as city blocks.
+                props.removeAll { CityLayout.blocksRoad(it) }
+                buildCity()
+            }
             else -> buildDesert()
         }
     }
@@ -281,20 +329,24 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
     }
 
     private fun buildCity() {
-        val blockZ = 95f
-        var z = 220f
-        while (z < distance - 80f) {
+        var row = 0
+        while (CityLayout.rowZ(row) < distance - 80f) {
+            val z = CityLayout.rowZ(row)
             var col = -4
             while (col <= 4) {
-                val x = col * 78f + (rnd.nextFloat() * 14f - 7f)
+                val limit = CityLayout.jitterLimit(56f)
+                val x = col * CityLayout.COLUMN_SPACING + (rnd.nextFloat() * 2f - 1f) * limit
                 val central = Math.abs(x) < 30f
                 val skip = rnd.nextFloat() < (if (central) 0.62f else 0.24f)
                 if (!skip && Math.abs(z - distance) > 70f) {
                     val h = if (central) 14f + rnd.nextFloat() * 26f else 22f + rnd.nextFloat() * 70f
                     val w = 34f + rnd.nextFloat() * 22f
+                    // عمق ساختمان هم با کف شبکه محدود می‌شود تا از خیابان عرضی رد نشود
+                    val dMax = (CityLayout.ROW_SPACING * 0.5f - CityLayout.HALF_ROAD -
+                        CityLayout.CLEARANCE) * 2f
                     props.add(
                         Prop(
-                            x, z, w, h, 30f + rnd.nextFloat() * 22f,
+                            x, z, w, h, min(30f + rnd.nextFloat() * 22f, dMax),
                             Theme.shade(palette.prop, 0.75f + rnd.nextFloat() * 0.5f),
                             0f, PropKind.BUILDING
                         )
@@ -302,7 +354,7 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
                 }
                 col++
             }
-            z += blockZ
+            row++
         }
     }
 
@@ -362,6 +414,28 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
     fun activeTarget(): Target? = targets.firstOrNull { !it.destroyed }
 
     fun allDestroyed(): Boolean = targets.all { it.destroyed }
+
+    /** Segment/rotated-box test for solid scenery; does not skip thin walls. */
+    fun projectileHitsProp(ax: Float, ay: Float, az: Float, bx: Float, by: Float, bz: Float): Boolean {
+        for (p in props) {
+            if (p.kind == PropKind.BUSH || p.kind == PropKind.TREE || p.kind == PropKind.PALM) continue
+            val s = sin(p.rot); val c = cos(p.rot)
+            val x0 = (ax-p.x)*c + (az-p.z)*s
+            val z0 = -(ax-p.x)*s + (az-p.z)*c
+            val x1 = (bx-p.x)*c + (bz-p.z)*s
+            val z1 = -(bx-p.x)*s + (bz-p.z)*c
+            var enter = 0f; var leave = 1f
+            fun slab(start: Float, delta: Float, low: Float, high: Float): Boolean {
+                if (abs(delta) < .000001f) return start >= low && start <= high
+                val a = (low-start)/delta; val b = (high-start)/delta
+                enter = maxOf(enter, minOf(a,b)); leave = minOf(leave, maxOf(a,b))
+                return enter <= leave
+            }
+            if (slab(x0,x1-x0,-p.w*.5f,p.w*.5f) &&
+                slab(ay,by-ay,0f,p.h) && slab(z0,z1-z0,-p.d*.5f,p.d*.5f)) return true
+        }
+        return false
+    }
 
     /** آیا این نقطه داخل یکی از موانع است */
     fun hitsProp(px: Float, py: Float, pz: Float): Boolean = pointInProp(px, py, pz)

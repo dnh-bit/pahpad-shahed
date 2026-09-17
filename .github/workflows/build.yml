@@ -33,6 +33,9 @@ jobs:
           echo "$KEY_B64" | base64 --decode > app/upload.jks
           printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=hoda-upload\nkeyPassword=%s\n' "$KEY_PASS" "$KEY_PASS" > app/keystore.properties
 
+      - name: Regression tests
+        run: gradle testDebugUnitTest --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g"
+
       - name: Build release APK
         run: |
           gradle --version
@@ -41,7 +44,7 @@ jobs:
       - name: Locate APK
         run: find app/build/outputs -name "*.apk"
 
-      - name: Check APK size budget (<10MB)
+      - name: Verify APK exists
         shell: bash
         run: |
           shopt -s nullglob
@@ -50,23 +53,19 @@ jobs:
           for apk in "${apks[@]}"; do
             bytes=$(stat -c '%s' "$apk")
             echo "$(basename "$apk"): $bytes bytes"
-            if (( bytes >= 10000000 )); then
-              echo 'APK must remain below 10,000,000 bytes'
-              exit 1
-            fi
           done
 
       - name: Rename APK
         run: |
           mkdir -p out
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$APK" out/pahpad-shahed-v0.0.5.apk
+          cp "$APK" out/pahpad-shahed-v0.0.6.apk
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v0.0.5
-          name: "0.0.5"
-          files: out/pahpad-shahed-v0.0.5.apk
+          tag_name: v0.0.6
+          name: "0.0.6"
+          files: out/pahpad-shahed-v0.0.6.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

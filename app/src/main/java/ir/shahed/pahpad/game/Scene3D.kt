@@ -52,6 +52,8 @@ class Face {
     var color=0; var depth=0f; var outlineColor=0; var hasOutline=false
     var bitmap:Bitmap?=null; var transparent=false; var fog=0f; var opacity=1f
     val uv=FloatArray(8); val dst=FloatArray(8)
+    val textureMatrix=FloatArray(9)
+    var radius=0f // Positive for a camera-facing particle circle.
 }
 
 /** Pooled painter renderer with near-plane clipping and depth-sorted image planes.
@@ -79,7 +81,7 @@ class Scene3D {
     fun clear(){order.clear();pool.clear();shaders.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())
-        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f }
+        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f }
     }
     private fun fogFactor(depth:Float)=((depth-fogStart)/(fogEnd-fogStart)).coerceIn(0f,0.96f)
     private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f) {
@@ -111,16 +113,51 @@ class Scene3D {
         }
         // Expanded bounds accommodate the outer Canvas roll transform.
         if(maxX < -cam.width || minX > cam.width*2 || maxY < -cam.height || minY > cam.height*2){used--;return}
-        if(texture!=null && n==4 && input[0][2]>near && input[1][2]>near && input[2][2]>near && input[3][2]>near) {
+        if(texture!=null && n==4 && textureMapping(texture,f.textureMatrix)) {
             f.bitmap=texture; f.transparent=transparent
-            val tw=texture.width.toFloat();val th=texture.height.toFloat()
-            f.uv[0]=0f;f.uv[1]=0f;f.uv[2]=tw;f.uv[3]=0f;f.uv[4]=tw;f.uv[5]=th;f.uv[6]=0f;f.uv[7]=th
-            for(i in 0..3){f.dst[i*2]=f.xs[i];f.dst[i*2+1]=f.ys[i]}
         } else if(transparent) {
             // A clipped sprite must never become an opaque rectangular fallback.
             used--;return
         }
         order.add(f)
+    }
+    /** Map bitmap pixels to homogeneous screen coordinates BEFORE clipping.
+     * Solve on the quad's dominant camera-space plane, then compose projection.
+     * Never divide original vertices by z: they may lie on/behind the eye plane.
+     * The clipped path supplies coverage only; it must not redefine the UV corners.
+     * Like setPolyToPoly, this assumes a planar, convex, non-degenerate quad.
+     */
+    private fun textureMapping(bitmap:Bitmap,out:FloatArray):Boolean {
+        val p=input[0];val q=input[1];val r=input[2];val s=input[3]
+        val ax=(q[0]-p[0]).toDouble();val ay=(q[1]-p[1]).toDouble();val az=(q[2]-p[2]).toDouble()
+        val bx=(s[0]-p[0]).toDouble();val by=(s[1]-p[1]).toDouble();val bz=(s[2]-p[2]).toDouble()
+        val nx=abs(ay*bz-az*by);val ny=abs(az*bx-ax*bz);val nz=abs(ax*by-ay*bx)
+        val i:Int;val j:Int
+        if(nx>=ny && nx>=nz){i=1;j=2}else if(ny>=nz){i=0;j=2}else{i=0;j=1}
+        val d1=(q[i]-r[i]).toDouble();val d2=(s[i]-r[i]).toDouble()
+        val e1=(q[j]-r[j]).toDouble();val e2=(s[j]-r[j]).toDouble()
+        val d3=p[i].toDouble()-q[i]+r[i]-s[i];val e3=p[j].toDouble()-q[j]+r[j]-s[j]
+        val det=d1*e2-d2*e1
+        if(!det.isFinite() || abs(det)<=1e-12*max(1.0,abs(d1*e2)+abs(d2*e1)))return false
+        val g=(d3*e2-d2*e3)/det;val h=(d1*e3-d3*e1)/det
+        // A convex quad has positive homogeneous corner weights.
+        if(1.0+g<=0.0 || 1.0+h<=0.0 || 1.0+g+h<=0.0)return false
+        for(k in 0..2) {
+            val a=((1.0+g)*q[k]-p[k])/bitmap.width
+            val b=((1.0+h)*s[k]-p[k])/bitmap.height
+            val c=p[k].toDouble()
+            if(k==2){out[6]=a.toFloat();out[7]=b.toFloat();out[8]=c.toFloat()}
+            else {
+                val sign=if(k==0)cam.focal else -cam.focal
+                val center=if(k==0)cam.screenCx else cam.screenCy
+                val za=((1.0+g)*q[2]-p[2])/bitmap.width
+                val zb=((1.0+h)*s[2]-p[2])/bitmap.height
+                out[k*3]=(sign*a+center*za).toFloat()
+                out[k*3+1]=(sign*b+center*zb).toFloat()
+                out[k*3+2]=(sign*c+center*p[2]).toFloat()
+            }
+        }
+        return out.all { it.isFinite() }
     }
     fun quad(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,outline:Int=0,texture:Bitmap?=null,transparent:Boolean=false) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
@@ -162,14 +199,30 @@ class Scene3D {
         stroke.color=Theme.withAlpha(Theme.mix(color,fogColor,fogFactor((a[2]+b[2])/2)),Color.alpha(color)/255f);stroke.strokeWidth=width
         canvas.drawLine(cam.screenCx+cam.focal*a[0]/a[2],cam.screenCy-cam.focal*a[1]/a[2],cam.screenCx+cam.focal*b[0]/b[2],cam.screenCy-cam.focal*b[1]/b[2],stroke)
     }
+    /** Queue an already projected camera-facing particle. Shared painter order fixes
+     * fully separated occluders, not intersecting/slanted surfaces: one depth per
+     * primitive cannot replace a per-pixel z-buffer. Alpha blends back to front.
+     */
+    fun particle(sx:Float,sy:Float,depth:Float,radius:Float,color:Int) {
+        if(!sx.isFinite() || !sy.isFinite() || !depth.isFinite() || !radius.isFinite() ||
+            depth<=cam.near || radius<=0f || Color.alpha(color)==0)return
+        val f=next();f.count=0;f.xs[0]=sx;f.ys[0]=sy;f.depth=depth;f.radius=radius;f.color=color
+        order.add(f)
+    }
     fun flush(canvas:Canvas) {
         order.sortWith(depthOrder)
         for(f in order) {
+            if(f.radius>0f) {
+                paint.shader=null;paint.color=f.color
+                canvas.drawCircle(f.xs[0],f.ys[0],f.radius,paint)
+                continue
+            }
             path.rewind();path.moveTo(f.xs[0],f.ys[0]);for(i in 1 until f.count)path.lineTo(f.xs[i],f.ys[i]);path.close()
             paint.shader=null;paint.alpha=255;paint.color=f.color
             if(!f.transparent)canvas.drawPath(path,paint)
             val bitmap=f.bitmap
-            if(bitmap!=null && matrix.setPolyToPoly(f.uv,0,f.dst,0,4)) {
+            if(bitmap!=null) {
+                matrix.setValues(f.textureMatrix)
                 val shader=shaders.getOrPut(bitmap){BitmapShader(bitmap,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP)}
                 shader.setLocalMatrix(matrix);paint.shader=shader
                 paint.alpha=if(f.transparent)(255*f.opacity*(1f-f.fog*.75f)).toInt() else (208*(1f-f.fog)).toInt()
