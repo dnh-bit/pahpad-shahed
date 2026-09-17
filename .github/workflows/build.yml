@@ -34,7 +34,13 @@ jobs:
           printf 'storeFile=upload.jks\nstorePassword=%s\nkeyAlias=hoda-upload\nkeyPassword=%s\n' "$KEY_PASS" "$KEY_PASS" > app/keystore.properties
 
       - name: Regression tests
-        run: gradle testDebugUnitTest --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g"
+        run: |
+          gradle testDebugUnitTest --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g" --continue || true
+          find app/build/test-results -name '*.xml' | while read f; do
+            echo "===== $f"
+            cat "$f"
+          done
+          gradle testDebugUnitTest --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g"
 
       - name: Build release APK
         run: |

@@ -28,16 +28,45 @@ class Scene3DRegressionTest {
             assertEquals("visible sprite must not disappear at $z",1,faces(s).size)
             val face=faces(s).single()
             assertSame(bitmap,face.bitmap);assertTrue(face.transparent);assertEquals(.4f,face.opacity,0f)
-            val matrix=Matrix().apply { setValues(face.textureMatrix) }
-            val points=floatArrayOf(60f,25f,90f,75f)
-            matrix.mapPoints(points)
+            // The stored 3x3 maps bitmap pixels to homogeneous screen coordinates:
+            // screen = (M[0..5] . p) / (M[6]*x + M[7]*y + M[8]). Android's affine
+            // Matrix cannot represent this; Scene3D applies the division itself.
+            val m=face.textureMatrix
             for(i in 0..1) {
                 val u=if(i==0).6f else .9f;val v=if(i==0).25f else .75f
+                val x=u*100f;val y=v*100f
+                val w=m[6]*x+m[7]*y+m[8]
+                val px=(m[0]*x+m[1]*y+m[2])/w
+                val py=(m[3]*x+m[4]*y+m[5])/w
                 val depth=z+2f*u
-                assertEquals(s.cam.screenCx+s.cam.focal*(-.1f+.2f*u)/depth,points[2*i],.01f)
-                assertEquals(s.cam.screenCy-s.cam.focal*(.1f-.2f*v)/depth,points[2*i+1],.01f)
+                assertEquals(s.cam.screenCx+s.cam.focal*(-.1f+.2f*u)/depth,px,.01f)
+                assertEquals(s.cam.screenCy-s.cam.focal*(.1f-.2f*v)/depth,py,.01f)
             }
         }
+    }
+
+    @Test fun texturedFaceRasterizesProjectiveMeshGrid() {
+        val s=scene();val bitmap=Bitmap.createBitmap(100,100,Bitmap.Config.ARGB_8888)
+        s.begin()
+        s.imagePlane(arrayOf(floatArrayOf(-.1f,.1f,0f),floatArrayOf(.1f,.1f,2f),floatArrayOf(.1f,-.1f,2f),floatArrayOf(-.1f,-.1f,0f)),bitmap,.5f)
+        val face=faces(s).single()
+        s.flush(Canvas(Bitmap.createBitmap(800,600,Bitmap.Config.ARGB_8888)))
+        // Grid is placed in bitmap space; corners carry the projective screen positions.
+        val steps=6; val n=(steps+1)*(steps+1)
+        assertEquals(n*2,face.dst.size/2*2)
+        // Bitmap corner (0,0) must project exactly to the far top-left polygon vertex.
+        val m=face.textureMatrix
+        val w=m[8]
+        assertEquals((m[2])/w,face.dst[0],.01f)
+        assertEquals((m[5])/w,face.dst[1],.01f)
+        // Bitmap corner (100,100) lands on the projected far bottom-right vertex.
+        val w2=m[6]*100f+m[7]*100f+m[8]
+        assertEquals((m[0]*100f+m[1]*100f+m[2])/w2,face.dst[(n-1)*2],.01f)
+        assertEquals((m[3]*100f+m[4]*100f+m[5])/w2,face.dst[(n-1)*2+1],.01f)
+        // UV grid stays the uniform bitmap lattice (0..width, 0..height).
+        assertEquals(100f,face.uv[(n-1)*2],.001f)
+        assertEquals(100f,face.uv[(n-1)*2+1],.001f)
+        assertEquals(0f,face.uv[0],.001f)
     }
 
     @Test fun clippedOpaqueTextureDoesNotFallBackToFlatColor() {
