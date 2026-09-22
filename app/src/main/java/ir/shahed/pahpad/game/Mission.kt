@@ -45,7 +45,7 @@ class MissionResult(
 
     /** قوانین ستاره با اندازهٔ واقعی این ماموریت */
     fun starRules(): List<StarRules.Rule> = StarRules.evaluate(
-        success, targetsDestroyed, targetsTotal, bonusesCollected, totalBonuses,
+        success, targetsDestroyed, targetsTotal, bonusesCollected, bonusesTotal,
         damage, elapsed, parTime
     )
 }

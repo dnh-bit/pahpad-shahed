@@ -67,6 +67,14 @@ jobs:
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           cp "$APK" out/pahpad-shahed-v0.0.7.apk
 
+      - name: Upload test results (diagnostics)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: app/build/test-results/**
+          if-no-files-found: ignore
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
@@ -92,6 +100,11 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Normalize ANDROID_HOME
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+          echo "sdk.dir=${ANDROID_HOME:-$ANDROID_SDK_ROOT}" >> local.properties || true
+
       - name: Install Android build-tools (apksigner/zipalign)
         run: |
           yes | sdkmanager --licenses > /dev/null || true
@@ -101,11 +114,12 @@ jobs:
 
       - name: Setup Godot 4.3 + export templates
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip
+          mkdir -p /tmp/godot-ci
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip 2>&1 | tee /tmp/godot-ci/setup.log
           unzip -q /tmp/godot.zip -d /tmp
           mv /tmp/Godot_v4.3-stable_linux.x86_64 /tmp/godot
           chmod +x /tmp/godot
-          /tmp/godot --version
+          /tmp/godot --version 2>&1 | tee -a /tmp/godot-ci/setup.log
           mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
           wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz -O /tmp/templates.tpz
           unzip -q /tmp/templates.tpz -d /tmp/godot-templates
@@ -135,13 +149,14 @@ jobs:
 
       - name: Import project resources
         run: |
-          /tmp/godot --headless --path spikes/godot-flight --import || true
-          /tmp/godot --headless --path spikes/godot-flight --quit
+          mkdir -p /tmp/godot-ci
+          (/tmp/godot --headless --path spikes/godot-flight --import || true) 2>&1 | tee /tmp/godot-ci/import.log
+          /tmp/godot --headless --path spikes/godot-flight --quit 2>&1 | tee -a /tmp/godot-ci/import.log
 
       - name: Export Godot Android APK
         run: |
-          mkdir -p out
-          /tmp/godot --headless --path spikes/godot-flight --export-release "Android" /tmp/saffron-sky.apk
+          mkdir -p out /tmp/godot-ci
+          /tmp/godot --headless --path spikes/godot-flight --export-debug "Android" /tmp/saffron-sky.apk 2>&1 | tee /tmp/godot-ci/export.log
           ls -lh /tmp/saffron-sky.apk
 
       - name: Verify exported APK
@@ -151,6 +166,14 @@ jobs:
           "$APKSIGNER" verify --print-certs /tmp/saffron-sky.apk | head -20
           cp /tmp/saffron-sky.apk out/saffron-sky-v0.0.7-godot-flight.apk
           ls -lh out/
+
+      - name: Upload Godot export logs (diagnostics)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-export-logs
+          path: /tmp/godot-ci/**
+          if-no-files-found: ignore
 
       - name: Release Godot flight APK
         uses: softprops/action-gh-release@v1
