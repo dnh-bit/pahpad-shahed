@@ -36,7 +36,7 @@ The scene test exercises movement, pause, reset, touch steering, clearing held i
 Environment warnings: missing optional `libXinerama.so.1`; V-Sync unsupported by the software display. Godot 4.3's dummy headless renderer emits `mesh_get_surface_count: Parameter m is null` when freeing primitive meshes; this was reproduced with an isolated BoxMesh, then tests were rerun on the real software OpenGL backend without that error. No screenshots or FPS claims are inferred from these logs.
 
 ## Verdict: PARTIAL
-The standalone course runs and its scripted behaviors pass. Actual phone controls, rendering quality, performance and Android export remain unverified. The native 0.0.6 APK uses the original Kotlin/Canvas renderer, not this Godot scene.
+The standalone course runs and its scripted behaviors pass. Actual phone controls, rendering quality, performance and Android export remain unverified. The native 0.0.7 APK uses the original Kotlin/Canvas renderer, not this Godot scene.
 
 ## License
 New code and generated geometry in this directory: MIT (see LICENSE). Godot is separately MIT-licensed; see https://godotengine.org/license/.

@@ -65,13 +65,98 @@ jobs:
         run: |
           mkdir -p out
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$APK" out/pahpad-shahed-v0.0.6.apk
+          cp "$APK" out/pahpad-shahed-v0.0.7.apk
 
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v0.0.6
-          name: "0.0.6"
-          files: out/pahpad-shahed-v0.0.6.apk
+          tag_name: v0.0.7
+          name: "0.0.7"
+          files: out/pahpad-shahed-v0.0.7.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  godot-flight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java (Godot Android export signs with apksigner)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build-tools (apksigner/zipalign)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "build-tools;34.0.0" "platforms;android-34" > /dev/null
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME/build-tools"
+
+      - name: Setup Godot 4.3 + export templates
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp
+          mv /tmp/Godot_v4.3-stable_linux.x86_64 /tmp/godot
+          chmod +x /tmp/godot
+          /tmp/godot --version
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.3.stable"
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz -O /tmp/templates.tpz
+          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+          cp /tmp/godot-templates/templates/* "$HOME/.local/share/godot/export_templates/4.3.stable/"
+          ls -lh "$HOME/.local/share/godot/export_templates/4.3.stable/" | head
+
+      - name: Configure Godot editor settings (SDK path + debug keystore)
+        run: |
+          mkdir -p "$HOME/.android" "$HOME/.local/share/godot/editor"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -v \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android -keypass android \
+              -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          {
+            echo '[gd_resource type="EditorSettings" format=3]'
+            echo ''
+            echo '[resource]'
+            echo "export/android/android_sdk_path = \"$ANDROID_HOME\""
+            echo "export/android/debug_keystore = \"$HOME/.android/debug.keystore\""
+            echo 'export/android/debug_keystore_user = "androiddebugkey"'
+            echo 'export/android/debug_keystore_password = "android"'
+          } > "$HOME/.local/share/godot/editor/editor_settings-4.tres"
+          cat "$HOME/.local/share/godot/editor/editor_settings-4.tres"
+
+      - name: Import project resources
+        run: |
+          /tmp/godot --headless --path spikes/godot-flight --import || true
+          /tmp/godot --headless --path spikes/godot-flight --quit
+
+      - name: Export Godot Android APK
+        run: |
+          mkdir -p out
+          /tmp/godot --headless --path spikes/godot-flight --export-release "Android" /tmp/saffron-sky.apk
+          ls -lh /tmp/saffron-sky.apk
+
+      - name: Verify exported APK
+        run: |
+          unzip -l /tmp/saffron-sky.apk | grep -q AndroidManifest.xml || { echo 'Not an APK: AndroidManifest.xml missing'; exit 1; }
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | head -1)
+          "$APKSIGNER" verify --print-certs /tmp/saffron-sky.apk | head -20
+          cp /tmp/saffron-sky.apk out/saffron-sky-v0.0.7-godot-flight.apk
+          ls -lh out/
+
+      - name: Release Godot flight APK
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v0.0.7-godot-flight
+          name: "0.0.7-godot-flight (Saffron Sky)"
+          files: out/saffron-sky-v0.0.7-godot-flight.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

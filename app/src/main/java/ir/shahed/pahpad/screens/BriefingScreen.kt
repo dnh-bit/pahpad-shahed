@@ -198,7 +198,7 @@ class BriefingScreen(
         val model = DroneModels.byId(save.selectedDroneId) ?: DroneModels.all.first()
         val cruise = model.speedAt(save.upgradeLevel(model.id, UpgradeKind.SPEED)) * 0.8f / 3.6f
         val par = StarRules.parTime(level.distance, cruise, level.targets)
-        val preview = StarRules.preview(level.targets, par)
+        val preview = StarRules.preview(level.targets, par, world.bonuses.size)
         val starsH = dp(26f) + preview.size * dp(26f)
         if (fits(starsH)) {
             ui.panel(c, x, y, w, starsH, Theme.withAlpha(Theme.AMBER, 0.08f),

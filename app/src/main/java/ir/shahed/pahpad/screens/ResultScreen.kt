@@ -183,7 +183,7 @@ class ResultScreen(
             y += dp(42f)
         }
         y += dp(4f)
-        ui.text(c, "بونوس‌ها فقط امتیاز و سکه می‌دهند و شرط ستاره نیستند.",
+        ui.text(c, "امتیاز بونوس‌ها جداگانه است؛ جمع همهٔ آن‌ها ستارهٔ دوم را می‌دهد.",
             rx + rw - dp(6f), y, dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
         y += dp(18f)
         if (mode == MissionMode.STORY) {

@@ -26,7 +26,10 @@ class MissionResult(
     val xp: Int,
     val targetsDestroyed: Int,
     val targetsTotal: Int,
-    /** میانگین دقت برخورد بین ۰ و ۱؛ مبنای ستاره‌ی دوم */
+    /** تعداد بونوس‌های جمع‌شده و کل بونوس‌های همین ماموریت؛ مبنای ستارهٔ دوم */
+    val bonusesCollected: Int,
+    val bonusesTotal: Int,
+    /** میانگین دقت برخورد بین ۰ و ۱؛ صرفاً اطلاعاتی (امتیاز جزئیات)، نه شرط ستاره */
     val avgAccuracy: Float,
     /** تعداد آسیب‌های پدافندی؛ مبنای ستاره‌ی سوم */
     val damage: Int,
@@ -40,9 +43,10 @@ class MissionResult(
 ) {
     val total: Int get() = scoreTotal
 
-    /** قوانین ستاره با اندازه‌ی واقعی این ماموریت */
+    /** قوانین ستاره با اندازهٔ واقعی این ماموریت */
     fun starRules(): List<StarRules.Rule> = StarRules.evaluate(
-        success, targetsDestroyed, targetsTotal, avgAccuracy, damage, elapsed, parTime
+        success, targetsDestroyed, targetsTotal, bonusesCollected, totalBonuses,
+        damage, elapsed, parTime
     )
 }
 
@@ -110,6 +114,13 @@ class Mission(
     // منابع و وضعیت
     var fuelLeft = 0f
         private set
+    /**
+     * مقدار سوخت در آغاز همین پهباد (پس از هر پرتاب/موج). نوار سوخت نسبت به همین
+     * عدد سنجیده می‌شود، نه نسبت به `maxRange`؛ چون سوخت اولیه عمداً بزرگ‌تر از
+     * حداکثر برد است (حداقل ۱٫۴۵× فاصلهٔ ماموریت × ۱٫۱۵ ذخیره) و تقسیم بر
+     * `maxRange` نوار را تا مدّتی روی ۱۰۰٪ پین می‌کرد (باگ «کم نشدن نوار سوخت»).
+     */
+    private var fuelMax = 1f
     var damage = 0
         private set
     var elapsed = 0f
@@ -130,7 +141,7 @@ class Mission(
         private set
 
     private var accuracyPoints = 0f
-    /** جمع دقت خام برخوردها برای محاسبه‌ی میانگین دقت (مبنای ستاره‌ی دوم) */
+    /** جمع دقت خام برخوردها؛ صرفاً برای امتیاز جزئیات و نمایش اطلاعاتی */
     private var precisionSum = 0f
     private var fuelRatioSum = 0f
     private var impacts = 0
@@ -185,6 +196,7 @@ class Mission(
         // سوخت تضمینی: حتی با پهپاد بی‌ارتقا، برد کافی برای رسیدن به هدف وجود دارد
         // (بیشینهٔ برد مدل یا ۱٫۴۵ برابر فاصلهٔ ماموریت) + ۱۵٪ ذخیره برای پیچ و مانور
         fuelLeft = Math.max(maxRange, level.distance * 1.45f) * 1.15f
+        fuelMax = fuelLeft.coerceAtLeast(1f)
         signalLoss = 0f
         phase = Phase.READY
     }
@@ -441,7 +453,7 @@ class Mission(
         lastImpactAccuracy = precision
         precisionSum += precision
         accuracyPoints += perTarget * (0.2f + 0.8f * Math.pow(precision.toDouble(), 1.15).toFloat())
-        fuelRatioSum += (fuelLeft / maxRange).coerceIn(0f, 1f)
+        fuelRatioSum += (fuelLeft / fuelMax).coerceIn(0f, 1f)
         flash = 1f
         shake = 1.4f
         onExplosion?.invoke(t.x, t.centerY, t.z, 1f + blastRadius / 45f)
@@ -487,7 +499,10 @@ class Mission(
         baseSeed = baseSeed * 31 + wave
         val scale = 1f + wave * 0.35f
         world = World(level, baseSeed, scale)
-        totalBonuses += world.bonuses.size
+        // بونوس‌های موج قبلی که جمع نشده‌اند با تعویض دنیا غیرقابل‌دسترس می‌شوند؛
+        // فقط بونوس‌های جمع‌شده + بونوس‌های موج تازه در مخرج ستارهٔ دو می‌مانند
+        // تا «جمع همهٔ بونوس‌ها» در حالت بی‌نهایت هم قابل گرفتن باشد.
+        totalBonuses = bonusesCollected + world.bonuses.size
         resetDrone()
         phase = Phase.FLYING
         speedMps = minSpeedKmh / 3.6f
@@ -520,7 +535,7 @@ class Mission(
             Math.round(accuracyPoints) + bonusScore + targetsDestroyed * 150
         else acc + timeScore + defense + fuelScore + bonusScore
 
-        val stars = StarRules.stars(success, avgAccuracy, damage, elapsed, par)
+        val stars = StarRules.stars(success, bonusesCollected, totalBonuses, damage, elapsed, par)
 
         val coinMul = if (mode == MissionMode.DAILY) 2f else 1f
         // لغو ماموریت هیچ پاداشی ندارد؛ شکست فقط پاداش تسلی‌بخش می‌گیرد
@@ -550,6 +565,8 @@ class Mission(
             xp = xp,
             targetsDestroyed = targetsDestroyed,
             targetsTotal = targetsTotal,
+            bonusesCollected = bonusesCollected,
+            bonusesTotal = totalBonuses,
             avgAccuracy = avgAccuracy,
             damage = damage,
             parTime = par,
@@ -591,7 +608,7 @@ class Mission(
 
     val altitude: Float get() = y
     val speedKmh: Float get() = speedMps * 3.6f
-    val fuel01: Float get() = (fuelLeft / maxRange).coerceIn(0f, 1f)
+    val fuel01: Float get() = (fuelLeft / fuelMax).coerceIn(0f, 1f)
 
     fun distanceToTarget(): Float {
         val t = world.activeTarget() ?: return 0f

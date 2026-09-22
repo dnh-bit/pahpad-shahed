@@ -217,7 +217,9 @@ class WorldRenderer(private val gfxContext: Context) {
 
     // ------------------------------------------------------------------ اجزا
 
-    /** Same footprint, height, roof cap and materials at every LOD; only facade decals drop out. */
+    /** Same footprint, height, roof cap and materials at every LOD; only facade decals drop out.
+     *  پنجره‌ها در مقیاس واقعی (متر) روی هر ۴ رخ چیده می‌شوند؛ نور و رنگ داخل ثابت
+     *  و با LOD/ویرانی سازگار است تا از نمای نزدیک طبیعی باشد و از دور نلرزد. */
     private fun building(
         x: Float, z: Float, w: Float, h: Float, d: Float, yaw: Float,
         baseColor: Int, destroyed: Boolean, detail: Int
@@ -229,15 +231,93 @@ class WorldRenderer(private val gfxContext: Context) {
         val cap = max(.5f, h * .04f).coerceAtMost(h * .2f)
         rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof)
         rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof)
-        if (detail == 0) {
-            // Thin inset window panels: no roof machinery/awnings that pop the silhouette.
-            val glass = if (destroyed) 0xFF292C2A.toInt() else 0xFF435D64.toInt()
-            val y0 = h * .08f
-            val y1 = h * .22f
+        if (detail > 1 || destroyed && detail != 0) {
+            // دورترین LOD بدون دکال؛ ویران فقط در نزدیک‌ترین LOD پنجرهٔ تیره نشان می‌دهد
+            if (destroyed && detail == 0) {
+                // شکستگی محدود در ویرانی نزدیک
+                val dark = 0xFF1F2322.toInt()
+                val usableH = h - cap
+                val winW = 2.2f; val winH = 2.0f; val floorH = 3.4f; val gapX = 0.9f
+                val floors = ((usableH - 1.6f) / floorH).toInt().coerceIn(1, 3)
+                val bays = ((w - 2.2f) / (winW + gapX)).toInt().coerceIn(1, 2)
+                val total = bays * winW + (bays - 1) * gapX; val sx = -total * 0.5f
+                for (side in -1..1 step 2) {
+                    val zz = side.toFloat() * (d * 0.5f + 0.018f)
+                    for (b in 0 until bays) for (f in 0 until floors) {
+                        val y0 = 1.2f + f * floorH; val y1 = y0 + winH
+                        if (y1 > usableH - 0.5f) continue
+                        val x0 = sx + b * (winW + gapX); val x1 = x0 + winW
+                        rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, dark)
+                    }
+                }
+            }
+            return
+        }
+        val usableH = h - cap
+        if (usableH < 3.5f || w < 4f || d < 4f) return
+        // مقیاس واقعی پنجره (متر) — مستقل از w/d تا کشیدگی نداشته باشد
+        val winW = 2.15f
+        val winH = 2.45f
+        val floorH = 3.55f
+        val gapX = 0.75f
+        val sill0 = 1.45f
+        val inset = 0.020f
+        val floorsFull = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 5)
+        val floors = if (detail == 0) floorsFull else minOf(floorsFull, 2)
+        // بافت نامنظم ملایم: هر ساختمان یک افست فاز دارد تا تکرار شطرنجی نشود
+        val seed = (x * 31f + z * 17f).toInt()
+        val phase = ((seed % 3) + 3) % 3
+        fun glassFor(b: Int, f: Int): Int {
+            if (destroyed) return 0xFF262A2B.toInt()
+            // شب‌ها (SPECIAL) برخی پنجره‌ها روشن‌تر
+            val lit = ((b * 7 + f * 11 + phase) % 5 == 0)
+            return if (lit) 0xFF8EA9B2.toInt() else 0xFF4A6570.toInt()
+        }
+        // رخ‌های ±Z (طول w)
+        val baysZ = ((w - 2.0f) / (winW + gapX)).toInt().coerceIn(1, if (detail == 0) 4 else 2)
+        run {
+            val total = baysZ * winW + (baysZ - 1) * gapX
+            val startX = -total * 0.5f
             for (side in -1..1 step 2) {
-                val zz = side * (d * .5f + .015f)
-                rig.face(-w * .30f, y0, zz, w * .30f, y0, zz,
-                    w * .30f, y1, zz, -w * .30f, y1, zz, glass)
+                val zz = side.toFloat() * (d * 0.5f + inset)
+                for (b in 0 until baysZ) {
+                    val x0 = startX + b * (winW + gapX); val x1 = x0 + winW
+                    for (f in 0 until floors) {
+                        val y0 = sill0 + f * floorH; val y1 = y0 + winH
+                        if (y1 > usableH - 0.45f) continue
+                        val g = glassFor(b + if (side > 0) 10 else 0, f)
+                        rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, g)
+                        // قاب نازک تیره (دو خط افقی باریک بالا/پایین پنجره برای عمق) — بدون تغییر سیلوئت
+                        val frame = Theme.shade(g, 0.58f)
+                        val fh = 0.07f
+                        rig.face(x0, y1 - fh, zz + 0.004f, x1, y1 - fh, zz + 0.004f, x1, y1, zz + 0.004f, x0, y1, zz + 0.004f, frame)
+                        rig.face(x0, y0, zz + 0.004f, x1, y0, zz + 0.004f, x1, y0 + fh, zz + 0.004f, x0, y0 + fh, zz + 0.004f, frame)
+                    }
+                }
+            }
+        }
+        // رخ‌های ±X (طول d) — فقط در نزدیک‌ترین LOD و با تراکم کمتر تا Faces کنترل شود
+        if (detail == 0 && d >= 6f) {
+            val baysX = ((d - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 3)
+            val totalZ = baysX * winW + (baysX - 1) * gapX
+            val startZ = -totalZ * 0.5f
+            val floorsX = minOf(floors, 4)
+            for (side in -1..1 step 2) {
+                val xx = side.toFloat() * (w * 0.5f + inset)
+                for (b in 0 until baysX) {
+                    val z0 = startZ + b * (winW + gapX); val z1 = z0 + winW
+                    for (f in 0 until floorsX) {
+                        val y0 = sill0 + f * floorH; val y1 = y0 + winH
+                        if (y1 > usableH - 0.45f) continue
+                        val g = glassFor(b + 20, f)
+                        // رخ ±X: مستطیل در صفحهٔ X ثابت، بازهٔ Z متغیر
+                        rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, g)
+                        val frame = Theme.shade(g, 0.58f)
+                        val fh = 0.07f
+                        rig.face(xx + side.toFloat() * 0.004f, y1 - fh, z0, xx + side.toFloat() * 0.004f, y1 - fh, z1, xx + side.toFloat() * 0.004f, y1, z1, xx + side.toFloat() * 0.004f, y1, z0, frame)
+                        rig.face(xx + side.toFloat() * 0.004f, y0, z0, xx + side.toFloat() * 0.004f, y0, z1, xx + side.toFloat() * 0.004f, y0 + fh, z1, xx + side.toFloat() * 0.004f, y0 + fh, z0, frame)
+                    }
+                }
             }
         }
     }

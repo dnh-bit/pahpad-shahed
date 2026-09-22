@@ -6,24 +6,26 @@ import ir.shahed.pahpad.core.Fa
  * قانون ستاره‌دهی.
  *
  * هر ستاره یک شرط مستقل و قابل اندازه‌گیری دارد. شرط‌ها قبل از ماموریت در بریفینگ و
- * بعد از ماموریت در صفحه‌ی نتیجه با عدد واقعی بازیکن نشان داده می‌شوند، پس همیشه
+ * بعد از ماموریت در صفحهٔ نتیجه با عدد واقعی بازیکن نشان داده می‌شوند، پس همیشه
  * مشخص است ستاره بر چه اساس داده یا کم شده است.
  *
- * تفاوت با نسخه‌ی قبلی: ستاره‌ها دیگر به مجموع امتیاز (که سقف ۲۵۰۰ داشت و برای سه
- * ستاره ۲۲۰۰ لازم بود) وصل نیستند. بونوس‌های مخفی هم شرط ستاره نیستند و فقط امتیاز و
- * سکه می‌دهند.
+ * ستاره‌ها به مجموع امتیاز گره نیستند:
+ *  - ستارهٔ یک: انهدام همهٔ اهداف اصلی.
+ *  - ستارهٔ دو: جمعِ همهٔ بونوس‌های مخفی مسیر. شرط قبلی «میانگین دقت برخورد ۵۰٪»
+ *    عملاً قابل گرفتن نبود (میانگین دقتِ برخورد به مرکز هدف با توزیع واقعی بازی
+ *    زیر ۵۰٪ می‌ماند) و با شمارش بونوس‌ها جایگزین شد.
+ *  - ستارهٔ سه: اجرای تمیز (بدون آسیب پدافندی) یا رسیدن زیر زمان مرجع.
+ *
+ * بونوس‌ها جدا از ستاره هم امتیاز و سکه می‌دهند.
  */
 object StarRules {
 
-    /** حد دقت برخورد برای ستاره‌ی دوم */
-    const val ACCURACY_GATE = 0.50f
-
-    /** ضریب سخاوتمندانه‌ی زمان مرجع نسبت به زمان پرواز نظری */
+    /** ضریب سخاوتمندانهٔ زمان مرجع نسبت به زمان پرواز نظری */
     private const val PAR_FACTOR = 2.1f
 
     /**
      * زمان مرجع ماموریت بر حسب ثانیه.
-     * فقط از فاصله‌ی هدف، سرعت پروازی پهباد و تعداد اهداف ساخته می‌شود؛ هیچ عدد
+     * فقط از فاصلهٔ هدف، سرعت پروازی پهباد و تعداد اهداف ساخته می‌شود؛ هیچ عدد
      * پنهانی در کار نیست، پس بازیکن می‌تواند آن را از قبل ببیند.
      */
     fun parTime(distance: Float, cruiseMps: Float, targets: Int): Float {
@@ -37,32 +39,42 @@ object StarRules {
         val title: String,
         /** متن قانون؛ همان چیزی که در بریفینگ نشان داده می‌شود */
         val requirement: String,
-        /** اندازه‌ی واقعی بازیکن؛ قبل از ماموریت خالی است */
+        /** اندازهٔ واقعی بازیکن؛ قبل از ماموریت خالی است */
         val measured: String,
         val passed: Boolean
     )
 
-    /** تعداد ستاره‌ها؛ ستاره‌ی دوم و سوم بدون ستاره‌ی اول شمرده نمی‌شوند. */
+    /**
+     * شرط ستارهٔ دو: همهٔ بونوس‌های موجودِ همان موج/ماموریت جمع شده باشند.
+     * ماموریتی که بونوسی ندارد این شرط را به‌طور خودکار می‌گیرد تا ستاره‌گیری
+     * هرگز به خاطر نبود بونوس ناممکن نشود.
+     */
+    fun allBonuses(bonusesCollected: Int, bonusesTotal: Int): Boolean =
+        bonusesTotal <= 0 || bonusesCollected >= bonusesTotal
+
+    /** تعداد ستاره‌ها؛ ستارهٔ دوم و سوم بدون ستارهٔ اول شمرده نمی‌شوند. */
     fun stars(
         success: Boolean,
-        avgAccuracy: Float,
+        bonusesCollected: Int,
+        bonusesTotal: Int,
         damage: Int,
         elapsed: Float,
         parTime: Float
     ): Int {
         if (!success) return 0
         var count = 1
-        if (avgAccuracy >= ACCURACY_GATE) count++
+        if (allBonuses(bonusesCollected, bonusesTotal)) count++
         if (damage == 0 || (parTime > 0f && elapsed <= parTime)) count++
         return count
     }
 
-    /** سه قانون با مقدار سنجیده‌شده‌ی بازیکن. */
+    /** سه قانون با مقدار سنجیده‌شدهٔ بازیکن. */
     fun evaluate(
         success: Boolean,
         targetsDestroyed: Int,
         targetsTotal: Int,
-        avgAccuracy: Float,
+        bonusesCollected: Int,
+        bonusesTotal: Int,
         damage: Int,
         elapsed: Float,
         parTime: Float
@@ -77,15 +89,15 @@ object StarRules {
         return listOf(
             Rule(
                 1, "انهدام هدف",
-                "همه‌ی اهداف اصلی منهدم شوند",
+                "همهٔ اهداف اصلی منهدم شوند",
                 Fa.num(targetsDestroyed) + " از " + Fa.num(targetsTotal.coerceAtLeast(1)) + " هدف",
                 success
             ),
             Rule(
-                2, "دقت برخورد",
-                "میانگین دقت برخورد " + Fa.percent(ACCURACY_GATE) + " یا بیشتر",
-                Fa.percent(avgAccuracy),
-                success && avgAccuracy >= ACCURACY_GATE
+                2, "جمع بونوس‌ها",
+                "همهٔ بونوس‌های مخفی جمع شوند",
+                Fa.num(bonusesCollected) + " از " + Fa.num(bonusesTotal) + " بونوس",
+                success && allBonuses(bonusesCollected, bonusesTotal)
             ),
             Rule(
                 3, "اجرای تمیز",
@@ -97,11 +109,11 @@ object StarRules {
     }
 
     /** همان سه قانون، برای نمایش در بریفینگ قبل از پرواز. */
-    fun preview(targetsTotal: Int, parTime: Float): List<Rule> = listOf(
-        Rule(1, "انهدام هدف", "همه‌ی اهداف اصلی منهدم شوند",
+    fun preview(targetsTotal: Int, parTime: Float, bonusesTotal: Int): List<Rule> = listOf(
+        Rule(1, "انهدام هدف", "همهٔ اهداف اصلی منهدم شوند",
             Fa.num(targetsTotal.coerceAtLeast(1)) + " هدف", false),
-        Rule(2, "دقت برخورد", "میانگین دقت برخورد " + Fa.percent(ACCURACY_GATE) + " یا بیشتر",
-            Fa.percent(ACCURACY_GATE), false),
+        Rule(2, "جمع بونوس‌ها", "همهٔ بونوس‌های مخفی جمع شوند",
+            Fa.num(bonusesTotal) + " بونوس", false),
         Rule(3, "اجرای تمیز", "بدون آسیب پدافندی، یا رسیدن زیر زمان مرجع",
             Fa.clock(parTime), false)
     )
