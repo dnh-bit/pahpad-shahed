@@ -22,6 +22,30 @@ class SceneryArt(private val context:Context) {
     private val halo=RadialGradient(0f,0f,1f,intArrayOf(0x55FFE3AD,0x16F3D4B0,0x00E8C7A0),floatArrayOf(0f,.3f,1f),Shader.TileMode.CLAMP)
     private var detailBitmap:Bitmap?=null
     private var detailShader:BitmapShader?=null
+    /** World-space sea animation phase, advanced by the render loop (seconds). */
+    private var seaPhase=0f
+    /** Accumulated seconds; read by draw() so the sea never sits perfectly still. */
+    fun advance(dt:Float){ seaPhase+=dt }
+
+    /**
+     * Fraction of each env_* sheet that is sky, measured from the shipped PNGs.
+     *
+     * A fixed 40% cut was wrong for three of the four sheets: naval, urban and
+     * special all have their horizon well above 40%, so the strip was showing
+     * photographed water/town/mountains on top of the renderer's own ground and
+     * water plane. Only the desert sheet's horizon happens to sit near 40%.
+     *
+     * These are measured constants, not a runtime edge search, because the
+     * sheets are photos: a gradient scan locks onto cloud and building edges,
+     * and a full w*h pixel read on the first draw of each env is pure waste.
+     * `checks/horizon_sheet.py` locks them against the PNGs.
+     */
+    private fun skyFraction(env:Env):Float = when(env){
+        Env.NAVAL -> 0.24f
+        Env.URBAN -> 0.25f
+        Env.SPECIAL -> 0.67f
+        else -> 0.55f
+    }
     private fun detail():BitmapShader {
         detailShader?.let{return it}
         val random=java.util.Random(71043L)
@@ -63,8 +87,12 @@ class SceneryArt(private val context:Context) {
             val source=Gfx.get(context,"env_${name(env)}")
             val bitmap=Bitmap.createBitmap(768,180,Bitmap.Config.ARGB_8888)
             if(source!=null){
+                // Crop the sky only. The renderer already draws a real water/ground
+                // plane below `horizon`, so any water or skyline baked into the
+                // strip is duplicated geometry floating over the playfield.
+                val skyOnly=(source.height*skyFraction(env)).toInt().coerceAtLeast(1)
                 val sc=Canvas(bitmap);val p=Paint(Paint.FILTER_BITMAP_FLAG)
-                sc.drawBitmap(source,Rect(0,0,source.width,(source.height*.40f).toInt()),Rect(0,0,768,180),p)
+                sc.drawBitmap(source,Rect(0,0,source.width,skyOnly),Rect(0,0,768,180),p)
                 p.shader=LinearGradient(0f,0f,0f,180f,intArrayOf(0x00FFFFFF,0xFFFFFFFF.toInt(),0xFFFFFFFF.toInt(),0x00FFFFFF),floatArrayOf(0f,.25f,.75f,1f),Shader.TileMode.CLAMP)
                 p.xfermode=PorterDuffXfermode(PorterDuff.Mode.DST_IN);sc.drawRect(0f,0f,768f,180f,p)
             }
@@ -93,14 +121,18 @@ class SceneryArt(private val context:Context) {
         if(valid&&bitmap!=null){
             val shader=shaderCache.getOrPut(env){BitmapShader(bitmap,Shader.TileMode.REPEAT,Shader.TileMode.REPEAT)}
             val tile=if(env==Env.NAVAL)110f else 180f
-            val ox=floor(cam.x/tile)*tile;val oz=floor(cam.z/tile)*tile
+            // Naval water drifts against the wind; land keeps the static grid.
+            val drift=if(env==Env.NAVAL)seaPhase*3.4f else 0f
+            val ox=floor((cam.x+drift)/tile)*tile;val oz=floor(cam.z/tile)*tile
             for(i in 0..3){src[i*2]=(groundCorners[i][0]-ox)*bitmap.width/tile;src[i*2+1]=(groundCorners[i][2]-oz)*bitmap.height/tile}
             if(matrix.setPolyToPoly(src,0,dst,0,4)){
                 shader.setLocalMatrix(matrix);paint.shader=shader;paint.alpha=255;c.drawRect(-w,top,w*2,bottom,paint);paint.shader=null
             }
-            // Incommensurate period relative to base terrain, anchored in world space.
+            // Incommensurate period relative to base terrain, anchored in world
+            // space. It must share the sea drift, else the fine grain reads as a
+            // second, frozen wave field sliding over the moving water.
             val period=997f
-            val detailX=floor(cam.x/period)*period;val detailZ=floor(cam.z/period)*period
+            val detailX=floor((cam.x+drift)/period)*period;val detailZ=floor(cam.z/period)*period
             for(i in 0..3){src[i*2]=(groundCorners[i][0]-detailX)*64f/period;src[i*2+1]=(groundCorners[i][2]-detailZ)*64f/period}
             if(matrix.setPolyToPoly(src,0,dst,0,4)){
                 val d=detail();d.setLocalMatrix(matrix);paint.shader=d;paint.alpha=22

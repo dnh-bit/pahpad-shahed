@@ -45,28 +45,60 @@ def desert():
 def naval():
     r = np.random.default_rng(20240902)
     yy, xx = np.meshgrid(np.arange(S), np.arange(S), indexing='ij')
+    # TILEABILITY: every wave term's phase must advance an exact integer number
+    # of cycles across one tile, or sin() jumps at the wrap and the runtime's
+    # 110 m repeat shows a seam line. The old 170/96/34/25 px periods did not
+    # divide S=512. Integer cycle counts guarantee continuity.
+    # Prime-ish, mutually non-harmonic cycle counts (4/2/11/16/7/23) keep the
+    # swell from reading as one repeating diagonal grating.
     wa = (T.fbm(S, 4, 3, r) - 0.5) * 26.0
-    wb = (T.fbm(S, 9, 3, r) - 0.5) * 14.0
-    swell = np.sin((xx * 0.86 + yy * 0.51) * (2 * np.pi / 170.0) + wa * 0.07) * 1.00
-    swell += np.sin((xx * -0.42 + yy * 0.90) * (2 * np.pi / 96.0) + wb * 0.09) * 0.55
-    chop = np.sin((xx * 0.70 - yy * 0.71) * (2 * np.pi / 34.0) + wa * 0.30) * 0.15
-    chop += np.sin((xx * 0.95 + yy * 0.30) * (2 * np.pi / 25.0) + wb * 0.35) * 0.10
-    micro = (T.fbm(S, 52, 3, r) - 0.5) * 0.10
-    h = T.blur_wrap(swell + chop + micro, 2)
-    lit = T.shade(h, 5.5, light=(-0.55, 0.5, 0.62), ambient=0.70, diffuse=0.46)
+    wb = (T.fbm(S, 8, 3, r) - 0.5) * 14.0
+    wc = (T.fbm(S, 16, 2, r) - 0.5) * 8.0
+
+    def tile_sine(cycles, ax, ay, phase=0.0):
+        # ax/ay integer slopes keep the phase lattice aligned to the tile.
+        return np.sin(2 * np.pi * (ax * xx + ay * yy) * cycles / S + phase)
+
+    # Long swell: 4 and 2 cycles over 110 m reads as a slow ocean roll.
+    swell = tile_sine(4, 1, 1, wa * 0.07) * 1.00
+    swell += tile_sine(2, 1, -1, wb * 0.09) * 0.55
+    swell += tile_sine(1, 1, 0, wc * 0.05) * 0.34
+    # Chop: shorter, crossing directions so the crests break up.
+    chop = tile_sine(11, 1, 2, wa * 0.30) * 0.22
+    chop += tile_sine(7, 2, -1, wb * 0.35) * 0.15
+    chop += tile_sine(23, 1, -3, wc * 0.55) * 0.07
+    micro = (T.fbm(S, 32, 3, r) - 0.5) * 0.12
+    h = T.blur_wrap(swell + chop + micro, 1)
+    # CONTRAST: the old (ambient=0.70, diffuse=0.46) pair compressed the ramp
+    # into a near-flat wash, so crests and troughs were one colour at gameplay
+    # distance. Lower ambient / higher diffuse restores crest-to-trough depth.
+    lit = T.shade(h, 3.0, light=(-0.55, 0.5, 0.62), ambient=0.46, diffuse=0.80)
     depth = ((h - h.min()) / (h.max() - h.min())).clip(0, 1)
-    rgb = T.ramp(depth, [(0.0, (16, 52, 74)), (0.30, (24, 70, 96)),
-                         (0.58, (34, 88, 114)), (0.80, (46, 106, 132)),
-                         (1.0, (68, 130, 152))])
-    # whitecaps only on the steep windward faces
+    # A brighter, wider ramp: the old stops topped out at RGB(68,130,152)
+    # (luma 115), so no amount of foam tinting could ever reach foam-white.
+    rgb = T.ramp(depth, [(0.0, (12, 44, 66)), (0.28, (20, 66, 94)),
+                         (0.52, (32, 88, 118)), (0.74, (58, 118, 148)),
+                         (0.90, (96, 158, 184)), (1.0, (150, 202, 218))])
+    # Whitecaps on the steep windward faces. The old (grad·3.2 - 0.90) gate
+    # never fired on a blurred field: measured coverage was 0.000%, i.e. the
+    # foam layer existed in code but never appeared in the texture. The gate is
+    # now a percentile of the actual slope distribution, so coverage becomes a
+    # stable property of the field rather than a hand-tuned absolute.
+    # The gate is a percentile of the actual slope/height distribution, so
+    # coverage is a stable property of the field rather than a hand-tuned
+    # absolute. 60th percentile x3 keeps whitecaps on the crests without
+    # blanketing the swell.
     gx, gy = T.grad(h)
-    steep = np.clip((gx * 0.6 + gy * 0.5) * 3.2 - 0.90, 0, 1)
-    crest = np.clip((depth - 0.88) * 7.0, 0, 1)
-    foam = np.clip(steep * crest * 1.4, 0, 1) * np.clip((T.fbm(S, 120, 3, r) - 0.45) * 3.0, 0, 1)
-    rgb = T.tint(rgb, (224, 238, 242), foam * 0.75)
-    glint = np.clip((lit - 1.05) * 7.0, 0, 1) * np.clip((T.fbm(S, 150, 2, r) - 0.55) * 3.5, 0, 1)
+    slope = gx * 0.6 + gy * 0.5
+    steep = np.clip((slope - np.percentile(slope, 60.0)) * 3.0 + 0.30, 0, 1)
+    crest = np.clip((depth - np.percentile(depth, 60.0)) * 3.0, 0, 1)
+    foam = steep * crest * np.clip((T.fbm(S, 32, 3, r) - 0.35) * 2.5, 0, 1)
+    rgb = T.tint(rgb, (228, 242, 246), np.clip(foam * 0.9, 0, 1))
+    # Sun glint: a specular path, kept off the flat troughs.
+    glint = np.clip((lit - np.percentile(lit, 93.0)) * 8.0, 0, 1) * np.clip(
+        (T.fbm(S, 32, 2, r) - 0.52) * 3.5, 0, 1)
     out = rgb * lit[..., None]
-    out = T.tint(out, (238, 244, 236), np.clip(glint * 0.55, 0, 1))
+    out = T.tint(out, (242, 248, 240), np.clip(glint * 0.6, 0, 1))
     T.save_rgb(out, os.path.join(OUT, 'terrain_naval.png'))
 
 
@@ -133,58 +165,61 @@ def special():
 # ------------------------------------------------------------------ materials
 
 def wall():
+    """Blank concrete wall sheet: NO baked window grid.
+
+    This sheet used to bake its own 5x7 window grid. The runtime maps it once
+    across each entire wall face (Scene3D.textureMapping, u/v 0..1), so the
+    baked pitch was face_width/5 x usable_height/7 metres and therefore
+    disagreed with the metric window decals WorldRenderer.building() draws on
+    top of it (2.90 m x 3.55 m). On the common 34 m x 48 m building that meant
+    a 6.8 m baked grid under a 2.9 m decal grid: two overlapping, clashing
+    window systems on every facade.
+
+    The facade now carries only a neutral, tiling-safe surface (panel joints,
+    form-tie marks, stains) and all windows come from the metric decals, so
+    there is exactly one window grid and it never stretches.
+    """
     r = np.random.default_rng(20240911)
     h = np.zeros((M, M), np.float32)
-    glassmask = np.zeros((M, M), np.float32)
-    frame = np.zeros((M, M), np.float32)
-    sill = np.zeros((M, M), np.float32)
-    mullion = np.zeros((M, M), np.float32)
-    cols, rows = 5, 7
-    cw, ch = M / cols, M / rows
-    lit_pane = np.zeros((M, M), np.float32)
-    for j in range(rows):
-        for i in range(cols):
-            gx = int(i * cw + cw * 0.16)
-            gy = int(j * ch + ch * 0.16)
-            gw = int(cw * 0.68)
-            gh = int(ch * 0.58)
-            T.rect(frame, gx - 1, gy - 1, gw + 2, gh + 2, 1.0)
-            T.rect(glassmask, gx, gy, gw, gh, 1.0)
-            T.rect(sill, gx - 2, gy + gh + 1, gw + 4, 2, 1.0)
-            T.rect(mullion, gx + gw // 2, gy, 1, gh, 1.0)
-            if r.random() < 0.22:
-                T.rect(lit_pane, gx, gy, gw, gh, 1.0)
-    # ground floor band: shutters instead of windows
-    T.rect(glassmask, 0, M - int(ch * 0.55), M, int(ch * 0.42), 0.0)
     conc = T.fbm(M, 9, 4, r)
     fine = T.fbm(M, 60, 3, r)
+    # Panel joints on a 2 m module: one texture repeat = 8 m of wall, so the
+    # horizontal and vertical pitch stay equal and the sheet still tiles.
     seam = np.zeros((M, M), np.float32)
-    for k in range(cols + 1):
-        T.vband(seam, int(k * cw) - 1, 2, 1.0)
-    for k in range(rows + 1):
-        T.hband(seam, int(k * ch) - 1, 2, 0.8)
-    h += conc * 0.4 + fine * 0.15 + sill * 1.4 + frame * 0.5 - glassmask * 1.0 - seam * 0.7
+    panel = M / 4
+    for k in range(5):
+        T.vband(seam, int(k * panel) - 1, 2, 1.0)
+        T.hband(seam, int(k * panel) - 1, 2, 1.0)
+    # Form-tie plugs on a half-module grid add fine detail without a second grid.
+    # Applied AFTER the accumulate so a darkening value can be used; T.rect()
+    # takes a max, so it cannot subtract.
+    for j in range(8):
+        for i in range(8):
+            cx = int((i + 0.5) * panel)
+            cy = int((j + 0.5) * panel)
+            yy2, xx2 = np.ogrid[:M, :M]
+            plug = (np.abs(yy2 - cy) <= 1) & (np.abs(xx2 - cx) <= 1)
+            h[plug] -= 0.35
+    h += conc * 0.4 + fine * 0.15 - seam * 0.7
     lit = T.shade(h, 2.4, ambient=0.62, diffuse=0.72)
     occ = T.ao(h, 5, 0.8)
     rgb = T.ramp(conc * 0.7 + fine * 0.3, [(0.0, (140, 136, 122)), (0.5, (168, 163, 148)),
                                            (1.0, (196, 190, 174))])
     rgb = T.tint(rgb, (110, 106, 96), seam * 0.6)
-    # window glass: dark, with a sky reflection gradient top-down inside each pane
-    yy, xx = np.meshgrid(np.arange(M), np.arange(M), indexing='ij')
-    localy = (yy % max(1, int(ch))) / max(1.0, ch)
-    glass = T.ramp(np.clip(1.0 - localy * 1.5, 0, 1), [(0.0, (26, 34, 42)), (0.5, (42, 58, 70)),
-                                                       (1.0, (104, 132, 148))])
-    rgb = rgb * (1 - glassmask[..., None]) + glass * glassmask[..., None]
-    rgb = T.tint(rgb, (188, 168, 118), lit_pane * glassmask * 0.55)
-    rgb = T.tint(rgb, (86, 82, 74), mullion * 0.6)
-    rgb = T.tint(rgb, (128, 124, 114), frame * (1 - glassmask) * 0.35)
-    stain = T.streaks(M, 90, r, 46, 2.4) * (1 - glassmask)
+    stain = T.streaks(M, 90, r, 46, 2.4)
     rgb = T.tint(rgb, (96, 92, 80), stain * 0.42)
     dirt = np.clip((T.fbm(M, 5, 3, r) - 0.52) * 3.0, 0, 1)
-    rgb = T.tint(rgb, (112, 104, 88), dirt * 0.3 * (1 - glassmask))
+    rgb = T.tint(rgb, (112, 104, 88), dirt * 0.3)
+    # Vertical weather streaking below the joints. The taper must complete a
+    # whole number of periods across the sheet or the x wrap shows a seam.
+    yy, xx = np.meshgrid(np.arange(M), np.arange(M), indexing='ij')
+    taper = np.clip(np.sin(xx / M * 2 * np.pi * 4) ** 2, 0, 1)
+    weather = np.roll(T.fbm(M, 4, 3, r), 0, axis=0) * taper
+    rgb = T.tint(rgb, (128, 124, 116), np.clip(weather - 0.55, 0, 1) * 0.5)
     out = rgb * (lit * occ)[..., None]
-    # glass keeps a hard specular streak so it does not muddy
-    out = T.tint(out, (196, 214, 226), glassmask * (1 - lit_pane) * np.clip((T.fbm(M, 24, 2, r) - 0.66) * 4, 0, 1) * 0.45)
+    # Damp sheen where the concrete is darkest, so the wall is not dead flat.
+    sheen = np.clip((conc * 0.7 + fine * 0.3 - 0.62) * 2.2, 0, 1)
+    out = T.tint(out, (176, 180, 178), sheen * 0.22)
     T.save_rgb(out, os.path.join(OUT, 'material_wall.png'))
 
 

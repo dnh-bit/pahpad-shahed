@@ -7,6 +7,7 @@ import ir.shahed.pahpad.core.Theme
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 
 /**
@@ -66,6 +67,7 @@ class WorldRenderer(private val gfxContext: Context) {
     }
 
     fun update(dt: Float, mission: Mission) {
+        art.advance(dt)
         drone.update(dt, mission)
         fx.update(dt)
         if (mission.fpv) fx.clearEngineSmoke()
@@ -230,7 +232,28 @@ class WorldRenderer(private val gfxContext: Context) {
         val roof = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_roof")
         val cap = max(.5f, h * .04f).coerceAtMost(h * .2f)
         rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof)
+        // لبهٔ پشت‌بام (parapet): یک تاج باریک که سیلوئت را از «جعبهٔ صاف» جدا می‌کند
         rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof)
+        val parapet = if (detail == 0) min(1.1f, max(.35f, h * .018f)) else 0f
+        if (parapet > 0f) {
+            val pr = Theme.shade(color, 1.16f)
+            val t = min(.7f, w * .05f)
+            rig.box(0f, h, -d * .5f + t * .5f, w, parapet, t, pr, wall, roof)
+            rig.box(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof)
+            rig.box(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
+            rig.box(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
+            // یک واحد فنی روی پشت‌بام تا از زاویهٔ بالا سیلوئت متفاوت باشد
+            val seed = (x * 31f + z * 17f).toInt()
+            val unitW = (w * .22f).coerceIn(1.6f, 5f)
+            val unitD = (d * .26f).coerceIn(1.6f, 5f)
+            val ux = (((seed % 5) + 5) % 5 - 2) * w * .11f
+            val uz = ((((seed / 5) % 5) + 5) % 5 - 2) * d * .11f
+            val unitH = parapet * 2.4f
+            rig.box(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof)
+            // لولهٔ آب روی واحد فنی
+            rig.tube(ux + unitW * .5f, h + unitH, uz, ux + unitW * .5f, h + unitH + 1.6f, uz,
+                .16f, 6, Theme.shade(color, 0.8f), caps = true)
+        }
         if (detail > 1 || destroyed && detail != 0) {
             // دورترین LOD بدون دکال؛ ویران فقط در نزدیک‌ترین LOD پنجرهٔ تیره نشان می‌دهد
             if (destroyed && detail == 0) {
@@ -288,15 +311,18 @@ class WorldRenderer(private val gfxContext: Context) {
                         val g = glassFor(b + if (side > 0) 10 else 0, f)
                         rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, g)
                         // قاب نازک تیره (دو خط افقی باریک بالا/پایین پنجره برای عمق) — بدون تغییر سیلوئت
+                        // آفست قاب باید هم‌جهت با بیرونِ همان رخ باشد؛ آفست ثابتِ ‎+0.004‎
+                        // روی رخ ‎-Z‎ قاب را داخل دیوار می‌برد و آن را نامرئی می‌کند.
+                        val fz = zz + side.toFloat() * 0.004f
                         val frame = Theme.shade(g, 0.58f)
                         val fh = 0.07f
-                        rig.face(x0, y1 - fh, zz + 0.004f, x1, y1 - fh, zz + 0.004f, x1, y1, zz + 0.004f, x0, y1, zz + 0.004f, frame)
-                        rig.face(x0, y0, zz + 0.004f, x1, y0, zz + 0.004f, x1, y0 + fh, zz + 0.004f, x0, y0 + fh, zz + 0.004f, frame)
+                        rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame)
+                        rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh, fz, x0, y0 + fh, fz, frame)
                     }
                 }
             }
         }
-        // رخ‌های ±X (طول d) — فقط در نزدیک‌ترین LOD و با تراکم کمتر تا Faces کنترل شود
+        // رخ‌های ±X (طول d)
         if (detail == 0 && d >= 6f) {
             val baysX = ((d - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 3)
             val totalZ = baysX * winW + (baysX - 1) * gapX

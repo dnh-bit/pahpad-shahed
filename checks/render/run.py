@@ -22,9 +22,15 @@ for jar in ('compiler.jar', 'stdlib.jar', 'script.jar', 'trove.jar', 'annotation
     if not (tools / jar).is_file():
         raise SystemExit(f'Missing real Kotlin dependency: {tools / jar}')
 src = root / 'app/src/main/java/ir/shahed/pahpad'
+probes = sorted((root / 'checks/render').glob('*Probe.kt'))
 with tempfile.TemporaryDirectory(prefix='render-regression-', dir='/tmp') as out:
     subprocess.run([java, '-cp', str(tools/'*'), 'org.jetbrains.kotlin.cli.jvm.K2JVMCompiler',
                     '-no-stdlib', '-no-reflect', '-classpath', str(tools/'stdlib.jar') + ':' + str(tools/'annotations.jar'),
                     '-d', out, str(src/'game/Scene3D.kt'), str(src/'game/Fx.kt'), str(src/'core/Theme.kt'),
-                    str(root/'checks/render/GraphicsDoubles.kt'), str(root/'checks/render/RenderRegression.kt')], check=True)
+                    str(root/'checks/render/GraphicsDoubles.kt'), str(root/'checks/render/RenderRegression.kt'),
+                    *map(str, probes)], check=True)
     subprocess.run([java, '-cp', out + ':' + str(tools/'stdlib.jar'), 'checks.render.RenderRegressionKt'], check=True)
+    for probe in probes:
+        entry = 'checks.render.' + probe.stem + 'Kt'
+        print(f'--- {entry}')
+        subprocess.run([java, '-cp', out + ':' + str(tools/'stdlib.jar'), entry], check=True)
