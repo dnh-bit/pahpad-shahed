@@ -51,6 +51,10 @@ class Face {
     var count=0; val xs=FloatArray(8); val ys=FloatArray(8)
     var color=0; var depth=0f; var outlineColor=0; var hasOutline=false
     var bitmap:Bitmap?=null; var transparent=false; var fog=0f; var opacity=1f
+    /** Soft sprite for particles; drawn centred on xs[0],ys[0] with `radius`. */
+    var sprite:Bitmap?=null; var additive=false
+    /** Light applied to an opaque texture layer (textures are albedo, not lit). */
+    var filter:ColorFilter?=null
     val uv=FloatArray(8); val dst=FloatArray(8)
     val textureMatrix=FloatArray(9)
     var radius=0f // Positive for a camera-facing particle circle.
@@ -62,9 +66,57 @@ class Face {
 class Scene3D {
     val cam=Camera()
     // One world-space sun for procedural solids, fuselage and ground shadows.
-    val sunX=-.44f;val sunY=.36f;val sunZ=.82f
+    // 0.0.9: configured per environment by EnvLook; colours are lit with a
+    // hemisphere ambient (sky above, warm bounce below) plus a coloured sun.
+    var sunX=-.44f;private set
+    var sunY=.36f;private set
+    var sunZ=.82f;private set
+    /** Direction used for cast shadows: the sun, but never lower than ~30 deg. */
+    var shadowX=-.44f;private set
+    var shadowZ=.82f;private set
+    private var sunR=1f;private var sunG=.95f;private var sunB=.88f
+    private var skyR=.5f;private var skyG=.55f;private var skyB=.64f
+    private var bounceR=.40f;private var bounceG=.36f;private var bounceB=.30f
+    var look:EnvLook=EnvLook.DESERT;private set
+    fun configure(l:EnvLook){
+        look=l
+        sunX=l.sunX;sunY=l.sunY;sunZ=l.sunZ
+        val sy=max(l.sunY,.52f)
+        shadowX=l.sunX/sy;shadowZ=l.sunZ/sy
+        sunR=l.sunR;sunG=l.sunG;sunB=l.sunB
+        skyR=l.skyR;skyG=l.skyG;skyB=l.skyB
+        bounceR=l.bounceR;bounceG=l.bounceG;bounceB=l.bounceB
+        fogColor=l.fog;fogStart=l.fogStart;fogEnd=l.fogEnd
+    }
+    /** Light of the most recent lit() call, consumed by the next submitted face. */
+    private var pendingLight=-1
+    private fun q(k:Float)=(k*1.08f*32f).toInt().coerceIn(0,63)
+    private val lightFilters=HashMap<Int,ColorFilter>()
+    private fun filterFor(key:Int):ColorFilter = lightFilters.getOrPut(key) {
+        fun ch(shift:Int)=((key shr shift) and 63)/32f
+        val r=ch(12);val g=ch(6);val b=ch(0)
+        fun mul(k:Float)=(min(1f,k)*255f).toInt()
+        fun add(k:Float)=(max(0f,k-1f)*110f).toInt().coerceIn(0,255)
+        LightingColorFilter(Color.rgb(mul(r),mul(g),mul(b)),Color.rgb(add(r),add(g),add(b)))
+    }
+    /** Scalar legacy term kept for tools/preview and any older callers. */
     fun light(nx:Float,ny:Float,nz:Float):Float =
         .66f+.46f*max(0f,nx*sunX+ny*sunY+nz*sunZ)
+    /** Colour lighting: albedo * (hemisphere ambient + sun * N.L), per channel. */
+    fun lit(color:Int,nx:Float,ny:Float,nz:Float):Int {
+        val d=max(0f,nx*sunX+ny*sunY+nz*sunZ)
+        val hemi=(ny*.5f+.5f).coerceIn(0f,1f)
+        // Slight wrap so faces just past the terminator are not dead flat.
+        val wrap=max(0f,(nx*sunX+ny*sunY+nz*sunZ+.25f)/1.25f)*.12f
+        val kr=bounceR+(skyR-bounceR)*hemi+sunR*(d*.88f+wrap)
+        val kg=bounceG+(skyG-bounceG)*hemi+sunG*(d*.88f+wrap)
+        val kb=bounceB+(skyB-bounceB)*hemi+sunB*(d*.88f+wrap)
+        pendingLight=(q(kr) shl 12) or (q(kg) shl 6) or q(kb)
+        val r=(Color.red(color)*kr*1.08f).toInt().coerceIn(0,255)
+        val g=(Color.green(color)*kg*1.08f).toInt().coerceIn(0,255)
+        val b=(Color.blue(color)*kb*1.08f).toInt().coerceIn(0,255)
+        return Color.argb(Color.alpha(color),r,g,b)
+    }
     private val depthOrder=Comparator<Face>{a,b->b.depth.compareTo(a.depth)}
     var fogColor=Theme.DESERT.fog; var fogStart=260f; var fogEnd=1500f
     var wallTexture:Bitmap?=null; var roofTexture:Bitmap?=null
@@ -77,14 +129,23 @@ class Scene3D {
     private val matrix=Matrix()
     private val shaders=HashMap<Bitmap,BitmapShader>()
     private val corners=Array(4){FloatArray(3)}
+    private val spriteRect=RectF()
+    private val screenBlend=PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+    /** Faces submitted this frame; exposed for perf overlays/tests. */
+    val queued:Int get()=order.size
     fun begin(){ used=0; order.clear(); cam.refresh() }
-    fun clear(){order.clear();pool.clear();shaders.clear();used=0;wallTexture=null;roofTexture=null}
+    fun clear(){order.clear();pool.clear();shaders.clear();lightFilters.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())
-        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f }
+        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f; it.sprite=null; it.additive=false; it.filter=null }
     }
-    private fun fogFactor(depth:Float)=((depth-fogStart)/(fogEnd-fogStart)).coerceIn(0f,0.96f)
+    /** Smooth aerial perspective; also sampled by SceneryArt for the ground haze. */
+    fun fogFactor(depth:Float):Float {
+        val t=((depth-fogStart)/(fogEnd-fogStart)).coerceIn(0f,1f)
+        return (t*t*(3f-2f*t))*.97f
+    }
     private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f) {
+        val lightKey=pendingLight;pendingLight=-1
         val near=cam.near+0.002f
         var count=0
         for(i in 0 until n) {
@@ -115,6 +176,7 @@ class Scene3D {
         if(maxX < -cam.width || minX > cam.width*2 || maxY < -cam.height || minY > cam.height*2){used--;return}
         if(texture!=null && n==4 && textureMapping(texture,f.textureMatrix)) {
             f.bitmap=texture; f.transparent=transparent
+            if(!transparent && lightKey>=0)f.filter=filterFor(lightKey)
         } else if(transparent) {
             // A clipped sprite must never become an opaque rectangular fallback.
             used--;return
@@ -184,10 +246,15 @@ class Scene3D {
         for(i in 0..3) {
             val j=(i+1)%4;val a=corners[i];val b=corners[j]
             val nx=b[2]-a[2];val nz=a[0]-b[0]
+            // Closed solid: skip walls facing away from the eye (halves the sort load
+            // and removes back walls that average-depth sorting could lift forward).
+            val mx=(a[0]+b[0])*.5f-cam.x;val mz=(a[2]+b[2])*.5f-cam.z
+            if(nx*mx+nz*mz>=0f)continue
             val inv=1f/sqrt(nx*nx+nz*nz).coerceAtLeast(.001f)
-            quad(a[0],top,a[2],b[0],top,b[2],b[0],baseY,b[2],a[0],baseY,a[2],Theme.shade(sideColor,light(nx*inv,0f,nz*inv)/.78f),texture=wallTexture)
+            quad(a[0],top,a[2],b[0],top,b[2],b[0],baseY,b[2],a[0],baseY,a[2],lit(Theme.shade(sideColor,1f/.78f),nx*inv,0f,nz*inv),texture=wallTexture)
         }
-        quad(corners[0][0],top,corners[0][2],corners[1][0],top,corners[1][2],corners[2][0],top,corners[2][2],corners[3][0],top,corners[3][2],Theme.shade(topColor,light(0f,1f,0f)/1.22f),texture=roofTexture)
+        if(cam.y>top)
+            quad(corners[0][0],top,corners[0][2],corners[1][0],top,corners[1][2],corners[2][0],top,corners[2][2],corners[3][0],top,corners[3][2],lit(Theme.shade(topColor,1f/1.22f),0f,1f,0f),texture=roofTexture)
     }
     fun line(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,canvas:Canvas,color:Int,width:Float) {
         cam.toCamera(x0,y0,z0,a);cam.toCamera(x1,y1,z1,b)
@@ -203,18 +270,30 @@ class Scene3D {
      * fully separated occluders, not intersecting/slanted surfaces: one depth per
      * primitive cannot replace a per-pixel z-buffer. Alpha blends back to front.
      */
-    fun particle(sx:Float,sy:Float,depth:Float,radius:Float,color:Int) {
+    fun particle(sx:Float,sy:Float,depth:Float,radius:Float,color:Int,sprite:Bitmap?=null,additive:Boolean=false) {
         if(!sx.isFinite() || !sy.isFinite() || !depth.isFinite() || !radius.isFinite() ||
             depth<=cam.near || radius<=0f || Color.alpha(color)==0)return
         val f=next();f.count=0;f.xs[0]=sx;f.ys[0]=sy;f.depth=depth;f.radius=radius;f.color=color
+        f.sprite=sprite;f.additive=additive
         order.add(f)
     }
     fun flush(canvas:Canvas) {
         order.sortWith(depthOrder)
         for(f in order) {
             if(f.radius>0f) {
-                paint.shader=null;paint.color=f.color
-                canvas.drawCircle(f.xs[0],f.ys[0],f.radius,paint)
+                paint.shader=null
+                val sprite=f.sprite
+                if(sprite!=null) {
+                    // Sprites carry their own colour; the face colour supplies alpha only.
+                    paint.color=0xFFFFFFFF.toInt();paint.alpha=Color.alpha(f.color)
+                    if(f.additive)paint.xfermode=screenBlend
+                    spriteRect.set(f.xs[0]-f.radius,f.ys[0]-f.radius,f.xs[0]+f.radius,f.ys[0]+f.radius)
+                    canvas.drawBitmap(sprite,null,spriteRect,paint)
+                    paint.xfermode=null;paint.alpha=255
+                } else {
+                    paint.color=f.color
+                    canvas.drawCircle(f.xs[0],f.ys[0],f.radius,paint)
+                }
                 continue
             }
             path.rewind();path.moveTo(f.xs[0],f.ys[0]);for(i in 1 until f.count)path.lineTo(f.xs[i],f.ys[i]);path.close()
@@ -225,8 +304,9 @@ class Scene3D {
                 matrix.setValues(f.textureMatrix)
                 val shader=shaders.getOrPut(bitmap){BitmapShader(bitmap,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP)}
                 shader.setLocalMatrix(matrix);paint.shader=shader
-                paint.alpha=if(f.transparent)(255*f.opacity*(1f-f.fog*.75f)).toInt() else (208*(1f-f.fog)).toInt()
-                canvas.drawPath(path,paint);paint.shader=null;paint.alpha=255
+                paint.alpha=if(f.transparent)(255*f.opacity*(1f-f.fog*.75f)).toInt() else (226*(1f-f.fog)).toInt()
+                paint.colorFilter=f.filter
+                canvas.drawPath(path,paint);paint.shader=null;paint.alpha=255;paint.colorFilter=null
             }
             if(f.hasOutline){stroke.color=f.outlineColor;stroke.strokeWidth=1f;canvas.drawPath(path,stroke)}
         }

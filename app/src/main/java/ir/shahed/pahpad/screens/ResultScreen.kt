@@ -67,8 +67,8 @@ class ResultScreen(
 
     override fun layoutUi(w: Float, h: Float) {
         val bw = w * 0.22f
-        val bh = dp(46f)
-        val y = h - dp(64f)
+        val bh = dp(44f)
+        val y = h - dp(58f)
         val total = if (next.visible) 3 else 2
         val gap = dp(10f)
         val startX = (w - (bw * total + gap * (total - 1))) / 2f
@@ -113,13 +113,18 @@ class ResultScreen(
         var y = dp(74f)
 
         val earned = if (revealed >= rules.size) res.stars else rules.take(revealed).count { it.passed }
-        ui.stars(c, px + pw / 2f, y + dp(16f), dp(15f), earned)
-        y += dp(40f)
+        ui.stars(c, px + pw / 2f, y + dp(14f), dp(14f), earned)
+        y += dp(34f)
         ui.text(c, "قانون ستاره‌ها", right - dp(6f), y, dp(12.5f), Theme.TEXT, bold = true,
             align = Paint.Align.RIGHT)
-        y += dp(14f)
+        y += dp(12f)
 
-        val rowH = dp(46f)
+        // ارتفاع ردیف‌ها با فضای موجود تنظیم می‌شود تا پنل امتیاز روی دکمه‌ها نیفتد
+        val scoreH = dp(56f)
+        val limit = vh - dp(58f) - dp(8f)
+        val rowH = if (rules.isEmpty()) dp(46f)
+            else ((limit - scoreH - dp(6f) - y) / rules.size).coerceIn(dp(34f), dp(46f))
+        val ph = rowH - dp(5f)
         for ((i, rule) in rules.withIndex()) {
             val shown = i < revealed
             val ok = shown && rule.passed
@@ -133,30 +138,30 @@ class ResultScreen(
                 ok -> Theme.withAlpha(Theme.MINT, 0.45f)
                 else -> Theme.withAlpha(Theme.RED, 0.40f)
             }
-            ui.panel(c, px, y, pw, rowH - dp(6f), fill, edge, dp(10f))
-            ui.star(c, right - dp(18f), y + dp(20f), dp(9f), ok, if (ok) Theme.AMBER else Theme.TEXT_FAINT)
-            ui.text(c, rule.title, right - dp(34f), y + dp(14f), dp(12f),
+            ui.panel(c, px, y, pw, ph, fill, edge, dp(10f))
+            ui.star(c, right - dp(18f), y + ph / 2f, dp(9f), ok, if (ok) Theme.AMBER else Theme.TEXT_FAINT)
+            ui.text(c, rule.title, right - dp(34f), y + ph * 0.33f, dp(12f),
                 if (shown) Theme.TEXT else Theme.TEXT_FAINT, bold = true, align = Paint.Align.RIGHT)
-            ui.text(c, rule.requirement, right - dp(34f), y + dp(30f), dp(10f), Theme.TEXT_FAINT,
+            ui.text(c, rule.requirement, right - dp(34f), y + ph * 0.74f, dp(10f), Theme.TEXT_FAINT,
                 align = Paint.Align.RIGHT)
-            ui.text(c, if (shown) rule.measured else "—", px + dp(12f), y + dp(20f), dp(11.5f),
+            ui.text(c, if (shown) rule.measured else "—", px + dp(12f), y + ph / 2f, dp(11.5f),
                 if (ok) Theme.MINT else if (shown) Theme.RED else Theme.TEXT_FAINT,
                 bold = true, align = Paint.Align.LEFT)
             y += rowH
         }
 
         y += dp(6f)
-        ui.panel(c, px, y, pw, dp(64f))
-        ui.text(c, "امتیاز نهایی", right - dp(14f), y + dp(18f), dp(11.5f), Theme.TEXT_DIM,
+        ui.panel(c, px, y, pw, scoreH)
+        ui.text(c, "امتیاز نهایی", right - dp(14f), y + dp(15f), dp(11.5f), Theme.TEXT_DIM,
             align = Paint.Align.RIGHT)
-        ui.text(c, Fa.grouped(res.total), right - dp(14f), y + dp(44f), dp(24f), Theme.TEXT,
+        ui.text(c, Fa.grouped(res.total), right - dp(14f), y + dp(38f), dp(22f), Theme.TEXT,
             bold = true, align = Paint.Align.RIGHT)
-        ui.iconCoin(c, px + dp(20f), y + dp(20f), dp(8f))
-        ui.text(c, Fa.grouped(res.coins), px + dp(34f), y + dp(20f), dp(12.5f), Theme.AMBER,
+        ui.iconCoin(c, px + dp(20f), y + dp(17f), dp(8f))
+        ui.text(c, Fa.grouped(res.coins), px + dp(34f), y + dp(17f), dp(12.5f), Theme.AMBER,
             bold = true, align = Paint.Align.LEFT)
-        ui.text(c, "تجربه " + Fa.grouped(res.xp), px + dp(34f), y + dp(44f), dp(11.5f), Theme.MINT,
+        ui.text(c, "تجربه " + Fa.grouped(res.xp), px + dp(34f), y + dp(39f), dp(11.5f), Theme.MINT,
             align = Paint.Align.LEFT)
-        ui.text(c, Fa.clock(res.elapsed), px + pw / 2f + dp(20f), y + dp(44f), dp(11f), Theme.TEXT_DIM)
+        ui.text(c, Fa.clock(res.elapsed), px + pw / 2f + dp(20f), y + dp(39f), dp(11f), Theme.TEXT_DIM)
     }
 
     // --------------------------------------------------------- ریز امتیازها
@@ -180,7 +185,7 @@ class ResultScreen(
                 ui.bar(c, rx + dp(86f), y + dp(28f), (rw - dp(190f)).coerceAtLeast(dp(20f)), dp(3.5f),
                     row.second.toFloat() / row.third.toFloat(), Theme.MINT)
             }
-            y += dp(42f)
+            y += dp(40f)
         }
         y += dp(4f)
         ui.text(c, "امتیاز بونوس‌ها جداگانه است؛ جمع همهٔ آن‌ها ستارهٔ دوم را می‌دهد.",

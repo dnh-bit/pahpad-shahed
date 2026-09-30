@@ -17,6 +17,7 @@ class DroneArt(private val context:Context) {
     private var sy=0f;private var cy=1f;private var sp=0f;private var cp=1f;private var sr=0f;private var cr=1f
     private var originX=0f;private var originY=0f;private var originZ=0f
     private var propAngle=0f
+    private var clock=0f
     private val blur by lazy {
         val bitmap=Bitmap.createBitmap(64,64,Bitmap.Config.ARGB_8888)
         val p=Paint(Paint.ANTI_ALIAS_FLAG)
@@ -25,6 +26,7 @@ class DroneArt(private val context:Context) {
         bitmap
     }
     fun update(dt:Float,m:Mission) {
+        clock+=dt
         if(m.phase==Mission.Phase.FLYING)
             propAngle=(propAngle+dt*(43f+42f*m.throttle+(if(m.boost)20f else 0f)))%(2f*PI.toFloat())
     }
@@ -38,10 +40,10 @@ class DroneArt(private val context:Context) {
         val vx=d[0]-a[0];val vy=d[1]-a[1];val vz=d[2]-a[2]
         val nx=uy*vz-uz*vy;val ny=uz*vx-ux*vz;val nz=ux*vy-uy*vx
         val inv=1f/sqrt(nx*nx+ny*ny+nz*nz).coerceAtLeast(.0001f)
-        val shaded=Theme.shade(color,scene.light(nx*inv,ny*inv,nz*inv))
+        val shaded=scene.lit(color,nx*inv,ny*inv,nz*inv)
         scene.quad(a[0],a[1],a[2],b[0],b[1],b[2],c[0],c[1],c[2],d[0],d[1],d[2],shaded)
     }
-    fun draw(scene:Scene3D,m:Mission){
+    fun draw(scene:Scene3D,m:Mission,fx:Fx?=null){
         sy=sin(m.yaw);cy=cos(m.yaw);sp=sin(m.pitch);cp=cos(m.pitch);sr=sin(m.roll);cr=cos(m.roll)
         originX=m.x;originY=m.y;originZ=m.z
         val id=when(m.model.id){"shahed136"->"136";"shahed238"->"238";"shahedx"->"x";else->"131"}
@@ -90,6 +92,27 @@ class DroneArt(private val context:Context) {
                 transform(1.18f,-1.01f,tail-.05f,points[2]);transform(-1.18f,-1.01f,tail-.05f,points[3])
                 scene.imagePlane(points,blur,.60f+m.throttle*.30f)
             }
+        }
+        if(fx!=null)lights(scene,m,fx,id,scale)
+    }
+
+    /** Port/starboard nav lights, tail strobe and motor glow (third-person only). */
+    private fun lights(scene:Scene3D,m:Mission,fx:Fx,id:String,scale:Float){
+        // Wingtip positions measured from the drone_*.png alpha masks (fraction of half-span).
+        val tipX=when(id){"238","x"->.90f;else->.86f}
+        val tipZ=when(id){"131"->-.62f;"238"->-.78f;"x"->-.48f;else->-.72f}
+        transform(-tipX*scale,.06f,tipZ*scale,p0)
+        fx.light(scene,p0[0],p0[1],p0[2],.55f,fx.glowRed,.85f)
+        transform(tipX*scale,.06f,tipZ*scale,p1)
+        fx.light(scene,p1[0],p1[1],p1[2],.55f,fx.glowGreen,.85f)
+        if(clock%1.2f<.07f){
+            transform(0f,.45f,-scale*.7f,p2)
+            fx.light(scene,p2[0],p2[1],p2[2],1.6f,fx.glowWhite,1f)
+        }
+        if(m.phase==Mission.Phase.FLYING){
+            transform(0f,.17f,-scale*.82f,p3)
+            val heat=.25f+.35f*m.throttle+(if(m.boost).35f else 0f)
+            fx.light(scene,p3[0],p3[1],p3[2],.9f+(if(m.boost).7f else 0f),fx.glowAmber,heat.coerceAtMost(1f))
         }
     }
 }

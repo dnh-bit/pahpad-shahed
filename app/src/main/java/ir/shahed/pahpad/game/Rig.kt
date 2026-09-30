@@ -31,6 +31,9 @@ class Rig(private val scene: Scene3D) {
     private val ringA = FloatArray(3)
     private val ringB = FloatArray(3)
 
+    /** Back-face culling for closed convex solids (hexa, capped tubes) only. */
+    private var cull = false
+
     /** ضریب بزرگنمایی یکنواخت؛ مدل‌ها با ابعاد واقعی (متر) نوشته می‌شوند. */
     var scale = 1f
 
@@ -73,7 +76,7 @@ class Rig(private val scene: Scene3D) {
         bx: Float, by: Float, bz: Float,
         cx: Float, cy2: Float, cz: Float,
         dx: Float, dy: Float, dz: Float,
-        color: Int, texture: Bitmap? = null
+        color: Int, texture: Bitmap? = null, emissive: Boolean = false, cullBack: Boolean = false
     ) {
         world(ax, ay, az, pa)
         world(bx, by, bz, pb)
@@ -95,7 +98,14 @@ class Rig(private val scene: Scene3D) {
         if (nx * wx + ny * my + nz * wz < 0f) {
             nx = -nx; ny = -ny; nz = -nz
         }
-        val shaded = Theme.shade(color, scene.light(nx, ny, nz))
+        if (cull || cullBack) {
+            val cam = scene.cam
+            val fx = (pa[0] + pb[0] + pc[0] + pd[0]) * 0.25f - cam.x
+            val fy = (pa[1] + pb[1] + pc[1] + pd[1]) * 0.25f - cam.y
+            val fz = (pa[2] + pb[2] + pc[2] + pd[2]) * 0.25f - cam.z
+            if (nx * fx + ny * fy + nz * fz >= 0f) return
+        }
+        val shaded = if (emissive) color else scene.lit(color, nx, ny, nz)
         scene.quad(
             pa[0], pa[1], pa[2], pb[0], pb[1], pb[2],
             pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
@@ -122,7 +132,7 @@ class Rig(private val scene: Scene3D) {
         if (ny < 0f) { nx = -nx; ny = -ny; nz = -nz }
         scene.triangle(
             pa[0], pa[1], pa[2], pb[0], pb[1], pb[2], pc[0], pc[1], pc[2],
-            Theme.shade(color, scene.light(nx, ny, nz))
+            scene.lit(color, nx, ny, nz)
         )
     }
 
@@ -130,6 +140,11 @@ class Rig(private val scene: Scene3D) {
 
     /** هشت رأس: ۰..۳ پایین (خلاف ساعت)، ۴..۷ بالا با همان ترتیب. */
     private fun hexa(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean = true) {
+        cull = true
+        try { hexaFaces(p, color, side, top, bottom) } finally { cull = false }
+    }
+
+    private fun hexaFaces(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean) {
         fun v(i: Int, k: Int) = p[i * 3 + k]
         if (bottom) {
             face(v(3, 0), v(3, 1), v(3, 2), v(2, 0), v(2, 1), v(2, 2),
@@ -270,7 +285,9 @@ class Rig(private val scene: Scene3D) {
             val nax = x0 + ex; val nay = y0 + ey; val naz = z0 + ez
             val nbx = x1 + ex; val nby = y1 + ey; val nbz = z1 + ez
             if (i > 0) {
+                cull = caps
                 face(pax, pay, paz, nax, nay, naz, nbx, nby, nbz, pbx, pby, pbz, color, texture)
+                cull = false
                 if (caps) {
                     tri(x0, y0, z0, pax, pay, paz, nax, nay, naz, Theme.shade(color, 0.88f))
                     tri(x1, y1, z1, nbx, nby, nbz, pbx, pby, pbz, Theme.shade(color, 1.06f))

@@ -64,23 +64,35 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
         ui.background(c, vw, vh)
         Deco.resources(this, c)
 
-        // بنر تصویری بالای ستون عنوان (پهباد بر فراز کویر در غروب)
-        val heroW = vw * 0.44f
-        val heroH = heroW * 300f / 640f
-        val heroX = vw * 0.26f - heroW / 2f
-        val heroY = vh * 0.26f - dp(58f)
-        ui.image(ui.context, c, "menu_hero", heroX, heroY, heroW, heroH, radius = dp(16f))
-
-        // ستون چپ: لوگو و وضعیت بازیکن
+        // ستون چپ از پایین به بالا چیده می‌شود تا در صفحه‌های کوتاه
+        // (حدود ۳۶۰dp) بنر، عنوان و پنل رتبه روی هم نیفتند و بنر زیر نوار منابع بماند
         val lx = vw * 0.26f
-        val titleY = heroY + heroH + dp(34f)
-        ui.text(c, "پهباد شاهد", lx, titleY, dp(34f), Theme.TEXT, bold = true)
-        ui.text(c, "اپراتور پهباد؛ ماموریت‌های دقیق", lx, titleY + dp(26f), dp(13f), Theme.TEXT_DIM)
-
         val panelW = vw * 0.34f
         val panelH = dp(96f)
         val px = lx - panelW / 2f
-        val py = vh * 0.58f
+        val py = vh - dp(30f) - panelH
+        val subY = py - dp(18f)
+        val titleY = subY - dp(28f)
+        val heroTop = dp(56f)
+        val heroBottom = titleY - dp(26f)
+        var heroW = vw * 0.44f
+        var heroH = heroW * 300f / 640f
+        if (heroH > heroBottom - heroTop) {
+            heroH = Math.max(0f, heroBottom - heroTop)
+            heroW = heroH * 640f / 300f
+        }
+        val heroX = lx - heroW / 2f
+        val heroY = heroTop + (heroBottom - heroTop - heroH) / 2f
+        if (heroH > dp(40f)) {
+            ui.image(ui.context, c, "menu_hero", heroX, heroY, heroW, heroH, radius = dp(16f))
+            ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.35f)
+            ui.stroke.strokeWidth = dp(1.2f)
+            c.drawRoundRect(heroX, heroY, heroX + heroW, heroY + heroH, dp(16f), dp(16f), ui.stroke)
+        }
+
+        ui.text(c, "پهباد شاهد", lx, titleY, dp(34f), Theme.TEXT, bold = true)
+        ui.text(c, "اپراتور پهباد؛ ماموریت‌های دقیق", lx, subY, dp(13f), Theme.TEXT_DIM)
+
         ui.panel(c, px, py, panelW, panelH)
         val rank = save.rank
         ui.text(c, "رتبه: " + rank.title, px + panelW - dp(14f), py + dp(20f), dp(14.5f), Theme.MINT, bold = true, align = Paint.Align.RIGHT)
@@ -92,6 +104,6 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
             px + panelW - dp(14f), py + dp(78f), dp(12f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
 
         drawButtons(c)
-        ui.text(c, "نسخه " + Fa.num("0.0.8"), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
+        ui.text(c, "نسخه " + Fa.num("0.0.9"), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
     }
 }

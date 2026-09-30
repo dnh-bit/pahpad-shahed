@@ -1,9 +1,14 @@
 package ir.shahed.pahpad.screens
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.RectF
+import android.graphics.Shader
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -33,8 +38,6 @@ class GameScreen(
     private val mission = Mission(level, save, mode, seed)
     private val renderer = WorldRenderer(game)
     private val rnd = Random()
-    private val markerPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply { alpha = 220 }
-    private val markerRect = RectF()
     private val mapClip = android.graphics.Path()
     private var explosionShake = 0f
     private var shakeDuration = .3f
@@ -110,6 +113,7 @@ class GameScreen(
             calibrated = false
         }
         mission.onHit = {
+            hitFlash = .45f
             audio.aaShot()
             audio.vibrate(140)
         }
@@ -312,6 +316,7 @@ class GameScreen(
     override fun update(dt: Float) {
         if (paused) return
         explosionShake = (explosionShake - dt).coerceAtLeast(0f)
+        hitFlash = (hitFlash - dt).coerceAtLeast(0f)
         visualFlash = (visualFlash - dt).coerceAtLeast(0f)
 
         if (mission.phase == Mission.Phase.FLYING) {
@@ -376,8 +381,35 @@ class GameScreen(
 
     // ------------------------------------------------------------ رسم
 
+    // ---- لایه‌های پس‌پردازش (یک‌بار برای هر اندازهٔ صفحه ساخته می‌شوند)
+    private var vignette: RadialGradient? = null
+    private var hurt: RadialGradient? = null
+    private var scan: BitmapShader? = null
+    private var overlayW = 0f
+    private var overlayH = 0f
+    private var hitFlash = 0f
+    private val tri = Path()
+
+    private fun ensureOverlays() {
+        if (vignette != null && overlayW == vw && overlayH == vh) return
+        overlayW = vw
+        overlayH = vh
+        val r = Math.hypot((vw / 2f).toDouble(), (vh / 2f).toDouble()).toFloat().coerceAtLeast(1f)
+        vignette = RadialGradient(vw / 2f, vh / 2f, r, intArrayOf(0x00000000, 0x00000000, 0x70000000),
+            floatArrayOf(0f, .6f, 1f), Shader.TileMode.CLAMP)
+        hurt = RadialGradient(vw / 2f, vh / 2f, r, intArrayOf(0x00000000, 0x00000000, 0xD0B3141B.toInt()),
+            floatArrayOf(0f, .5f, 1f), Shader.TileMode.CLAMP)
+        if (scan == null) {
+            val n = maxOf(3, dp(3f).toInt())
+            val bmp = Bitmap.createBitmap(1, n, Bitmap.Config.ARGB_8888)
+            bmp.setPixel(0, 0, 0x30000000)
+            scan = BitmapShader(bmp, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        }
+    }
+
     override fun render(c: Canvas) {
         setupCamera()
+        ensureOverlays()
 
         val fade = (explosionShake / shakeDuration).coerceIn(0f, 1f)
         val shake = if (paused) 0f else maxOf(mission.shake * .65f, fade * fade * shakePower)
@@ -391,16 +423,19 @@ class GameScreen(
         c.save()
         c.rotate(rollDeg, vw / 2f, vh / 2f)
         renderer.draw(c, mission, vw, vh)
+        if (mission.fpv && mission.phase == Mission.Phase.FLYING) drawPitchLadder(c)
         drawTargetMarkers(c)
         c.restore()
         c.restore()
 
+        drawPost(c)
         if (visualFlash > 0f) {
             ui.fill.color = Theme.withAlpha(0xFFFFEAC8.toInt(), visualFlash / .05f * .48f)
             ui.fill.shader = null
             c.drawRect(0f, 0f, vw, vh, ui.fill)
         }
         drawSignalNoise(c)
+        if (mission.fpv) drawFpvFrame(c)
         drawHud(c)
         drawControls(c)
         drawToasts(c)
@@ -410,148 +445,339 @@ class GameScreen(
         if (finished) drawFinishBanner(c)
     }
 
+    /** Vignette + damage edge glow. */
+    private fun drawPost(c: Canvas) {
+        ui.fill.shader = vignette
+        ui.fill.alpha = 255
+        c.drawRect(0f, 0f, vw, vh, ui.fill)
+        val dmg = if (mission.armor > 0) mission.damage.toFloat() / mission.armor.toFloat() else 0f
+        val pulse = .7f + .3f * kotlin.math.sin(time * 5f)
+        val a = (hitFlash * 1.8f + dmg * .38f * pulse).coerceIn(0f, 1f)
+        if (a > .01f) {
+            ui.fill.shader = hurt
+            ui.fill.alpha = (a * 255f).toInt()
+            c.drawRect(0f, 0f, vw, vh, ui.fill)
+        }
+        ui.fill.shader = null
+        ui.fill.alpha = 255
+    }
+
     // ---- اخلال سیگنال
     private fun drawSignalNoise(c: Canvas) {
         val s = mission.signalLoss
         if (s < 0.12f) return
         ui.fill.shader = null
-        val bands = (s * 14f).toInt()
+        val bands = (s * 16f).toInt()
         for (i in 0 until bands) {
             val y = rnd.nextFloat() * vh
-            val h = dp(2f) + rnd.nextFloat() * dp(10f)
-            ui.fill.color = Theme.withAlpha(Theme.VIOLET, 0.05f + rnd.nextFloat() * 0.12f * s)
-            c.drawRect(0f, y, vw, y + h, ui.fill)
+            val h = dp(1.5f) + rnd.nextFloat() * dp(9f)
+            val shift = (rnd.nextFloat() - .5f) * dp(30f) * s
+            ui.fill.color = Theme.withAlpha(if (i % 3 == 0) 0xFFFFFFFF.toInt() else Theme.VIOLET, 0.04f + rnd.nextFloat() * 0.12f * s)
+            c.drawRect(shift, y, vw + shift, y + h, ui.fill)
         }
-        ui.fill.color = Theme.withAlpha(Theme.VIOLET, s * 0.12f)
+        ui.fill.color = Theme.withAlpha(Theme.VIOLET, s * 0.10f)
         c.drawRect(0f, 0f, vw, vh, ui.fill)
+        if (s > .45f) {
+            val a = ((s - .45f) * 2f).coerceIn(0f, 1f) * (.6f + .4f * kotlin.math.sin(time * 18f))
+            ui.text(c, "سیگنال ضعیف", vw / 2f, vh * .22f, dp(14f), Theme.VIOLET, bold = true, alpha = a)
+        }
+    }
+
+    // ---- نمای دوربین نوک: خطوط اسکن، قاب و نشانگرها
+    private fun drawFpvFrame(c: Canvas) {
+        ui.fill.shader = scan
+        ui.fill.alpha = 255
+        c.drawRect(0f, 0f, vw, vh, ui.fill)
+        ui.fill.shader = null
+        ui.fill.color = Theme.withAlpha(0xFF1D3B33.toInt(), .10f)
+        c.drawRect(0f, 0f, vw, vh, ui.fill)
+        val m = dp(26f)
+        val l = dp(34f)
+        ui.stroke.color = Theme.withAlpha(Theme.MINT, .55f)
+        ui.stroke.strokeWidth = dp(1.6f)
+        // گوشه‌های قاب
+        c.drawLine(m, m, m + l, m, ui.stroke); c.drawLine(m, m, m, m + l, ui.stroke)
+        c.drawLine(vw - m, m, vw - m - l, m, ui.stroke); c.drawLine(vw - m, m, vw - m, m + l, ui.stroke)
+        c.drawLine(m, vh - m, m + l, vh - m, ui.stroke); c.drawLine(m, vh - m, m, vh - m - l, ui.stroke)
+        c.drawLine(vw - m, vh - m, vw - m - l, vh - m, ui.stroke); c.drawLine(vw - m, vh - m, vw - m, vh - m - l, ui.stroke)
+        // نشانگر مرکز
+        val cx = vw / 2f
+        val cy = vh / 2f
+        ui.stroke.strokeWidth = dp(1.3f)
+        ui.stroke.color = Theme.withAlpha(Theme.MINT, .85f)
+        c.drawLine(cx - dp(24f), cy, cx - dp(8f), cy, ui.stroke)
+        c.drawLine(cx + dp(8f), cy, cx + dp(24f), cy, ui.stroke)
+        c.drawLine(cx, cy + dp(8f), cx, cy + dp(18f), ui.stroke)
+        ui.fill.color = Theme.MINT
+        c.drawCircle(cx, cy, dp(1.8f), ui.fill)
+        // REC
+        if ((time * 1.2f) % 1f < .6f) {
+            ui.fill.color = Theme.RED
+            c.drawCircle(vw - m - dp(64f), m + dp(16f), dp(4f), ui.fill)
+        }
+        ui.text(c, "EO/IR  " + Fa.clock(mission.elapsed), vw - m - dp(12f), m + dp(16f), dp(10f),
+            Theme.withAlpha(Theme.MINT, .8f), align = Paint.Align.RIGHT)
+        ui.text(c, "دوربین نوک پهباد", cx, vh - dp(112f), dp(10.5f), Theme.withAlpha(Theme.MINT, 0.7f))
+    }
+
+    // ---- نردبان زاویه در نمای اول‌شخص (داخل بوم چرخیده تا با افق هم‌راستا بماند)
+    private fun drawPitchLadder(c: Canvas) {
+        val cam = renderer.scene.cam
+        val cx = vw / 2f
+        ui.stroke.strokeWidth = dp(1.1f)
+        for (k in -6..6) {
+            if (k == 0) continue
+            val e = Math.toRadians(k * 10.0).toFloat()
+            val a = e - cam.pitch
+            if (kotlin.math.abs(a) > 1.2f) continue
+            val y = cam.screenCy - cam.focal * kotlin.math.tan(a)
+            if (y < vh * .14f || y > vh * .86f) continue
+            val half = dp(if (k % 3 == 0) 62f else 46f)
+            val gap = dp(30f)
+            ui.stroke.color = Theme.withAlpha(Theme.MINT, if (k > 0) .55f else .38f)
+            if (k > 0) {
+                c.drawLine(cx - half, y, cx - gap, y, ui.stroke)
+                c.drawLine(cx + gap, y, cx + half, y, ui.stroke)
+            } else {
+                // زیر افق: خط‌چین
+                val seg = (half - gap) / 5f
+                var x = gap
+                while (x < half) {
+                    c.drawLine(cx - x, y, cx - x - seg * .6f, y, ui.stroke)
+                    c.drawLine(cx + x, y, cx + x + seg * .6f, y, ui.stroke)
+                    x += seg
+                }
+            }
+            val tick = if (k > 0) dp(5f) else -dp(5f)
+            c.drawLine(cx - half, y, cx - half, y + tick, ui.stroke)
+            c.drawLine(cx + half, y, cx + half, y + tick, ui.stroke)
+            ui.text(c, Fa.num(kotlin.math.abs(k * 10)), cx - half - dp(13f), y, dp(9f), Theme.withAlpha(Theme.MINT, .7f))
+        }
+        val hy = cam.horizonY()
+        ui.stroke.color = Theme.withAlpha(Theme.MINT, .5f)
+        ui.stroke.strokeWidth = dp(1.4f)
+        c.drawLine(cx - vw * .34f, hy, cx - dp(40f), hy, ui.stroke)
+        c.drawLine(cx + dp(40f), hy, cx + vw * .34f, hy, ui.stroke)
     }
 
     // ---- نشانگر هدف
     private fun drawTargetMarkers(c: Canvas) {
         val t = mission.world.activeTarget() ?: return
         val p = renderer.project(t.x, t.centerY, t.z)
-        if (p != null && p[0] > 0f && p[0] < vw && p[1] > 0f && p[1] < vh) {
-            val size = dp(20f) + dp(60f) / (1f + p[2] / 120f)
-            ui.stroke.color = Theme.withAlpha(Theme.RED, 0.9f)
-            ui.stroke.strokeWidth = dp(1.6f)
-            c.drawCircle(p[0], p[1], size, ui.stroke)
-            c.drawLine(p[0] - size * 1.4f, p[1], p[0] - size * 0.6f, p[1], ui.stroke)
-            c.drawLine(p[0] + size * 0.6f, p[1], p[0] + size * 1.4f, p[1], ui.stroke)
-            c.drawLine(p[0], p[1] - size * 1.4f, p[0], p[1] - size * 0.6f, ui.stroke)
-            c.drawLine(p[0], p[1] + size * 0.6f, p[0], p[1] + size * 1.4f, ui.stroke)
-            val bmp = ui.imageGet(ui.context, "hud_target")
-            if (bmp != null) {
-                val isz = dp(16f)
-                markerRect.set(p[0] - isz / 2f, p[1] - size - isz - dp(10f), p[0] + isz / 2f, p[1] - size - dp(10f))
-                c.drawBitmap(bmp, null, markerRect, markerPaint)
+        val margin = dp(36f)
+        if (p != null && p[0] > margin && p[0] < vw - margin && p[1] > margin && p[1] < vh - margin) {
+            val px = p[0]
+            val py = p[1]
+            val dist = mission.distanceToTarget()
+            val size = dp(16f) + dp(54f) / (1f + p[2] / 110f)
+            val close = dist < 320f
+            val pulse = (kotlin.math.sin(time * (if (close) 12f else 4f)) + 1f) / 2f
+            val color = if (close) Theme.mix(Theme.RED, Theme.AMBER, pulse) else Theme.RED
+            ui.stroke.color = Theme.withAlpha(color, .92f)
+            ui.stroke.strokeWidth = dp(2f)
+            val arm = size * .45f
+            val s2 = size * (1f + (if (close) .12f else .05f) * pulse)
+            // چهار براکت گوشه
+            for (sx in -1..1 step 2) for (sy in -1..1 step 2) {
+                val cx = px + sx * s2
+                val cy = py + sy * s2
+                c.drawLine(cx, cy, cx - sx * arm, cy, ui.stroke)
+                c.drawLine(cx, cy, cx, cy - sy * arm, ui.stroke)
             }
-            ui.text(c, t.label, p[0], p[1] - size - dp(14f), dp(11.5f), Theme.RED, bold = true)
+            // لوزی مرکز
+            tri.rewind()
+            val dd = dp(5f)
+            tri.moveTo(px, py - dd); tri.lineTo(px + dd, py); tri.lineTo(px, py + dd); tri.lineTo(px - dd, py); tri.close()
+            ui.stroke.strokeWidth = dp(1.4f)
+            c.drawPath(tri, ui.stroke)
+            ui.text(c, t.label, px, py - s2 - dp(12f), dp(11.5f), color, bold = true)
+            ui.text(c, Fa.meters(dist), px, py + s2 + dp(12f), dp(10.5f), Theme.withAlpha(Theme.TEXT, .9f))
+            if (close) ui.text(c, "قفل روی هدف", px, py + s2 + dp(28f), dp(10f), color, bold = true, alpha = .6f + .4f * pulse)
         } else {
-            // فلش جهت هدف در لبه صفحه
-            val bearing = mission.bearingToTarget()
+            // فلش لبهٔ صفحه به سمت هدف
             val cx = vw / 2f
             val cy = vh / 2f
-            val r = Math.min(vw, vh) * 0.36f
-            val px = cx + Math.sin(bearing.toDouble()).toFloat() * r
-            val py = cy - dp(30f)
-            ui.fill.color = Theme.withAlpha(Theme.RED, 0.85f)
+            var dx: Float
+            var dy: Float
+            if (p != null) {
+                dx = p[0] - cx; dy = p[1] - cy
+            } else {
+                val b = mission.bearingToTarget()
+                dx = if (b >= 0f) 1f else -1f
+                dy = .25f
+            }
+            val len = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat().coerceAtLeast(.001f)
+            dx /= len; dy /= len
+            val rx = vw * .42f
+            val ry = vh * .36f
+            val k = 1f / Math.sqrt(((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry)).toDouble()).toFloat()
+            val ax = cx + dx * k
+            val ay = cy + dy * k
+            val sz = dp(13f)
+            val nx = -dy
+            val ny = dx
+            tri.rewind()
+            tri.moveTo(ax + dx * sz, ay + dy * sz)
+            tri.lineTo(ax - dx * sz * .6f + nx * sz * .8f, ay - dy * sz * .6f + ny * sz * .8f)
+            tri.lineTo(ax - dx * sz * .2f, ay - dy * sz * .2f)
+            tri.lineTo(ax - dx * sz * .6f - nx * sz * .8f, ay - dy * sz * .6f - ny * sz * .8f)
+            tri.close()
+            val a = .65f + .35f * ((kotlin.math.sin(time * 6f) + 1f) / 2f)
             ui.fill.shader = null
-            c.drawCircle(px, py, dp(6f), ui.fill)
-            ui.text(c, if (bearing > 0) "هدف در سمت راست" else "هدف در سمت چپ", cx, cy - dp(60f),
-                dp(12f), Theme.RED)
+            ui.fill.color = Theme.withAlpha(Theme.RED, a)
+            c.drawPath(tri, ui.fill)
+            ui.text(c, Fa.meters(mission.distanceToTarget()), ax - dx * dp(30f), ay - dy * dp(30f), dp(10.5f), Theme.RED, bold = true)
         }
     }
 
     // ---- HUD اصلی
+    private fun hudPanel(c: Canvas, x: Float, y: Float, w: Float, h: Float, accent: Int) {
+        ui.panel(c, x, y, w, h, Theme.withAlpha(Theme.BG_DEEP, .62f), Theme.withAlpha(accent, .28f), dp(10f))
+        ui.fill.color = Theme.withAlpha(accent, .8f)
+        ui.fill.shader = null
+        c.drawRect(x + dp(10f), y, x + w - dp(10f), y + dp(1.6f), ui.fill)
+    }
+
+    private fun drawHeadingTape(c: Canvas, cx: Float, top: Float) {
+        val tw = dp(250f)
+        val th = dp(28f)
+        val left = cx - tw / 2f
+        hudPanel(c, left, top, tw, th, Theme.MINT)
+        val heading = Math.toDegrees(mission.yaw.toDouble()).toFloat()
+        val pxPerDeg = tw / 110f
+        c.save()
+        c.clipRect(left + dp(6f), top, left + tw - dp(6f), top + th)
+        var d = (kotlin.math.floor((heading - 60f) / 5f) * 5f).toInt()
+        ui.stroke.strokeWidth = dp(1f)
+        while (d <= heading + 60f) {
+            val x = cx + (d - heading) * pxPerDeg
+            val major = ((d % 30) + 30) % 30 == 0
+            ui.stroke.color = Theme.withAlpha(Theme.TEXT, if (major) .75f else .3f)
+            c.drawLine(x, top + th - dp(if (major) 9f else 5f), x, top + th - dp(2f), ui.stroke)
+            if (major) {
+                val deg = ((d % 360) + 360) % 360
+                ui.text(c, Fa.num(deg), x, top + dp(10f), dp(9f), Theme.TEXT_DIM)
+            }
+            d += 5
+        }
+        if (mission.world.activeTarget() != null) {
+            val b = Math.toDegrees(mission.bearingToTarget().toDouble()).toFloat()
+            val bx = cx + b.coerceIn(-52f, 52f) * pxPerDeg
+            tri.rewind()
+            tri.moveTo(bx, top + th - dp(3f)); tri.lineTo(bx - dp(5f), top + th - dp(11f)); tri.lineTo(bx + dp(5f), top + th - dp(11f)); tri.close()
+            ui.fill.color = Theme.RED
+            c.drawPath(tri, ui.fill)
+        }
+        c.restore()
+        tri.rewind()
+        tri.moveTo(cx, top + th + dp(1f)); tri.lineTo(cx - dp(5f), top + th + dp(7f)); tri.lineTo(cx + dp(5f), top + th + dp(7f)); tri.close()
+        ui.fill.color = Theme.MINT
+        c.drawPath(tri, ui.fill)
+    }
+
     private fun drawHud(c: Canvas) {
         val pad = dp(14f)
 
         // ===== بالا چپ: نقشه کوچک
-        val mapR = dp(52f)
+        val mapR = dp(50f)
         val mapCx = pad + mapR
         val mapCy = pad + mapR
         drawMiniMap(c, mapCx, mapCy, mapR)
 
         // ===== بالا راست: ارتفاع و سرعت
-        val rx = vw - dp(70f)
-        ui.panel(c, rx - dp(108f), pad - dp(5f), dp(118f), dp(105f),
-            Theme.withAlpha(Theme.BG_DEEP, .76f), Theme.withAlpha(Theme.TEXT_DIM, .28f), dp(12f))
-        ui.text(c, "ارتفاع", rx, pad + dp(8f), dp(10.5f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
-        ui.text(c, Fa.num(mission.altitude, 0) + " م", rx, pad + dp(26f), dp(17f), Theme.TEXT,
-            bold = true, align = Paint.Align.RIGHT)
-        ui.text(c, "سرعت", rx, pad + dp(50f), dp(10.5f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
-        ui.text(c, Fa.num(mission.speedKmh, 0), rx, pad + dp(68f), dp(17f),
+        val pw = dp(112f)
+        val px = pauseRect.left - dp(8f) - pw
+        val py = pad - dp(4f)
+        hudPanel(c, px, py, pw, dp(96f), Theme.MINT)
+        val rx = px + pw - dp(12f)
+        ui.text(c, "ارتفاع", rx, py + dp(13f), dp(10f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
+        val lowAlt = mission.altitude < 25f
+        ui.text(c, Fa.num(mission.altitude, 0) + " م", rx, py + dp(31f), dp(17f),
+            if (lowAlt) Theme.AMBER else Theme.TEXT, bold = true, align = Paint.Align.RIGHT)
+        // نشانگر اوج/شیرجه
+        val vs = kotlin.math.sin(mission.pitch)
+        val arrowX = px + dp(16f)
+        val arrowY = py + dp(28f)
+        tri.rewind()
+        if (kotlin.math.abs(vs) > .04f) {
+            val dir = if (vs > 0f) -1f else 1f
+            tri.moveTo(arrowX, arrowY + dir * dp(7f)); tri.lineTo(arrowX - dp(5f), arrowY - dir * dp(2f)); tri.lineTo(arrowX + dp(5f), arrowY - dir * dp(2f)); tri.close()
+            ui.fill.color = if (vs > 0f) Theme.MINT else Theme.AMBER
+            ui.fill.shader = null
+            c.drawPath(tri, ui.fill)
+        }
+        ui.text(c, "سرعت", rx, py + dp(54f), dp(10f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
+        ui.text(c, Fa.num(mission.speedKmh, 0), rx, py + dp(72f), dp(17f),
             if (mission.boost) Theme.ORANGE else Theme.TEXT, bold = true, align = Paint.Align.RIGHT)
-        ui.text(c, "کیلومتر/ساعت", rx, pad + dp(84f), dp(9.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
+        ui.text(c, "کیلومتر/ساعت", px + dp(12f), py + dp(86f), dp(8.5f), Theme.TEXT_FAINT, align = Paint.Align.LEFT)
 
-        // ===== وسط بالا: فاصله تا هدف و زمان
+        // ===== وسط بالا: قطب‌نما و فاصله تا هدف
         val topCx = vw / 2f
-        ui.panel(c, topCx - dp(90f), dp(10f), dp(180f), dp(42f),
-            Theme.withAlpha(Theme.BG_DEEP, 0.76f), Theme.withAlpha(Theme.TEXT_DIM, 0.28f), dp(12f))
-        ui.text(c, "فاصله تا هدف", topCx, dp(21f), dp(10f), Theme.TEXT_DIM)
-        ui.text(c, Fa.meters(mission.distanceToTarget()), topCx, dp(39f), dp(15f), Theme.MINT, bold = true)
-
+        drawHeadingTape(c, topCx, dp(10f))
+        ui.text(c, Fa.meters(mission.distanceToTarget()), topCx, dp(52f), dp(15f), Theme.MINT, bold = true)
         if (level.timeLimit > 0f) {
             val danger = mission.timeLeft < 15f
-            ui.text(c, "زمان: " + Fa.clock(mission.timeLeft), topCx, dp(64f), dp(13f),
-                if (danger) Theme.RED else Theme.TEXT, bold = true)
+            val a = if (danger) .6f + .4f * kotlin.math.sin(time * 8f) else 1f
+            ui.text(c, "زمان " + Fa.clock(mission.timeLeft), topCx, dp(72f), dp(12.5f),
+                if (danger) Theme.RED else Theme.TEXT, bold = true, alpha = a)
         }
 
-        // ===== وسط پایین: نوار سوخت
+        // ===== وسط پایین: نوار سوخت قطعه‌قطعه
         val fw = dp(220f)
         val fx0 = topCx - fw / 2f
         val fy = vh - dp(30f)
-        ui.panel(c, fx0 - dp(12f), fy - dp(29f), fw + dp(24f), dp(59f),
-            Theme.withAlpha(Theme.BG_DEEP, .76f), Theme.withAlpha(Theme.TEXT_DIM, .28f), dp(12f))
+        hudPanel(c, fx0 - dp(12f), fy - dp(27f), fw + dp(24f), dp(52f), Theme.MINT)
         val fuel = mission.fuel01
         val fuelColor = when {
             fuel < 0.18f -> Theme.RED
             fuel < 0.4f -> Theme.AMBER
             else -> Theme.MINT
         }
-        ui.text(c, "سوخت / برد باقی‌مانده", topCx, fy - dp(16f), dp(10f), Theme.TEXT_DIM)
-        ui.bar(c, fx0, fy, fw, dp(9f), fuel, fuelColor)
-        ui.text(c, Fa.percent(fuel), topCx, fy + dp(20f), dp(11f), fuelColor)
+        ui.text(c, "سوخت", fx0 + fw, fy - dp(15f), dp(10f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
+        ui.text(c, Fa.percent(fuel), fx0, fy - dp(15f), dp(10.5f), fuelColor, bold = true, align = Paint.Align.LEFT)
+        val segs = 20
+        val gap = dp(2f)
+        val sw = (fw - gap * (segs - 1)) / segs
+        val lit = kotlin.math.ceil(fuel * segs).toInt()
+        val blink = fuel < .18f && (time * 3f) % 1f < .5f
+        ui.fill.shader = null
+        for (i in 0 until segs) {
+            val x0 = fx0 + i * (sw + gap)
+            ui.fill.color = if (i < lit && !blink) fuelColor else Theme.withAlpha(Theme.TEXT_FAINT, .22f)
+            c.drawRect(x0, fy - dp(3f), x0 + sw, fy + dp(7f), ui.fill)
+        }
 
         // ===== وضعیت ماموریت
         val infoY = vh - dp(78f)
-        ui.text(c, "اهداف: " + mission.targetsInfo, topCx - dp(120f), infoY, dp(11.5f), Theme.TEXT_DIM)
-        ui.text(c, "بونوس: " + mission.bonusInfo, topCx + dp(120f), infoY, dp(11.5f), Theme.AMBER)
+        ui.chip(c, topCx - dp(78f), infoY, "اهداف " + mission.targetsInfo, Theme.TEXT_DIM, dp(10.5f))
+        ui.chip(c, topCx + dp(78f), infoY, "بونوس " + mission.bonusInfo, Theme.AMBER, dp(10.5f))
         if (mode == MissionMode.ENDLESS) {
-            ui.text(c, "موج " + Fa.num(mission.wave), topCx, infoY - dp(18f), dp(12f), Theme.ORANGE, bold = true)
+            ui.text(c, "موج " + Fa.num(mission.wave), topCx, infoY - dp(22f), dp(12f), Theme.ORANGE, bold = true)
         }
 
         // ===== هشدارها
-        var wy = mapCy + mapR + dp(24f)
+        var wy = mapCy + mapR + dp(28f)
+        val chipX = pad + mapR
         if (mission.radarLock) {
-            val blink = (Math.sin((time * 8f).toDouble()).toFloat() + 1f) / 2f
-            ui.chip(c, dp(14f) + dp(58f), wy, "شناسایی رادار", Theme.withAlpha(Theme.BLUE, 0.5f + blink * 0.5f))
-            wy += dp(28f)
+            val blinkR = (Math.sin((time * 8f).toDouble()).toFloat() + 1f) / 2f
+            ui.chip(c, chipX, wy, "شناسایی رادار", Theme.withAlpha(Theme.BLUE, 0.5f + blinkR * 0.5f))
+            wy += dp(26f)
         }
         if (mission.ewActive) {
-            ui.chip(c, dp(14f) + dp(58f), wy, "اخلال سیگنال", Theme.VIOLET)
-            wy += dp(28f)
+            ui.chip(c, chipX, wy, "اخلال سیگنال", Theme.VIOLET)
+            wy += dp(26f)
         }
         if (mission.damage > 0) {
-            ui.chip(c, dp(14f) + dp(58f), wy, "آسیب " + Fa.num(mission.damage) + " از " + Fa.num(mission.armor), Theme.RED)
-            wy += dp(28f)
+            ui.chip(c, chipX, wy, "آسیب " + Fa.num(mission.damage) + " از " + Fa.num(mission.armor), Theme.RED)
+            wy += dp(26f)
         }
         if (mission.fuel01 < 0.2f) {
-            ui.chip(c, dp(14f) + dp(58f), wy, "سوخت کم", Theme.AMBER)
+            ui.chip(c, chipX, wy, "سوخت کم", Theme.AMBER)
+            wy += dp(26f)
         }
-
-        // ===== نشانه‌گیری در نمای دوربین پهباد
-        if (mission.fpv) {
-            val cx = vw / 2f
-            val cy = vh / 2f
-            ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.75f)
-            ui.stroke.strokeWidth = dp(1.2f)
-            c.drawCircle(cx, cy, dp(16f), ui.stroke)
-            c.drawLine(cx - dp(26f), cy, cx - dp(20f), cy, ui.stroke)
-            c.drawLine(cx + dp(20f), cy, cx + dp(26f), cy, ui.stroke)
-            c.drawLine(cx, cy - dp(26f), cx, cy - dp(20f), ui.stroke)
-            c.drawLine(cx, cy + dp(20f), cx, cy + dp(26f), ui.stroke)
-            ui.text(c, "دوربین نوک پهباد", cx, vh - dp(56f), dp(10.5f), Theme.withAlpha(Theme.MINT, 0.7f))
+        if (mission.phase == Mission.Phase.FLYING && lowAlt && mission.pitch < -.05f) {
+            val a = .5f + .5f * ((kotlin.math.sin(time * 10f) + 1f) / 2f)
+            ui.chip(c, chipX, wy, "ارتفاع کم", Theme.withAlpha(Theme.AMBER, a))
         }
 
         // دکمه توقف
@@ -564,14 +790,11 @@ class GameScreen(
         c.drawRect(pcx + dp(2f), pcy - dp(8f), pcx + dp(6f), pcy + dp(8f), ui.fill)
     }
 
-    // ---- نقشه کوچک
+    // ---- نقشه کوچک (رو به جلو؛ جهت چرخش اصلاح شد)
     private fun drawMiniMap(c: Canvas, cx: Float, cy: Float, r: Float) {
-        ui.fill.color = Theme.withAlpha(Theme.BG_DEEP, 0.68f)
+        ui.fill.color = Theme.withAlpha(Theme.BG_DEEP, 0.66f)
         ui.fill.shader = null
         c.drawCircle(cx, cy, r, ui.fill)
-        ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.5f)
-        ui.stroke.strokeWidth = dp(1.2f)
-        c.drawCircle(cx, cy, r, ui.stroke)
 
         val range = 700f
         val scale = r / range
@@ -579,7 +802,21 @@ class GameScreen(
         mapClip.rewind()
         mapClip.addCircle(cx, cy, r, android.graphics.Path.Direction.CW)
         c.clipPath(mapClip)
-        c.rotate(Math.toDegrees(mission.yaw.toDouble()).toFloat(), cx, cy)
+        // حلقه‌های فاصله
+        ui.stroke.strokeWidth = dp(1f)
+        ui.stroke.color = Theme.withAlpha(Theme.MINT, .12f)
+        c.drawCircle(cx, cy, r * .5f, ui.stroke)
+        // مخروط دید
+        tri.rewind()
+        tri.moveTo(cx, cy)
+        tri.lineTo(cx - r * .75f, cy - r)
+        tri.lineTo(cx + r * .75f, cy - r)
+        tri.close()
+        ui.fill.color = Theme.withAlpha(Theme.MINT, .07f)
+        c.drawPath(tri, ui.fill)
+        // Heading-up: rotate the world by -yaw so the drone's heading points up.
+        // (It used to rotate by +yaw, which doubled the error while turning.)
+        c.rotate(-Math.toDegrees(mission.yaw.toDouble()).toFloat(), cx, cy)
 
         fun mapX(wx: Float) = cx + (wx - mission.x) * scale
         fun mapY(wz: Float) = cy - (wz - mission.z) * scale
@@ -605,32 +842,64 @@ class GameScreen(
             ui.fill.color = Theme.AMBER
             c.drawCircle(mapX(b.x), mapY(b.z), dp(1.8f), ui.fill)
         }
+        val active = mission.world.activeTarget()
         for (t in mission.world.targets) {
-            ui.fill.color = if (t.destroyed) Theme.TEXT_FAINT else Theme.AMBER
-            c.drawCircle(mapX(t.x), mapY(t.z), dp(3.4f), ui.fill)
+            ui.fill.color = if (t.destroyed) Theme.TEXT_FAINT else Theme.RED
+            c.drawCircle(mapX(t.x), mapY(t.z), dp(if (t === active) 4f else 3f), ui.fill)
+            if (t === active) {
+                ui.stroke.color = Theme.withAlpha(Theme.RED, .5f + .5f * kotlin.math.sin(time * 5f))
+                ui.stroke.strokeWidth = dp(1.2f)
+                c.drawCircle(mapX(t.x), mapY(t.z), dp(7f), ui.stroke)
+            }
         }
+        // نشان شمال (محور +Z جهان)
+        ui.text(c, "ش", mapX(mission.x), mapY(mission.z + range * .82f), dp(9f), Theme.withAlpha(Theme.TEXT, .7f), bold = true)
         c.restore()
 
+        ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.55f)
+        ui.stroke.strokeWidth = dp(1.3f)
+        c.drawCircle(cx, cy, r, ui.stroke)
         // پهباد در مرکز
         Deco.droneIcon(this, c, cx, cy, dp(7f), Theme.MINT, 0f)
-        ui.text(c, "نقشه تاکتیکی", cx, cy + r + dp(10f), dp(9.5f), Theme.TEXT_FAINT)
     }
 
     // ---- کنترل‌ها
     private fun drawControls(c: Canvas) {
+        ui.fill.shader = null
         // جوی‌استیک
         if (!useTilt) {
             val baseX = if (joyPointer >= 0) joyBaseX else dp(90f)
             val baseY = if (joyPointer >= 0) joyBaseY else vh - dp(90f)
             val r = dp(58f)
-            ui.stroke.color = Theme.withAlpha(Theme.TEXT, 0.28f)
+            val active = joyPointer >= 0
+            ui.fill.color = Theme.withAlpha(Theme.BG_DEEP, if (active) .38f else .26f)
+            c.drawCircle(baseX, baseY, r, ui.fill)
+            ui.stroke.color = Theme.withAlpha(Theme.MINT, if (active) .55f else .3f)
             ui.stroke.strokeWidth = dp(1.4f)
             c.drawCircle(baseX, baseY, r, ui.stroke)
-            val kx = if (joyPointer >= 0) (joyX).coerceIn(baseX - r, baseX + r) else baseX
-            val ky = if (joyPointer >= 0) (joyY).coerceIn(baseY - r, baseY + r) else baseY
-            ui.fill.color = Theme.withAlpha(Theme.MINT, 0.4f)
-            ui.fill.shader = null
-            c.drawCircle(kx, ky, dp(22f), ui.fill)
+            ui.stroke.color = Theme.withAlpha(Theme.TEXT, .25f)
+            for (i in 0 until 4) {
+                val ang = i * Math.PI.toFloat() / 2f
+                val ca = kotlin.math.cos(ang)
+                val sa = kotlin.math.sin(ang)
+                c.drawLine(baseX + ca * r * .78f, baseY + sa * r * .78f, baseX + ca * r * .94f, baseY + sa * r * .94f, ui.stroke)
+            }
+            var kx = baseX
+            var ky = baseY
+            if (active) {
+                val dx = joyX - baseX
+                val dy = joyY - baseY
+                val len = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                val k = if (len > r) r / len else 1f
+                kx = baseX + dx * k
+                ky = baseY + dy * k
+            }
+            ui.fill.color = Theme.withAlpha(Theme.MINT, if (active) .22f else .12f)
+            c.drawCircle(kx, ky, dp(30f), ui.fill)
+            ui.fill.color = Theme.withAlpha(Theme.MINT, if (active) .75f else .45f)
+            c.drawCircle(kx, ky, dp(19f), ui.fill)
+            ui.fill.color = Theme.withAlpha(0xFFFFFFFF.toInt(), .35f)
+            c.drawCircle(kx - dp(5f), ky - dp(6f), dp(6f), ui.fill)
         } else {
             ui.text(c, "کنترل با تیلت گوشی", dp(90f), vh - dp(90f), dp(11f),
                 Theme.withAlpha(Theme.TEXT_DIM, 0.7f))
@@ -641,26 +910,41 @@ class GameScreen(
         ui.text(c, if (mission.fpv) "نمای سوم شخص" else "دوربین پهباد",
             camRect.centerX(), camRect.centerY(), dp(11f), Theme.MINT, bold = true)
 
-        // دکمه بوست
+        // دکمه بوست (دایره‌ای با هاله)
         val boostOn = mission.boost
-        ui.panel(c, boostRect, Theme.withAlpha(if (boostOn) Theme.ORANGE else Theme.BG_DEEP, if (boostOn) 0.6f else 0.55f),
-            Theme.withAlpha(Theme.ORANGE, 0.7f), dp(14f))
-        ui.text(c, "بوست", boostRect.centerX(), boostRect.centerY() - dp(6f), dp(13f), Theme.ORANGE, bold = true)
-        ui.text(c, "نگه دارید", boostRect.centerX(), boostRect.centerY() + dp(12f), dp(9.5f), Theme.TEXT_DIM)
+        val bcx = boostRect.centerX()
+        val bcy = boostRect.centerY()
+        val br = boostRect.width() / 2f
+        if (boostOn) {
+            ui.fill.color = Theme.withAlpha(Theme.ORANGE, .22f + .1f * kotlin.math.sin(time * 14f))
+            c.drawCircle(bcx, bcy, br * 1.25f, ui.fill)
+        }
+        ui.fill.color = Theme.withAlpha(if (boostOn) Theme.ORANGE else Theme.BG_DEEP, if (boostOn) .7f else .55f)
+        c.drawCircle(bcx, bcy, br, ui.fill)
+        ui.stroke.color = Theme.withAlpha(Theme.ORANGE, .8f)
+        ui.stroke.strokeWidth = dp(1.6f)
+        c.drawCircle(bcx, bcy, br, ui.stroke)
+        ui.text(c, "بوست", bcx, bcy - dp(5f), dp(13f), if (boostOn) Theme.BG_DEEP else Theme.ORANGE, bold = true)
+        ui.text(c, "نگه دارید", bcx, bcy + dp(12f), dp(9f), if (boostOn) Theme.BG_DEEP else Theme.TEXT_DIM)
 
-        // نشانگر گاز
-        val tx = vw - dp(96f)
-        val ty0 = vh * 0.32f
-        val th = vh * 0.3f
-        ui.stroke.color = Theme.withAlpha(Theme.TEXT, 0.22f)
-        ui.stroke.strokeWidth = dp(1.2f)
-        c.drawLine(tx, ty0, tx, ty0 + th, ui.stroke)
+        // اسلایدر گاز
+        val tx = vw - dp(112f)
+        val ty0 = vh * 0.30f
+        val th = vh * 0.30f
+        val tw = dp(8f)
+        rectTmp.set(tx - tw / 2f, ty0, tx + tw / 2f, ty0 + th)
+        ui.fill.color = Theme.withAlpha(Theme.BG_DEEP, .5f)
+        c.drawRoundRect(rectTmp, tw / 2f, tw / 2f, ui.fill)
         val knobY = ty0 + th * (1f - mission.throttle)
-        ui.fill.color = Theme.MINT
-        ui.fill.shader = null
-        c.drawCircle(tx, knobY, dp(5f), ui.fill)
+        rectTmp.set(tx - tw / 2f, knobY, tx + tw / 2f, ty0 + th)
+        ui.fill.color = Theme.withAlpha(if (mission.boost) Theme.ORANGE else Theme.MINT, .7f)
+        c.drawRoundRect(rectTmp, tw / 2f, tw / 2f, ui.fill)
+        ui.fill.color = Theme.TEXT
+        c.drawCircle(tx, knobY, dp(7f), ui.fill)
         ui.text(c, "گاز", tx, ty0 - dp(12f), dp(10f), Theme.TEXT_DIM)
+        ui.text(c, Fa.percent(mission.throttle), tx, ty0 + th + dp(12f), dp(9.5f), Theme.TEXT_DIM)
     }
+    private val rectTmp = RectF()
 
     // ---- پیام‌ها
     private fun drawToasts(c: Canvas) {

@@ -110,7 +110,7 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
         val rw = w - rx - dp(20f)
         var uy = h * 0.19f
         for (b in upgradeButtons) {
-            b.set(rx + rw - dp(120f), uy + dp(6f), dp(112f), dp(42f))
+            b.set(rx + dp(8f), uy + dp(5f), dp(112f), dp(38f))
             uy += dp(54f)
         }
         back.set(dp(20f), h - dp(52f), dp(110f), dp(40f))
@@ -139,13 +139,9 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
                 "shahed136" -> "drone_136_side"; "shahed238" -> "drone_238_side"; "shahedx" -> "drone_x_side"
                 else -> "drone_131_side"
             }
-            val imgAlpha = if (unlocked) 255 else 110
-            if (unlocked) {
-                ui.imageFit(ui.context, c, sideName, r.left + dp(6f), r.top + dp(6f), dp(64f), r.height() - dp(12f))
-            } else {
-                ui.imageFit(ui.context, c, sideName, r.left + dp(6f), r.top + dp(6f), dp(64f), r.height() - dp(12f))
-                ui.iconLock(c, r.left + dp(26f), r.centerY() + dp(2f), dp(10f))
-            }
+            val imgAlpha = if (unlocked) 255 else 90
+            ui.imageFit(ui.context, c, sideName, r.left + dp(6f), r.top + dp(6f), dp(64f), r.height() - dp(12f), imgAlpha)
+            if (!unlocked) ui.iconLock(c, r.left + dp(38f), r.centerY() + dp(2f), dp(10f))
             ui.text(c, m.name, r.right - dp(12f), r.top + dp(18f), dp(14f),
                 if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true, align = Paint.Align.RIGHT)
             val sub = if (unlocked) {
@@ -172,7 +168,7 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
             ui.text(c, k.valueAt(lvl, selected), rx + rw - dp(14f), uy + dp(34f), dp(11.5f), Theme.MINT,
                 align = Paint.Align.RIGHT)
             // نشانگر سطح
-            val pipStart = rx + dp(150f)
+            val pipStart = rx + dp(136f)
             for (i in 0 until 10) {
                 ui.fill.color = if (i < lvl) Theme.AMBER else Theme.withAlpha(Theme.TEXT_FAINT, 0.3f)
                 ui.fill.shader = null
@@ -182,7 +178,10 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
             uy += dp(54f)
         }
 
-        drawButtons(c)
+        // فقط دکمه‌های ارتقا و بازگشت؛ کارت‌های پهباد بالاتر رسم شده‌اند
+        // (نسخه‌ی قبل همه‌ی دکمه‌ها را دوباره روی کارت‌ها می‌کشید و تصویر و نام را می‌پوشاند)
+        for (b in upgradeButtons) ui.button(c, b)
+        ui.button(c, back)
 
         message?.let {
             val a = (messageTime / 0.6f).coerceIn(0f, 1f)

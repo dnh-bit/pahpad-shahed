@@ -50,6 +50,8 @@ class Ui(val context: Context, val density: Float) {
     private var bgWidth = -1f
     private var bgHeight = -1f
     private var bgAccent = 0
+    private var bgVignette: android.graphics.RadialGradient? = null
+    private var bgBand: LinearGradient? = null
 
     fun dp(v: Float): Float = v * density
 
@@ -131,6 +133,12 @@ class Ui(val context: Context, val density: Float) {
             bgGlow = android.graphics.RadialGradient(w * .5f, h * 1.15f, h * .9f,
                 intArrayOf(Theme.withAlpha(accent, .13f), Theme.withAlpha(accent, 0f)),
                 null, Shader.TileMode.CLAMP)
+            bgVignette = android.graphics.RadialGradient(w * .5f, h * .45f, Math.max(w, h) * .75f,
+                intArrayOf(0x00000000, 0x00000000, 0x99000000.toInt()),
+                floatArrayOf(0f, .55f, 1f), Shader.TileMode.CLAMP)
+            bgBand = LinearGradient(0f, h * .58f, 0f, h * .82f,
+                intArrayOf(Theme.withAlpha(accent, 0f), Theme.withAlpha(accent, .07f), Theme.withAlpha(accent, 0f)),
+                floatArrayOf(0f, .5f, 1f), Shader.TileMode.CLAMP)
             bgWidth = w; bgHeight = h; bgAccent = accent
         }
         fill.shader = bgGradient
@@ -145,9 +153,21 @@ class Ui(val context: Context, val density: Float) {
         while (x < w) { c.drawLine(x, 0f, x, h, stroke); x += step }
         var y = 0f
         while (y < h) { c.drawLine(0f, y, w, y, stroke); y += step }
-        // درخشش گوشه
+        // نقاط تقاطع شبکه
+        fill.color = Theme.withAlpha(accent, 0.16f)
+        var gx = 0f
+        while (gx < w) {
+            var gy = 0f
+            while (gy < h) { c.drawRect(gx - dp(1f), gy - dp(1f), gx + dp(1f), gy + dp(1f), fill); gy += step * 2f }
+            gx += step * 2f
+        }
+        // نوار نور افق، درخشش پایین و سایه‌ی لبه‌ها
+        fill.shader = bgBand
+        c.drawRect(0f, h * .58f, w, h * .82f, fill)
         fill.shader = bgGlow
         fill.alpha = 255
+        c.drawRect(0f, 0f, w, h, fill)
+        fill.shader = bgVignette
         c.drawRect(0f, 0f, w, h, fill)
         fill.shader = null
     }
@@ -163,12 +183,24 @@ class Ui(val context: Context, val density: Float) {
         fill.color = fillColor
         fill.shader = null
         c.drawRoundRect(r, radius, radius, fill)
+        // نور ملایم لبه‌ی بالا برای حس شیشه‌ای
+        val hiA = 0.07f * android.graphics.Color.alpha(fillColor) / 255f
+        if (r.height() > radius * 2f) {
+            fill.color = Theme.withAlpha(Theme.TEXT, hiA)
+            hiRect.set(r.left + dp(1f), r.top + dp(1f), r.right - dp(1f), r.top + Math.min(r.height() * 0.45f, dp(26f)))
+            c.drawRoundRect(hiRect, radius, radius, fill)
+        }
         if (strokeWidth > 0f) {
             stroke.color = strokeColor
             stroke.strokeWidth = strokeWidth
             c.drawRoundRect(r, radius, radius, stroke)
+            stroke.color = Theme.withAlpha(Theme.TEXT, hiA * 1.6f)
+            stroke.strokeWidth = dp(1f)
+            c.drawLine(r.left + radius, r.top + dp(1.2f), r.right - radius, r.top + dp(1.2f), stroke)
         }
     }
+
+    private val hiRect = RectF()
 
     fun panel(
         c: Canvas, x: Float, y: Float, w: Float, h: Float,
@@ -205,13 +237,15 @@ class Ui(val context: Context, val density: Float) {
     fun imageGet(context: Context, name: String): Bitmap? = Gfx.get(context, name)
 
     /** تصویر با حفظ تناسب داخل مستطیل (letterbox) */
-    fun imageFit(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float) {
+    fun imageFit(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float, alpha: Int = 255) {
         val bmp = Gfx.get(context, name) ?: return
         val bw = bmp.width.toFloat(); val bh = bmp.height.toFloat()
         val scale = Math.min(w / bw, h / bh)
         val dw = bw * scale; val dh = bh * scale
         imageRect.set(x + (w - dw) / 2f, y + (h - dh) / 2f, x + (w - dw) / 2f + dw, y + (h - dh) / 2f + dh)
+        bmpPaint.alpha = alpha.coerceIn(0, 255)
         c.drawBitmap(bmp, null, imageRect, bmpPaint)
+        bmpPaint.alpha = 255
     }
 
     // --------------------------------------------------------------- دکمه
@@ -219,36 +253,63 @@ class Ui(val context: Context, val density: Float) {
     fun button(c: Canvas, b: UiButton) {
         if (!b.visible) return
         val r = b.rect
-        val radius = dp(12f)
-        val alpha = if (b.enabled) 1f else 0.35f
+        val radius = Math.min(dp(12f), r.height() / 2f)
+        val alpha = if (b.enabled) 1f else 0.38f
         val press = if (b.pressed) 1f else 0f
+        // در حالت فشرده کمی به داخل می‌رود
+        val inset = press * dp(1.5f)
+        btnRect.set(r.left + inset, r.top + inset, r.right - inset, r.bottom - inset)
         if (b.filled) {
+            // درخشش بیرونی
+            if (b.enabled) {
+                stroke.color = Theme.withAlpha(b.accent, 0.22f)
+                stroke.strokeWidth = dp(5f)
+                c.drawRoundRect(btnRect, radius, radius, stroke)
+            }
             fill.color = Theme.withAlpha(Theme.mix(b.accent, Theme.TEXT, press * 0.25f), alpha)
             fill.shader = null
-            c.drawRoundRect(r, radius, radius, fill)
+            c.drawRoundRect(btnRect, radius, radius, fill)
+            // نیمه‌ی پایینی تیره‌تر برای حجم
+            fill.color = Theme.withAlpha(0xFF000000.toInt(), 0.16f * alpha)
+            c.save()
+            c.clipRect(btnRect.left, btnRect.centerY(), btnRect.right, btnRect.bottom)
+            c.drawRoundRect(btnRect, radius, radius, fill)
+            c.restore()
+            fill.color = Theme.withAlpha(0xFFFFFFFF.toInt(), 0.28f * alpha)
+            c.drawRect(btnRect.left + radius, btnRect.top + dp(1.5f), btnRect.right - radius, btnRect.top + dp(2.5f), fill)
             text(
-                c, b.label, r.centerX(), r.centerY() - (if (b.subLabel != null) dp(7f) else 0f),
+                c, b.label, btnRect.centerX(), btnRect.centerY() - (if (b.subLabel != null) dp(7f) else 0f),
                 dp(16f), Theme.BG_DEEP, bold = true, alpha = alpha
             )
         } else {
-            fill.color = Theme.withAlpha(if (b.pressed) Theme.PANEL_HI else Theme.PANEL, alpha)
+            fill.color = Theme.withAlpha(if (b.pressed) Theme.PANEL_HI else Theme.PANEL, alpha * 0.96f)
             fill.shader = null
-            c.drawRoundRect(r, radius, radius, fill)
-            stroke.color = Theme.withAlpha(b.accent, alpha * (if (b.pressed) 0.95f else 0.5f))
+            c.drawRoundRect(btnRect, radius, radius, fill)
+            // رنگ لهجه در نوار پایینی
+            fill.color = Theme.withAlpha(b.accent, alpha * (0.10f + press * 0.12f))
+            c.save()
+            c.clipRect(btnRect.left, btnRect.centerY(), btnRect.right, btnRect.bottom)
+            c.drawRoundRect(btnRect, radius, radius, fill)
+            c.restore()
+            stroke.color = Theme.withAlpha(b.accent, alpha * (if (b.pressed) 0.95f else 0.55f))
             stroke.strokeWidth = dp(1.3f)
-            c.drawRoundRect(r, radius, radius, stroke)
+            c.drawRoundRect(btnRect, radius, radius, stroke)
+            fill.color = Theme.withAlpha(b.accent, alpha * 0.9f)
+            c.drawRect(btnRect.centerX() - dp(10f), btnRect.bottom - dp(2.2f), btnRect.centerX() + dp(10f), btnRect.bottom - dp(0.8f), fill)
             text(
-                c, b.label, r.centerX(), r.centerY() - (if (b.subLabel != null) dp(7f) else 0f),
+                c, b.label, btnRect.centerX(), btnRect.centerY() - (if (b.subLabel != null) dp(7f) else 0f),
                 dp(16f), if (b.enabled) Theme.TEXT else Theme.TEXT_FAINT, bold = true, alpha = alpha
             )
         }
         b.subLabel?.let {
             text(
-                c, it, r.centerX(), r.centerY() + dp(12f), dp(11.5f),
+                c, it, btnRect.centerX(), btnRect.centerY() + dp(12f), dp(11.5f),
                 if (b.filled) Theme.BG_DEEP else Theme.TEXT_DIM, alpha = alpha * 0.9f
             )
         }
     }
+
+    private val btnRect = RectF()
 
     // --------------------------------------------------------------- اجزای بازی
 
@@ -322,8 +383,8 @@ class Ui(val context: Context, val density: Float) {
         stroke.color = color
         stroke.strokeWidth = r * 0.3f
         stroke.style = Paint.Style.STROKE
-        val arc = RectF(cx - r * 0.5f, cy - r * 0.85f, cx + r * 0.5f, cy + r * 0.15f)
-        c.drawArc(arc, 180f, 180f, false, stroke)
+        tmp.set(cx - r * 0.5f, cy - r * 0.85f, cx + r * 0.5f, cy + r * 0.15f)
+        c.drawArc(tmp, 180f, 180f, false, stroke)
     }
 
     fun chip(c: Canvas, cx: Float, cy: Float, label: String, color: Int, textSize: Float = dp(11.5f)) {

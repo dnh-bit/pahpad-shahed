@@ -162,7 +162,37 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
         buildTargets()
         buildDefenses()
         buildScenery()
+        clearObjectiveFootprints()
         buildBonuses()
+    }
+
+    /**
+     * Scenery is scattered independently of targets and air defence, so a city
+     * block or rock could be generated right on top of a secondary target or an
+     * AA site: the target was then hidden inside a building and the drone died on
+     * the building before it could reach it. Remove any prop whose footprint
+     * overlaps an objective (plus a small clearance). Removal consumes no RNG, so
+     * every seed still produces the same world otherwise.
+     */
+    private fun clearObjectiveFootprints() {
+        fun overlaps(p: Prop, x: Float, z: Float, r: Float): Boolean {
+            val s = sin(p.rot); val c = cos(p.rot)
+            val dx = x - p.x; val dz = z - p.z
+            val lx = dx * c + dz * s
+            val lz = -dx * s + dz * c
+            val qx = (abs(lx) - p.w * .5f).coerceAtLeast(0f)
+            val qz = (abs(lz) - p.d * .5f).coerceAtLeast(0f)
+            return qx * qx + qz * qz < r * r
+        }
+        props.removeAll { p ->
+            targets.any { t ->
+                val r = kotlin.math.max(t.w, t.d) * .5f + 10f
+                // moving targets sweep along their heading: keep their lane clear too
+                if (t.moving) abs((if (abs(sin(t.heading)) > .5f) p.z - t.z else p.x - t.x)) < p.d * .5f + r * .6f && p.kind != PropKind.SHIP && p.kind != PropKind.FREIGHTER && abs(p.x - t.x) < 420f
+                else overlaps(p, t.x, t.z, r)
+            } || aaSites.any { a -> overlaps(p, a.x, a.z, 12f) } ||
+                radars.any { r -> overlaps(p, r.x, r.z, 14f) }
+        }
     }
 
     // ------------------------------------------------------------- ساخت اهداف
@@ -381,7 +411,16 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
             val t = (i + 1f) / (n + 1f)
             val z = distance * t
             val x = rnd.nextFloat() * 240f - 120f
-            val y = 25f + rnd.nextFloat() * 110f
+            var y = 25f + rnd.nextFloat() * 110f
+            // A bonus generated inside a tall building could only be "collected" by
+            // crashing into it, making the all-bonuses star impossible on city maps.
+            // Lift it clear of any roof within the 22 m pickup radius.
+            for (p in props) {
+                if (p.kind == PropKind.BUSH || p.kind == PropKind.TREE || p.kind == PropKind.PALM) continue
+                val reach = kotlin.math.max(p.w, p.d) * .75f + 22f
+                val dx = p.x - x; val dz = p.z - z
+                if (dx * dx + dz * dz < reach * reach) y = kotlin.math.max(y, p.h + 16f)
+            }
             bonuses.add(Bonus(x, y, z, 100))
         }
     }
@@ -397,8 +436,15 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
             if (t.moving && t.speed > 0f) {
                 t.x += Math.sin(t.heading.toDouble()).toFloat() * t.speed * dt
                 t.z += Math.cos(t.heading.toDouble()).toFloat() * t.speed * dt
-                // برگشت در محدوده
-                if (Math.abs(t.x) > 380f) t.heading += Math.PI.toFloat()
+                // برگشت در محدوده. قبلاً هر فریمی که |x| هنوز بیرون از ۳۸۰ بود جهت را
+                // دوباره ۱۸۰ درجه می‌چرخاند؛ با dt متغیر هدف روی مرز می‌لرزید و گیر
+                // می‌کرد. حالا موقعیت روی مرز قفل می‌شود و جهت فقط رو به داخل تنظیم می‌شود.
+                if (Math.abs(t.x) > 380f) {
+                    val sx = Math.signum(t.x)
+                    t.x = 380f * sx
+                    val vx = Math.sin(t.heading.toDouble()).toFloat()
+                    if (vx * sx > 0f) t.heading = (t.heading + Math.PI.toFloat()) % TWO_PI
+                }
             }
         }
         for (b in bonuses) b.spin += dt * 2.4f
@@ -448,16 +494,47 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
         ax: Float, ay: Float, az: Float,
         bx: Float, by: Float, bz: Float
     ): Boolean {
-        val dx = bx - ax
-        val dy = by - ay
-        val dz = bz - az
-        val span = Math.sqrt((dx * dx + dy * dy + dz * dz).toDouble()).toFloat()
-        val steps = Math.min(12, Math.max(1, Math.ceil((span / 4f).toDouble()).toInt()))
-        for (i in 1..steps) {
-            val t = i.toFloat() / steps
-            if (pointInProp(ax + dx * t, ay + dy * t, az + dz * t)) return true
+        // Exact segment tests. The old version sampled at most 12 points 4 m apart,
+        // so a long frame (low FPS or boost) could step straight through a wall.
+        for (p in props) {
+            if (ay > p.h && by > p.h) continue
+            when (p.kind) {
+                PropKind.TREE, PropKind.PALM, PropKind.BUSH, PropKind.ROCK -> {
+                    val r = p.w * 0.42f
+                    // closest approach of the XZ segment to the trunk axis, clipped to height
+                    val sx = bx - ax; val sz = bz - az
+                    val len2 = sx * sx + sz * sz
+                    var t = if (len2 < 1e-6f) 0f else (((p.x - ax) * sx + (p.z - az) * sz) / len2).coerceIn(0f, 1f)
+                    val cy = ay + (by - ay) * t
+                    if (cy > p.h) {
+                        // segment is above the top at closest point; test the lower end instead
+                        t = if (ay < by) 0f else 1f
+                    }
+                    val qx = ax + sx * t - p.x; val qz = az + sz * t - p.z
+                    val qy = ay + (by - ay) * t
+                    if (qy <= p.h && qx * qx + qz * qz < r * r) return true
+                }
+                else -> if (segmentHitsBox(p, ax, ay, az, bx, by, bz)) return true
+            }
         }
         return false
+    }
+
+    private fun segmentHitsBox(p: Prop, ax: Float, ay: Float, az: Float, bx: Float, by: Float, bz: Float): Boolean {
+        val s = sin(p.rot); val c = cos(p.rot)
+        val x0 = (ax - p.x) * c + (az - p.z) * s
+        val z0 = -(ax - p.x) * s + (az - p.z) * c
+        val x1 = (bx - p.x) * c + (bz - p.z) * s
+        val z1 = -(bx - p.x) * s + (bz - p.z) * c
+        var enter = 0f; var leave = 1f
+        fun slab(start: Float, delta: Float, low: Float, high: Float): Boolean {
+            if (abs(delta) < .000001f) return start >= low && start <= high
+            val a = (low - start) / delta; val b = (high - start) / delta
+            enter = maxOf(enter, minOf(a, b)); leave = minOf(leave, maxOf(a, b))
+            return enter <= leave
+        }
+        return slab(x0, x1 - x0, -p.w * .5f, p.w * .5f) &&
+            slab(ay, by - ay, 0f, p.h) && slab(z0, z1 - z0, -p.d * .5f, p.d * .5f)
     }
 
     private fun pointInProp(px: Float, py: Float, pz: Float): Boolean {

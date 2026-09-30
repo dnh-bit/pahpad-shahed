@@ -7,169 +7,343 @@ import ir.shahed.pahpad.core.Theme
 import ir.shahed.pahpad.data.Env
 import kotlin.math.*
 
-/** Cached sky and two world-locked ground layers. No per-frame bitmap generation. */
-class SceneryArt(private val context:Context) {
-    private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val matrix=Matrix();private val fogMatrix=Matrix();private val skyMatrix=Matrix()
-    private val sunMatrix=Matrix()
-    private val src=FloatArray(8);private val dst=FloatArray(8);private val ground=FloatArray(3)
-    private val groundCorners=Array(4){FloatArray(3)}
-    private val shaderCache=HashMap<Env,BitmapShader>()
-    private var sky:LinearGradient?=null;private var haze:LinearGradient?=null
-    private var lastEnv:Env?=null;private var lastHeight=0f
-    private val skyline=HashMap<Env,Bitmap>()
-    private val rect=RectF()
-    private val halo=RadialGradient(0f,0f,1f,intArrayOf(0x55FFE3AD,0x16F3D4B0,0x00E8C7A0),floatArrayOf(0f,.3f,1f),Shader.TileMode.CLAMP)
-    private var detailBitmap:Bitmap?=null
-    private var detailShader:BitmapShader?=null
-    /** World-space sea animation phase, advanced by the render loop (seconds). */
-    private var seaPhase=0f
-    /** Accumulated seconds; read by draw() so the sea never sits perfectly still. */
-    fun advance(dt:Float){ seaPhase+=dt }
+/**
+ * Sky dome, sun, clouds, horizon relief, world-locked ground and cast shadows.
+ *
+ * 0.0.9 rewrite. Everything that sits "at infinity" (sky, sun, stars, clouds,
+ * mountains) is placed by elevation angle and scrolled by `yaw * focal`, so it
+ * turns exactly with the 3D world instead of sliding against it (the old strip
+ * used a fixed 4 tiles per turn, independent of the field of view). The ground
+ * haze is derived from the same fog curve as the geometry, so distant solids,
+ * ground and horizon dissolve into one colour. No per-frame allocations.
+ */
+class SceneryArt(private val context: Context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val blend = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val matrix = Matrix()
+    private val local = Matrix()
+    private val src = FloatArray(8); private val dst = FloatArray(8); private val ground = FloatArray(3)
+    private val groundCorners = Array(4) { FloatArray(3) }
+    private val rect = RectF()
+    private val screen = PorterDuffXfermode(PorterDuff.Mode.SCREEN)
+    private val multiply = PorterDuffXfermode(PorterDuff.Mode.MULTIPLY)
+
+    private val terrainShaders = HashMap<Env, BitmapShader>()
+    private var macroShader: BitmapShader? = null
+    private var macroFineShader: BitmapShader? = null
+    private var cloudFilter: ColorFilter? = null
+
+    private var lastLook: EnvLook? = null
+    private var sky: LinearGradient? = null
+    private var haze: LinearGradient? = null
+    private var halo: RadialGradient? = null
+    private var bloom: RadialGradient? = null
+    private var glint: RadialGradient? = null
+
+    /** World-space animation phase (seconds): sea drift, cloud drift, twinkle. */
+    private var phase = 0f
+    fun advance(dt: Float) { phase += dt }
+
+    // Fixed star field (elevation-biased), only used by looks with stars.
+    private val starCount = 110
+    private val starDir = FloatArray(starCount * 3)
+    private val starMag = FloatArray(starCount)
+    init {
+        val r = java.util.Random(0x51A7L)
+        for (i in 0 until starCount) {
+            val az = r.nextFloat() * 2f * PI.toFloat()
+            val el = (0.14f + 1.3f * r.nextFloat().pow(0.7f)).coerceAtMost(1.5f)
+            starDir[i * 3] = cos(el) * sin(az)
+            starDir[i * 3 + 1] = sin(el)
+            starDir[i * 3 + 2] = cos(el) * cos(az)
+            starMag[i] = 0.35f + r.nextFloat() * 0.65f
+        }
+    }
+
+    fun clear() {
+        terrainShaders.clear(); macroShader = null; macroFineShader = null
+        sky = null; haze = null; halo = null; bloom = null; glint = null; cloudFilter = null; lastLook = null
+    }
+
+    fun name(env: Env) = env.name.lowercase(java.util.Locale.ROOT)
+
+    private fun rebuild(look: EnvLook, scene: Scene3D) {
+        // Sky in unit space: y = -tan(elevation). Scaled by focal each frame.
+        val t70 = tan(Math.toRadians(70.0)).toFloat()
+        fun pos(deg: Double) = 1f - tan(Math.toRadians(deg)).toFloat() / t70
+        val mid = Theme.mix(look.glow, look.upper, .55f)
+        sky = LinearGradient(0f, -t70, 0f, 0f,
+            intArrayOf(look.zenith, look.upper, mid, look.glow, look.fog),
+            floatArrayOf(0f, pos(26.0), pos(10.0), pos(2.4), 1f), Shader.TileMode.CLAMP)
+        // Ground haze in unit space t = fogStart / distance (t=0 at the horizon).
+        val ds = floatArrayOf(1e7f, 1f, .86f, .72f, .58f, .44f, .30f, .16f, 0f)
+        val colors = IntArray(ds.size); val stops = FloatArray(ds.size)
+        for (i in ds.indices) {
+            val d = if (i == 0) 1e7f else look.fogStart + (look.fogEnd - look.fogStart) * ds[i]
+            stops[i] = (look.fogStart / d).coerceIn(0f, 1f)
+            colors[i] = Theme.withAlpha(look.fog, scene.fogFactor(d))
+        }
+        stops[0] = 0f
+        haze = LinearGradient(0f, 0f, 0f, 1f, colors, stops, Shader.TileMode.CLAMP)
+        halo = RadialGradient(0f, 0f, 1f,
+            intArrayOf(Theme.withAlpha(look.sunHalo, .55f), Theme.withAlpha(look.sunHalo, .16f), Theme.withAlpha(look.sunHalo, 0f)),
+            floatArrayOf(0f, .22f, 1f), Shader.TileMode.CLAMP)
+        bloom = RadialGradient(0f, 0f, 1f,
+            intArrayOf(Theme.withAlpha(look.sunHalo, .30f), Theme.withAlpha(look.glow, .10f), Theme.withAlpha(look.glow, 0f)),
+            floatArrayOf(0f, .45f, 1f), Shader.TileMode.CLAMP)
+        glint = RadialGradient(0f, 0f, 1f,
+            intArrayOf(Theme.withAlpha(look.sunDisc, .55f), Theme.withAlpha(look.sunHalo, .16f), Theme.withAlpha(look.sunHalo, 0f)),
+            floatArrayOf(0f, .35f, 1f), Shader.TileMode.CLAMP)
+        cloudFilter = LightingColorFilter(look.cloudMul and 0xFFFFFF, look.cloudAdd and 0xFFFFFF)
+        lastLook = look
+    }
+
+    fun draw(c: Canvas, scene: Scene3D, world: World, w: Float, h: Float) {
+        if (w <= 0f || h <= 0f) return
+        val env = world.level.env
+        val look = scene.look
+        if (lastLook !== look || sky == null) rebuild(look, scene)
+        val cam = scene.cam
+        val f = cam.focal
+        val horizon = cam.horizonY()
+
+        // ---------------------------------------------------------------- sky
+        local.setScale(1f, f); local.postTranslate(0f, horizon)
+        sky?.setLocalMatrix(local)
+        paint.shader = sky; paint.alpha = 255
+        c.drawRect(-w, -h, w * 2f, h * 2f, paint); paint.shader = null
+
+        if (look.stars) drawStars(c, scene, h)
+
+        // --------------------------------------------------------------- sun
+        val sunVisible = cam.project(cam.x + scene.sunX * 1000f, cam.y + scene.sunY * 1000f, cam.z + scene.sunZ * 1000f, ground)
+        val sunSx = ground[0]; val sunSy = ground[1]
+        if (sunVisible) {
+            blend.xfermode = screen
+            val big = h * 1.25f
+            local.setScale(big, big); local.postTranslate(sunSx, sunSy); bloom?.setLocalMatrix(local)
+            blend.shader = bloom; c.drawCircle(sunSx, sunSy, big, blend)
+            val r = h * .2f
+            local.setScale(r, r); local.postTranslate(sunSx, sunSy); halo?.setLocalMatrix(local)
+            blend.shader = halo; c.drawCircle(sunSx, sunSy, r, blend)
+            blend.shader = null; blend.xfermode = null
+            paint.color = look.sunDisc; c.drawCircle(sunSx, sunSy, h * .018f, paint)
+        }
+
+        // ------------------------------------------------------------ clouds
+        Gfx.get(context, "sky_clouds")?.let { clouds ->
+            val yTop = horizon - f * tan(Math.toRadians(21.0)).toFloat()
+            val yBot = horizon - f * tan(Math.toRadians(1.1)).toFloat()
+            paint.colorFilter = cloudFilter; paint.alpha = look.cloudAlpha
+            strip(c, clouds, yTop, yBot, cam.yaw + phase * .0035f, f, w, 1.7f)
+            paint.colorFilter = null; paint.alpha = 255
+        }
+
+        // ------------------------------------------------ distant relief strip
+        Gfx.get(context, "horizon_${name(env)}")?.let { relief ->
+            val s = f * tan(Math.toRadians(4.8)).toFloat()
+            val full = s / .86f
+            strip(c, relief, horizon - s, horizon - s + full, cam.yaw, f, w, 1f)
+        }
+
+        // ------------------------------------------------------------ ground
+        val top = max(-h, horizon + 2f); val bottom = h * 2f
+        if (top >= bottom) return
+        paint.color = look.groundFallback
+        c.drawRect(-w, top, w * 2f, bottom, paint)
+        dst[0] = -w; dst[1] = top; dst[2] = w * 2; dst[3] = top; dst[4] = w * 2; dst[5] = bottom; dst[6] = -w; dst[7] = bottom
+        var valid = true
+        for (i in 0..3) if (!cam.groundAt(dst[i * 2], dst[i * 2 + 1], groundCorners[i])) { valid = false; break }
+        val bitmap = Gfx.get(context, "terrain_${name(env)}")
+        val drift = if (env == Env.NAVAL) phase * 3.4f else 0f
+        if (valid && bitmap != null) {
+            val shader = terrainShaders.getOrPut(env) { BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT) }
+            val tile = if (env == Env.NAVAL) 110f else 180f
+            if (groundLayer(c, shader, bitmap.width.toFloat(), bitmap.height.toFloat(), tile, drift, 255, null, w, top, bottom)) {
+                Gfx.get(context, "terrain_macro")?.let { macro ->
+                    val m1 = macroShader ?: BitmapShader(macro, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).also { macroShader = it }
+                    val m2 = macroFineShader ?: BitmapShader(macro, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).also { macroFineShader = it }
+                    // Two incommensurate multiply layers break up the 180 m tile grid.
+                    val strength = if (env == Env.NAVAL) 150 else 255
+                    groundLayer(c, m1, macro.width.toFloat(), macro.height.toFloat(), 1613f, drift, strength, multiply, w, top, bottom)
+                    groundLayer(c, m2, macro.width.toFloat(), macro.height.toFloat(), 389f, drift, strength / 2, multiply, w, top, bottom)
+                }
+            }
+        }
+        // Sun glitter on water, at the sun's mirror depression angle.
+        if (env == Env.NAVAL && sunVisible) {
+            val el = asin(scene.sunY.coerceIn(-1f, 1f))
+            val gy = horizon + f * tan(el) * .55f
+            local.setScale(f * .34f, max(f * tan(el) * .75f, 1f)); local.postTranslate(sunSx, gy); glint?.setLocalMatrix(local)
+            blend.xfermode = screen; blend.shader = glint
+            c.drawRect(sunSx - f * .34f, top, sunSx + f * .34f, gy + f * tan(el) * .75f, blend)
+            blend.shader = null; blend.xfermode = null
+        }
+        // Aerial perspective over the ground, same curve as the geometry fog.
+        val height = max(cam.y, .5f)
+        val sMax = height * f / scene.fogStart
+        local.setScale(1f, max(sMax, .001f)); local.postTranslate(0f, horizon); haze?.setLocalMatrix(local)
+        paint.shader = haze; paint.alpha = 255
+        c.drawRect(-w, top, w * 2f, bottom, paint); paint.shader = null
+        // Soft bright seam where relief meets ground; hides the texture's far aliasing.
+        rect.set(-w, horizon - h * .01f, w * 2f, horizon + h * .02f)
+        paint.color = Theme.withAlpha(look.fog, .55f)
+        c.drawRect(rect, paint)
+    }
+
+    /** Sprite strip at infinity: whole number of mirrored tiles per turn. */
+    private fun strip(c: Canvas, bmp: Bitmap, yTop: Float, yBot: Float, yaw: Float, f: Float, w: Float, stretch: Float) {
+        val hPx = yBot - yTop
+        if (hPx <= 1f || !hPx.isFinite()) return
+        val circumference = 2f * PI.toFloat() * f
+        val want = hPx * bmp.width / bmp.height * stretch
+        var n = (circumference / want).roundToInt().coerceAtLeast(2)
+        if (n % 2 != 0) n++
+        val tileW = circumference / n
+        var offset = (yaw * f) % circumference
+        if (offset < 0f) offset += circumference
+        var i = floor((-w + offset) / tileW).toInt()
+        var x = i * tileW - offset
+        var guard = 0
+        while (x < w * 2f && guard++ < 64) {
+            rect.set(x, yTop, x + tileW + 1f, yBot)
+            if (((i % n) + n) % 2 != 0) {
+                c.save(); c.scale(-1f, 1f, rect.centerX(), 0f)
+                c.drawBitmap(bmp, null, rect, paint)
+                c.restore()
+            } else c.drawBitmap(bmp, null, rect, paint)
+            x += tileW; i++
+        }
+    }
+
+    private fun groundLayer(c: Canvas, shader: BitmapShader, bw: Float, bh: Float, period: Float, drift: Float,
+                            alpha: Int, mode: Xfermode?, w: Float, top: Float, bottom: Float): Boolean {
+        // Anchor on the near (bottom) corner: best float precision where detail shows.
+        val ox = floor((groundCorners[3][0] + drift) / period) * period
+        val oz = floor(groundCorners[3][2] / period) * period
+        for (i in 0..3) {
+            src[i * 2] = (groundCorners[i][0] + drift - ox) * bw / period
+            src[i * 2 + 1] = (groundCorners[i][2] - oz) * bh / period
+        }
+        if (!matrix.setPolyToPoly(src, 0, dst, 0, 4)) return false
+        shader.setLocalMatrix(matrix)
+        paint.shader = shader; paint.alpha = alpha; paint.xfermode = mode
+        c.drawRect(-w, top, w * 2, bottom, paint)
+        paint.shader = null; paint.alpha = 255; paint.xfermode = null
+        return true
+    }
+
+    private fun drawStars(c: Canvas, scene: Scene3D, h: Float) {
+        val cam = scene.cam
+        val base = max(1f, h / 520f)
+        for (i in 0 until starCount) {
+            if (!cam.project(cam.x + starDir[i * 3] * 1000f, cam.y + starDir[i * 3 + 1] * 1000f, cam.z + starDir[i * 3 + 2] * 1000f, ground)) continue
+            val el = starDir[i * 3 + 1]
+            val twinkle = .75f + .25f * sin(phase * (1.7f + i % 5) + i)
+            val a = (starMag[i] * twinkle * ((el - .12f) / .35f).coerceIn(0f, 1f)).coerceIn(0f, 1f)
+            if (a < .05f) continue
+            paint.color = Theme.withAlpha(0xFFF2F4FF.toInt(), a)
+            c.drawCircle(ground[0], ground[1], base * (.5f + starMag[i]), paint)
+        }
+    }
+
+    /** Screen-space lens ghosts; drawn after geometry, before the HUD. */
+    fun lensFlare(c: Canvas, scene: Scene3D, w: Float, h: Float) {
+        val cam = scene.cam
+        if (!cam.project(cam.x + scene.sunX * 1000f, cam.y + scene.sunY * 1000f, cam.z + scene.sunZ * 1000f, ground)) return
+        val sx = ground[0]; val sy = ground[1]
+        if (sx < -w * .1f || sx > w * 1.1f || sy < -h * .1f || sy > h * 1.1f) return
+        val edge = 1f - (max(abs(sx - w / 2f) / (w * .6f), abs(sy - h / 2f) / (h * .6f))).coerceIn(0f, 1f)
+        if (edge <= 0f) return
+        val cx = w / 2f; val cy = h / 2f
+        val look = scene.look
+        blend.shader = null; blend.xfermode = screen
+        val ghosts = floatArrayOf(.35f, .62f, 1.18f, 1.55f)
+        val sizes = floatArrayOf(.035f, .018f, .06f, .026f)
+        for (k in ghosts.indices) {
+            val gx = sx + (cx - sx) * ghosts[k] * 2f
+            val gy = sy + (cy - sy) * ghosts[k] * 2f
+            blend.color = Theme.withAlpha(if (k % 2 == 0) look.sunHalo else 0xFF9FD3FF.toInt(), .10f * edge)
+            c.drawCircle(gx, gy, h * sizes[k], blend)
+        }
+        blend.xfermode = null
+    }
+
+    fun roads(scene: Scene3D, world: World) {
+        if (world.level.env != Env.URBAN && world.level.env != Env.SPECIAL) return
+        val cam = scene.cam
+        val asphalt = 0xFF4B5052.toInt()
+        val curb = 0xFF8E8C84.toInt()
+        val paintLine = 0xFFD9D4B8.toInt()
+        val row0 = floor((cam.z - 120f - CityLayout.START_Z) / CityLayout.ROW_SPACING).toInt() - 1
+        val row1 = row0 + 19
+        for (row in row0..row1) {
+            val cross = CityLayout.crossZ(row)
+            val hr = CityLayout.HALF_ROAD
+            scene.quad(-400f, .04f, cross - hr, 400f, .04f, cross - hr, 400f, .04f, cross + hr, -400f, .04f, cross + hr, asphalt)
+            // kerbs
+            scene.quad(-400f, .06f, cross - hr - .9f, 400f, .06f, cross - hr - .9f, 400f, .06f, cross - hr, -400f, .06f, cross - hr, curb)
+            scene.quad(-400f, .06f, cross + hr, 400f, .06f, cross + hr, 400f, .06f, cross + hr + .9f, -400f, .06f, cross + hr + .9f, curb)
+            for (col in -4..4) {
+                val x = col * CityLayout.COLUMN_SPACING + 39f
+                scene.quad(x - hr, .05f, cross, x + hr, .05f, cross, x + hr, .05f, cross + CityLayout.ROW_SPACING, x - hr, .05f, cross + CityLayout.ROW_SPACING, asphalt)
+                for (i in 0..2) {
+                    val zz = cross + 14f + i * 26f
+                    scene.quad(x - .3f, .08f, zz, x + .3f, .08f, zz, x + .3f, .08f, zz + 10f, x - .3f, .08f, zz + 10f, paintLine)
+                }
+            }
+        }
+    }
+
+    /** Round soft blob (drone, AA sites). */
+    fun shadow(c: Canvas, scene: Scene3D, x: Float, z: Float, w: Float, d: Float, alpha: Float = .22f) {
+        val bmp = Gfx.get(context, "shadow_soft") ?: return
+        for (i in 0..3) {
+            val px = x + if (i == 0 || i == 3) -w else w
+            val pz = z + if (i < 2) -d else d
+            if (!scene.cam.project(px, .12f, pz, ground)) return
+            dst[i * 2] = ground[0]; dst[i * 2 + 1] = ground[1]
+        }
+        mapBitmap(c, bmp, alpha)
+    }
 
     /**
-     * Fraction of each env_* sheet that is sky, measured from the shipped PNGs.
-     *
-     * A fixed 40% cut was wrong for three of the four sheets: naval, urban and
-     * special all have their horizon well above 40%, so the strip was showing
-     * photographed water/town/mountains on top of the renderer's own ground and
-     * water plane. Only the desert sheet's horizon happens to sit near 40%.
-     *
-     * These are measured constants, not a runtime edge search, because the
-     * sheets are photos: a gradient scan locks onto cloud and building edges,
-     * and a full w*h pixel read on the first draw of each env is pure waste.
-     * `checks/horizon_sheet.py` locks them against the PNGs.
+     * Directional shadow of a (rotated) box of height `h`: a soft parallelogram
+     * from the footprint towards the anti-sun, instead of an axis-aligned blob.
      */
-    private fun skyFraction(env:Env):Float = when(env){
-        Env.NAVAL -> 0.24f
-        Env.URBAN -> 0.25f
-        Env.SPECIAL -> 0.67f
-        else -> 0.55f
+    fun castShadow(c: Canvas, scene: Scene3D, x: Float, z: Float, w: Float, d: Float, h: Float, rot: Float, alpha: Float) {
+        val bmp = Gfx.get(context, "shadow_box") ?: return
+        val dx = -scene.shadowX * h; val dz = -scene.shadowZ * h
+        val len = sqrt(dx * dx + dz * dz)
+        val ux: Float; val uz: Float
+        if (len > .01f) { ux = dx / len; uz = dz / len } else { ux = 0f; uz = 1f }
+        val px = -uz; val pz = ux
+        val cr = cos(rot); val sr = sin(rot)
+        val a1x = cr * w * .5f; val a1z = sr * w * .5f
+        val a2x = -sr * d * .5f; val a2z = cr * d * .5f
+        // shadow_box has soft margins (~17%), so widen the footprint to compensate
+        val hp = (abs(a1x * px + a1z * pz) + abs(a2x * px + a2z * pz)) * 1.28f
+        val hu = (abs(a1x * ux + a1z * uz) + abs(a2x * ux + a2z * uz)) * 1.28f
+        val bx = x - ux * hu; val bz = z - uz * hu
+        val fx = x + dx + ux * hu * .8f; val fz = z + dz + uz * hu * .8f
+        val cam = scene.cam
+        if (!cam.project(bx + px * hp, .1f, bz + pz * hp, ground)) return
+        dst[0] = ground[0]; dst[1] = ground[1]
+        if (!cam.project(bx - px * hp, .1f, bz - pz * hp, ground)) return
+        dst[2] = ground[0]; dst[3] = ground[1]
+        if (!cam.project(fx - px * hp, .1f, fz - pz * hp, ground)) return
+        dst[4] = ground[0]; dst[5] = ground[1]
+        if (!cam.project(fx + px * hp, .1f, fz + pz * hp, ground)) return
+        dst[6] = ground[0]; dst[7] = ground[1]
+        mapBitmap(c, bmp, alpha)
     }
-    private fun detail():BitmapShader {
-        detailShader?.let{return it}
-        val random=java.util.Random(71043L)
-        val pixels=IntArray(64*64){
-            val v=120+random.nextInt(33)
-            Color.rgb(v+4,v+2,v)
-        }
-        val bitmap=Bitmap.createBitmap(pixels,64,64,Bitmap.Config.ARGB_8888)
-        detailBitmap=bitmap
-        return BitmapShader(bitmap,Shader.TileMode.REPEAT,Shader.TileMode.REPEAT).also{detailShader=it}
-    }
-    fun clear(){
-        // Drop shader references first. Let GC reclaim bitmaps; Canvas may still reference them.
-        shaderCache.clear();skyline.clear();detailShader=null;detailBitmap=null;sky=null;haze=null
-    }
-    fun name(env:Env)=env.name.lowercase(java.util.Locale.ROOT)
-    fun draw(c:Canvas,scene:Scene3D,world:World,w:Float,h:Float) {
-        if(w<=0f||h<=0f)return
-        val env=world.level.env;val cam=scene.cam
-        val skyTop=when(env){Env.NAVAL->0xFF4C7F9F.toInt();Env.SPECIAL->0xFF5E687F.toInt();Env.URBAN->0xFF526F8A.toInt();else->0xFF527E9D.toInt()}
-        val middle=when(env){Env.NAVAL->0xFF97BECA.toInt();Env.SPECIAL->0xFFB6A3A3.toInt();Env.URBAN->0xFFB1BBC2.toInt();else->0xFFD1B696.toInt()}
-        val fog=when(env){Env.NAVAL->0xFFB3CDD2.toInt();Env.SPECIAL->0xFFD3B8A8.toInt();Env.URBAN->0xFFD2C9B8.toInt();else->0xFFE1C7A1.toInt()}
-        scene.fogColor=fog
-        if(sky==null||lastEnv!=env||lastHeight!=h){
-            sky=LinearGradient(0f,-h*1.5f,0f,h*.12f,intArrayOf(skyTop,middle,fog),floatArrayOf(0f,.68f,1f),Shader.TileMode.CLAMP)
-            haze=LinearGradient(0f,0f,0f,h*.7f,intArrayOf(fog,Theme.withAlpha(fog,.65f),Theme.withAlpha(fog,0f)),floatArrayOf(0f,.18f,1f),Shader.TileMode.CLAMP)
-            lastEnv=env;lastHeight=h
-        }
-        val horizon=cam.horizonY()
-        skyMatrix.setTranslate(0f,horizon);sky?.setLocalMatrix(skyMatrix)
-        paint.shader=sky;paint.alpha=255;c.drawRect(-w,-h,w*2,h*2,paint);paint.shader=null
-        if(cam.project(cam.x+scene.sunX*1000f,cam.y+scene.sunY*1000f,cam.z+scene.sunZ*1000f,ground)){
-            val radius=h*.14f
-            sunMatrix.setScale(radius,radius);sunMatrix.postTranslate(ground[0],ground[1]);halo.setLocalMatrix(sunMatrix)
-            paint.shader=halo;c.drawCircle(ground[0],ground[1],radius,paint);paint.shader=null
-            paint.color=0xDDFFF0CF.toInt();c.drawCircle(ground[0],ground[1],h*.013f,paint)
-        }
-        val strip=skyline.getOrPut(env){
-            val source=Gfx.get(context,"env_${name(env)}")
-            val bitmap=Bitmap.createBitmap(768,180,Bitmap.Config.ARGB_8888)
-            if(source!=null){
-                // Crop the sky only. The renderer already draws a real water/ground
-                // plane below `horizon`, so any water or skyline baked into the
-                // strip is duplicated geometry floating over the playfield.
-                val skyOnly=(source.height*skyFraction(env)).toInt().coerceAtLeast(1)
-                val sc=Canvas(bitmap);val p=Paint(Paint.FILTER_BITMAP_FLAG)
-                sc.drawBitmap(source,Rect(0,0,source.width,skyOnly),Rect(0,0,768,180),p)
-                p.shader=LinearGradient(0f,0f,0f,180f,intArrayOf(0x00FFFFFF,0xFFFFFFFF.toInt(),0xFFFFFFFF.toInt(),0x00FFFFFF),floatArrayOf(0f,.25f,.75f,1f),Shader.TileMode.CLAMP)
-                p.xfermode=PorterDuffXfermode(PorterDuff.Mode.DST_IN);sc.drawRect(0f,0f,768f,180f,p)
-            }
-            bitmap
-        }
-        val bandH=h*.34f;val bandW=bandH*768f/180f
-        val scroll=cam.yaw/(2f*PI.toFloat())*bandW*4f
-        var tileIndex=floor((-w+scroll)/bandW).toInt()
-        var bx=tileIndex*bandW-scroll
-        while(bx<w*2f){
-            rect.set(bx,horizon-bandH*.88f,bx+bandW,horizon+bandH*.12f)
-            c.save()
-            if((tileIndex and 1)!=0)c.scale(-1f,1f,rect.centerX(),0f)
-            paint.alpha=100;c.drawBitmap(strip,null,rect,paint)
-            c.restore();bx+=bandW;tileIndex++
-        }
-        paint.alpha=255
-        val top=max(-h,horizon+1.5f);val bottom=h*2f
-        if(top>=bottom)return
-        paint.color=when(env){Env.NAVAL->0xFF265B6F.toInt();Env.SPECIAL->0xFF777B65.toInt();Env.URBAN->0xFF717169.toInt();else->0xFFA98F6A.toInt()}
-        c.drawRect(-w,top,w*2f,bottom,paint)
-        dst[0]=-w;dst[1]=top;dst[2]=w*2;dst[3]=top;dst[4]=w*2;dst[5]=bottom;dst[6]=-w;dst[7]=bottom
-        var valid=true
-        for(i in 0..3)if(!cam.groundAt(dst[i*2],dst[i*2+1],groundCorners[i])){valid=false;break}
-        val bitmap=Gfx.get(context,"terrain_${name(env)}")
-        if(valid&&bitmap!=null){
-            val shader=shaderCache.getOrPut(env){BitmapShader(bitmap,Shader.TileMode.REPEAT,Shader.TileMode.REPEAT)}
-            val tile=if(env==Env.NAVAL)110f else 180f
-            // Naval water drifts against the wind; land keeps the static grid.
-            val drift=if(env==Env.NAVAL)seaPhase*3.4f else 0f
-            val ox=floor((cam.x+drift)/tile)*tile;val oz=floor(cam.z/tile)*tile
-            for(i in 0..3){src[i*2]=(groundCorners[i][0]-ox)*bitmap.width/tile;src[i*2+1]=(groundCorners[i][2]-oz)*bitmap.height/tile}
-            if(matrix.setPolyToPoly(src,0,dst,0,4)){
-                shader.setLocalMatrix(matrix);paint.shader=shader;paint.alpha=255;c.drawRect(-w,top,w*2,bottom,paint);paint.shader=null
-            }
-            // Incommensurate period relative to base terrain, anchored in world
-            // space. It must share the sea drift, else the fine grain reads as a
-            // second, frozen wave field sliding over the moving water.
-            val period=997f
-            val detailX=floor((cam.x+drift)/period)*period;val detailZ=floor(cam.z/period)*period
-            for(i in 0..3){src[i*2]=(groundCorners[i][0]-detailX)*64f/period;src[i*2+1]=(groundCorners[i][2]-detailZ)*64f/period}
-            if(matrix.setPolyToPoly(src,0,dst,0,4)){
-                val d=detail();d.setLocalMatrix(matrix);paint.shader=d;paint.alpha=22
-                c.drawRect(-w,top,w*2,bottom,paint);paint.shader=null;paint.alpha=255
-            }
-        }
-        fogMatrix.setTranslate(0f,horizon);haze?.setLocalMatrix(fogMatrix);paint.shader=haze;paint.alpha=255
-        c.drawRect(-w,top,w*2,bottom,paint);paint.shader=null
-    }
-    fun roads(scene:Scene3D,world:World) {
-        if(world.level.env!=Env.URBAN&&world.level.env!=Env.SPECIAL)return
-        val cam=scene.cam
-        val row0=floor((cam.z-120f-CityLayout.START_Z)/CityLayout.ROW_SPACING).toInt()-1
-        val row1=row0+19
-        for(row in row0..row1){
-            // Cross streets connect the centers between adjacent building rows.
-            val cross=CityLayout.crossZ(row)
-            scene.quad(-400f,.04f,cross-CityLayout.HALF_ROAD,400f,.04f,cross-CityLayout.HALF_ROAD,400f,.04f,cross+CityLayout.HALF_ROAD,-400f,.04f,cross+CityLayout.HALF_ROAD,0xFF555C5B.toInt())
-            for(col in -4..4){
-                val x=col*CityLayout.COLUMN_SPACING+39f
-                scene.quad(x-CityLayout.HALF_ROAD,.05f,cross,x+CityLayout.HALF_ROAD,.05f,cross,x+CityLayout.HALF_ROAD,.05f,cross+CityLayout.ROW_SPACING,x-CityLayout.HALF_ROAD,.05f,cross+CityLayout.ROW_SPACING,0xFF555C5B.toInt())
-                for(i in 0..2){val zz=cross+i*32f;scene.quad(x-.35f,.08f,zz,x+.35f,.08f,zz,x+.35f,.08f,zz+12f,x-.35f,.08f,zz+12f,0xFFB8BAA2.toInt())}
-            }
-        }
-    }
-    fun shadow(c:Canvas,scene:Scene3D,x:Float,z:Float,w:Float,d:Float,alpha:Float=.22f) {
-        val bmp=Gfx.get(context,"shadow_soft")?:return
-        for(i in 0..3){
-            val px=x+if(i==0||i==3)-w else w
-            val pz=z+if(i<2)-d else d
-            if(!scene.cam.project(px,.12f,pz,ground))return
-            dst[i*2]=ground[0];dst[i*2+1]=ground[1]
-        }
-        src[0]=0f;src[1]=0f;src[2]=bmp.width.toFloat();src[3]=0f;src[4]=src[2];src[5]=bmp.height.toFloat();src[6]=0f;src[7]=src[5]
-        if(matrix.setPolyToPoly(src,0,dst,0,4)){
-            paint.shader=null;paint.alpha=(alpha*255).toInt().coerceIn(0,255)
-            c.drawBitmap(bmp,matrix,paint);paint.alpha=255
+
+    private fun mapBitmap(c: Canvas, bmp: Bitmap, alpha: Float) {
+        src[0] = 0f; src[1] = 0f; src[2] = bmp.width.toFloat(); src[3] = 0f
+        src[4] = src[2]; src[5] = bmp.height.toFloat(); src[6] = 0f; src[7] = src[5]
+        if (matrix.setPolyToPoly(src, 0, dst, 0, 4)) {
+            paint.shader = null; paint.alpha = (alpha * 255).toInt().coerceIn(0, 255)
+            c.drawBitmap(bmp, matrix, paint); paint.alpha = 255
         }
     }
 }

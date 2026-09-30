@@ -30,6 +30,7 @@ class WorldRenderer(private val gfxContext: Context) {
     private var exhaustTimer = 0f
     private var wreckTimer = 0f
     private var sparkTimer = 0f
+    private var clock = 0f
 
     // Identity keys survive movement/rotation without sharing history between objects.
     private val lodStates = java.util.IdentityHashMap<Any, Int>()
@@ -67,6 +68,7 @@ class WorldRenderer(private val gfxContext: Context) {
     }
 
     fun update(dt: Float, mission: Mission) {
+        clock += dt
         art.advance(dt)
         drone.update(dt, mission)
         fx.update(dt)
@@ -88,7 +90,16 @@ class WorldRenderer(private val gfxContext: Context) {
         sparkTimer += dt
         if (wreckTimer >= .12f) {
             wreckTimer %= .12f
-            for (t in mission.world.targets) if (t.destroyed && t.burn < 6f) fx.smoke(t.x, t.h * .6f, t.z, 2f)
+            for (t in mission.world.targets) {
+                if (!t.destroyed) continue
+                // Fresh wreck: flames + thick smoke, then a thinning plume for a while.
+                if (t.burn < 7f) {
+                    fx.smoke(t.x, t.h * .55f, t.z, 2.2f)
+                    fx.flame(t.x, t.h * .35f, t.z, 1.6f)
+                } else if (t.burn < 22f && (t.burn * 10f).toInt() % 3 == 0) {
+                    fx.smoke(t.x, t.h * .5f, t.z, 1.4f)
+                }
+            }
         }
         if (sparkTimer >= .045f) {
             sparkTimer %= .045f
@@ -122,12 +133,16 @@ class WorldRenderer(private val gfxContext: Context) {
             lodStates.clear()
             lodWorld = world
         }
-        scene.fogStart = 300f
-        scene.fogEnd = 1650f
+        look = EnvLook.of(world.level.env)
+        scene.configure(look)
         scene.begin()
         art.draw(c, scene, world, w, h)
-        fx.drawGround(c, scene)
+        // Ground layer first: roads are flushed on their own so that every ground
+        // decal drawn afterwards (shadows, threat rings, blast rings) sits ON the
+        // road instead of being painted over by the depth-sorted road quads.
         art.roads(scene, world)
+        scene.flush(c)
+        fx.drawGround(c, scene)
         plain()
 
         val camX = scene.cam.x
@@ -141,13 +156,8 @@ class WorldRenderer(private val gfxContext: Context) {
             val d2 = dx * dx + dz * dz
             if (d2 > maxD2) continue
             val detail = lod(p, d2, p.kind == PropKind.BUILDING)
-            val shadowRange = if (p.kind == PropKind.BUILDING) 320f else 550f
-            if (d2 < shadowRange * shadowRange && p.kind != PropKind.SHIP && p.kind != PropKind.FREIGHTER) {
-                art.shadow(
-                    c, scene, p.x - p.h * scene.sunX / scene.sunY, p.z - p.h * scene.sunZ / scene.sunY,
-                    p.w * .8f, p.d * .75f, .65f
-                )
-            }
+            val shadowRange = if (p.kind == PropKind.BUILDING) 380f else 520f
+            if (d2 < shadowRange * shadowRange) shadowFor(c, p)
             when (p.kind) {
                 PropKind.TREE, PropKind.PALM, PropKind.BUSH, PropKind.ROCK -> billboard(p)
                 // ناوهای پس‌زمینه یک پله ساده‌تر از هدف اصلی رندر می‌شوند
@@ -165,6 +175,8 @@ class WorldRenderer(private val gfxContext: Context) {
         // ----------------------------------------------- مناطق رادار و اخلال
         for (r in world.radars) {
             zone(c, r.x, r.z, r.radius, Theme.BLUE)
+            if ((r.x - camX) * (r.x - camX) + (r.z - camZ) * (r.z - camZ) < 500f * 500f)
+                art.castShadow(c, scene, r.x, r.z, 9f, 9f, 6f, 0f, .42f)
             val dx = r.x - camX
             val dz = r.z - camZ
             val d2 = dx * dx + dz * dz
@@ -182,7 +194,7 @@ class WorldRenderer(private val gfxContext: Context) {
             if (d2 > maxD2) continue
             zone(c, a.x, a.z, a.range, Theme.RED)
             val detail = lod(a, d2)
-            if (d2 < 550f * 550f) art.shadow(c, scene, a.x + 3f, a.z - 2f, 7f, 9f, .5f)
+            if (d2 < 550f * 550f) art.castShadow(c, scene, a.x, a.z, 6f, 8f, 3.2f, a.bodyYaw, .5f)
             if (a.kind == AASite.KIND_GUN) {
                 hardware.aaGun(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, a.flash, detail)
             } else {
@@ -196,12 +208,31 @@ class WorldRenderer(private val gfxContext: Context) {
             val dz = t.z - camZ
             val d2 = dx * dx + dz * dz
             if (d2 > maxD2) continue
+            if (!t.destroyed && d2 < 700f * 700f && t.shape != TargetShape.SHIP && t.shape != TargetShape.CARRIER)
+                art.castShadow(c, scene, t.x, t.z, t.w, t.d, t.h * .8f, t.heading, .5f)
             target(t, lod(t, d2))
+        }
+        // Pulsing ground ring on the active target: readable from any distance.
+        world.activeTarget()?.let { t ->
+            val pulse = .5f + .5f * sin(clock * 5f)
+            val r0 = t.hitRadius * 1.25f + 6f
+            zone(c, t.x, t.z, r0 + pulse * 5f, Theme.RED, .35f + .45f * (1f - pulse), 2.2f)
+            zone(c, t.x, t.z, r0 * .55f, Theme.RED, .25f, 1.4f)
         }
 
         plain()
-        for (b in world.bonuses) if (!b.collected) scene.box(b.x, b.y, b.z, 4.5f, 4.5f, 4.5f, Theme.AMBER, b.spin)
+        for (b in world.bonuses) {
+            if (b.collected) continue
+            val bob = sin(clock * 2.2f + b.x) * .8f
+            scene.box(b.x, b.y + bob, b.z, 4.2f, 4.2f, 4.2f, Theme.AMBER, b.spin)
+            fx.light(scene, b.x, b.y + bob + 2.1f, b.z, 7f + sin(clock * 4f) * 1.2f, fx.glowAmber, .55f, 3f)
+        }
         for (m in world.missiles) missile(m)
+        for (a in world.aaSites) {
+            if (!a.alive || a.flash <= 0f) continue
+            fx.light(scene, a.x + sin(a.barrelYaw) * 3f, a.muzzleHeight + 1f, a.z + cos(a.barrelYaw) * 3f,
+                6f * (a.flash / .12f).coerceIn(0f, 1f) + 2f, fx.glowAmber, .9f)
+        }
 
         if (!mission.fpv && mission.phase != Mission.Phase.ENDED) {
             val alt = mission.y.coerceAtLeast(0f)
@@ -211,17 +242,36 @@ class WorldRenderer(private val gfxContext: Context) {
                     7f + alt * .035f, 7f + alt * .035f, (.40f - alt * .0015f).coerceAtLeast(.06f)
                 )
             }
-            drone.draw(scene, mission)
+            drone.draw(scene, mission, fx)
         }
         fx.draw(c, scene, mission.fpv)
         scene.flush(c)
+        art.lensFlare(c, scene, w, h)
+    }
+
+    private var look: EnvLook = EnvLook.DESERT
+
+    private fun shadowFor(c: Canvas, p: Prop) {
+        when (p.kind) {
+            PropKind.SHIP, PropKind.FREIGHTER -> return
+            PropKind.BUILDING -> {
+                // contact occlusion + directional cast shadow
+                art.castShadow(c, scene, p.x, p.z, p.w * 1.06f, p.d * 1.06f, 0f, p.rot, .30f)
+                art.castShadow(c, scene, p.x, p.z, p.w, p.d, p.h, p.rot, .50f)
+            }
+            PropKind.ROCK -> art.castShadow(c, scene, p.x, p.z, p.w * .8f, p.d * .7f, p.h * .6f, p.rot, .45f)
+            PropKind.TOWER_MAST -> art.castShadow(c, scene, p.x, p.z, p.w * .28f, p.d * .28f, p.h, p.rot, .45f)
+            else -> art.castShadow(c, scene, p.x, p.z, p.w * .55f, p.w * .55f, p.h * .75f, 0f, .40f)
+        }
     }
 
     // ------------------------------------------------------------------ اجزا
 
     /** Same footprint, height, roof cap and materials at every LOD; only facade decals drop out.
-     *  پنجره‌ها در مقیاس واقعی (متر) روی هر ۴ رخ چیده می‌شوند؛ نور و رنگ داخل ثابت
-     *  و با LOD/ویرانی سازگار است تا از نمای نزدیک طبیعی باشد و از دور نلرزد. */
+     *  پنجره‌ها در مقیاس واقعی (متر) روی هر ۴ رخ چیده می‌شوند. 0.0.9: شیشه رنگ آسمان همان
+     *  محیط را می‌گیرد، پنجره‌های روشن در غروب/شب خودتابان‌اند و نوار تیرهٔ پای دیوار
+     *  (اکلوژن تماسی) ساختمان را روی زمین می‌نشاند. منطق ویرانی نزدیک هم اصلاح شد
+     *  (شاخهٔ قبلی هرگز اجرا نمی‌شد). */
     private fun building(
         x: Float, z: Float, w: Float, h: Float, d: Float, yaw: Float,
         baseColor: Int, destroyed: Boolean, detail: Int
@@ -231,54 +281,59 @@ class WorldRenderer(private val gfxContext: Context) {
         val wall = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_wall")
         val roof = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_roof")
         val cap = max(.5f, h * .04f).coerceAtMost(h * .2f)
-        rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof)
-        // لبهٔ پشت‌بام (parapet): یک تاج باریک که سیلوئت را از «جعبهٔ صاف» جدا می‌کند
-        rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof)
-        val parapet = if (detail == 0) min(1.1f, max(.35f, h * .018f)) else 0f
+        rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false)
+        // لبهٔ پشت‌بام (parapet)
+        rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false)
+        val parapet = if (detail == 0 && !destroyed) min(1.1f, max(.35f, h * .018f)) else 0f
         if (parapet > 0f) {
             val pr = Theme.shade(color, 1.16f)
             val t = min(.7f, w * .05f)
-            rig.box(0f, h, -d * .5f + t * .5f, w, parapet, t, pr, wall, roof)
-            rig.box(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof)
-            rig.box(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
-            rig.box(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
-            // یک واحد فنی روی پشت‌بام تا از زاویهٔ بالا سیلوئت متفاوت باشد
+            rig.box(0f, h, -d * .5f + t * .5f, w, parapet, t, pr, wall, roof, bottom = false)
+            rig.box(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof, bottom = false)
+            rig.box(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
+            rig.box(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
             val seed = (x * 31f + z * 17f).toInt()
             val unitW = (w * .22f).coerceIn(1.6f, 5f)
             val unitD = (d * .26f).coerceIn(1.6f, 5f)
             val ux = (((seed % 5) + 5) % 5 - 2) * w * .11f
             val uz = ((((seed / 5) % 5) + 5) % 5 - 2) * d * .11f
             val unitH = parapet * 2.4f
-            rig.box(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof)
-            // لولهٔ آب روی واحد فنی
+            rig.box(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof, bottom = false)
             rig.tube(ux + unitW * .5f, h + unitH, uz, ux + unitW * .5f, h + unitH + 1.6f, uz,
                 .16f, 6, Theme.shade(color, 0.8f), caps = true)
         }
-        if (detail > 1 || destroyed && detail != 0) {
-            // دورترین LOD بدون دکال؛ ویران فقط در نزدیک‌ترین LOD پنجرهٔ تیره نشان می‌دهد
-            if (destroyed && detail == 0) {
-                // شکستگی محدود در ویرانی نزدیک
-                val dark = 0xFF1F2322.toInt()
-                val usableH = h - cap
-                val winW = 2.2f; val winH = 2.0f; val floorH = 3.4f; val gapX = 0.9f
-                val floors = ((usableH - 1.6f) / floorH).toInt().coerceIn(1, 3)
-                val bays = ((w - 2.2f) / (winW + gapX)).toInt().coerceIn(1, 2)
-                val total = bays * winW + (bays - 1) * gapX; val sx = -total * 0.5f
-                for (side in -1..1 step 2) {
-                    val zz = side.toFloat() * (d * 0.5f + 0.018f)
-                    for (b in 0 until bays) for (f in 0 until floors) {
-                        val y0 = 1.2f + f * floorH; val y1 = y0 + winH
-                        if (y1 > usableH - 0.5f) continue
-                        val x0 = sx + b * (winW + gapX); val x1 = x0 + winW
-                        rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, dark)
-                    }
+        val usableH = h - cap
+        if (detail <= 1 && !destroyed) {
+            // اکلوژن تماسی: نوار تیرهٔ ۱٫۲ متری پای هر چهار دیوار
+            val ao = Theme.shade(color, .52f)
+            val band = 1.2f
+            val ez = d * .5f + .012f; val ex = w * .5f + .012f
+            rig.face(-w * .5f, 0f, -ez, w * .5f, 0f, -ez, w * .5f, band, -ez, -w * .5f, band, -ez, ao, cullBack = true)
+            rig.face(-w * .5f, 0f, ez, w * .5f, 0f, ez, w * .5f, band, ez, -w * .5f, band, ez, ao, cullBack = true)
+            rig.face(-ex, 0f, -d * .5f, -ex, 0f, d * .5f, -ex, band, d * .5f, -ex, band, -d * .5f, ao, cullBack = true)
+            rig.face(ex, 0f, -d * .5f, ex, 0f, d * .5f, ex, band, d * .5f, ex, band, -d * .5f, ao, cullBack = true)
+        }
+        if (destroyed) {
+            // ویرانی: فقط در نزدیک‌ترین LOD چند پنجرهٔ سوختهٔ تیره
+            if (detail != 0) return
+            val dark = 0xFF1F2322.toInt()
+            val winW = 2.2f; val winH = 2.0f; val floorH = 3.4f; val gapX = 0.9f
+            val floors = ((usableH - 1.6f) / floorH).toInt().coerceIn(1, 3)
+            val bays = ((w - 2.2f) / (winW + gapX)).toInt().coerceIn(1, 2)
+            val total = bays * winW + (bays - 1) * gapX; val sx = -total * 0.5f
+            for (side in -1..1 step 2) {
+                val zz = side.toFloat() * (d * 0.5f + 0.018f)
+                for (b in 0 until bays) for (f in 0 until floors) {
+                    val y0 = 1.2f + f * floorH; val y1 = y0 + winH
+                    if (y1 > usableH - 0.5f) continue
+                    val x0 = sx + b * (winW + gapX); val x1 = x0 + winW
+                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, dark, cullBack = true)
                 }
             }
             return
         }
-        val usableH = h - cap
+        if (detail > 1) return
         if (usableH < 3.5f || w < 4f || d < 4f) return
-        // مقیاس واقعی پنجره (متر) — مستقل از w/d تا کشیدگی نداشته باشد
         val winW = 2.15f
         val winH = 2.45f
         val floorH = 3.55f
@@ -287,16 +342,13 @@ class WorldRenderer(private val gfxContext: Context) {
         val inset = 0.020f
         val floorsFull = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 5)
         val floors = if (detail == 0) floorsFull else minOf(floorsFull, 2)
-        // بافت نامنظم ملایم: هر ساختمان یک افست فاز دارد تا تکرار شطرنجی نشود
         val seed = (x * 31f + z * 17f).toInt()
-        val phase = ((seed % 3) + 3) % 3
-        fun glassFor(b: Int, f: Int): Int {
-            if (destroyed) return 0xFF262A2B.toInt()
-            // شب‌ها (SPECIAL) برخی پنجره‌ها روشن‌تر
-            val lit = ((b * 7 + f * 11 + phase) % 5 == 0)
-            return if (lit) 0xFF8EA9B2.toInt() else 0xFF4A6570.toInt()
-        }
-        // رخ‌های ±Z (طول w)
+        val phase = ((seed % 7) + 7) % 7
+        val glass = look.windowGlass
+        val glassHi = Theme.mix(glass, look.upper, .45f)
+        fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % look.litChance) == 0
+        fun glassFor(b: Int, f: Int): Int =
+            if ((b + f + phase) % 3 == 0) glassHi else glass
         val baysZ = ((w - 2.0f) / (winW + gapX)).toInt().coerceIn(1, if (detail == 0) 4 else 2)
         run {
             val total = baysZ * winW + (baysZ - 1) * gapX
@@ -308,21 +360,22 @@ class WorldRenderer(private val gfxContext: Context) {
                     for (f in 0 until floors) {
                         val y0 = sill0 + f * floorH; val y1 = y0 + winH
                         if (y1 > usableH - 0.45f) continue
-                        val g = glassFor(b + if (side > 0) 10 else 0, f)
-                        rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, g)
-                        // قاب نازک تیره (دو خط افقی باریک بالا/پایین پنجره برای عمق) — بدون تغییر سیلوئت
-                        // آفست قاب باید هم‌جهت با بیرونِ همان رخ باشد؛ آفست ثابتِ ‎+0.004‎
-                        // روی رخ ‎-Z‎ قاب را داخل دیوار می‌برد و آن را نامرئی می‌کند.
+                        val bi = b + if (side > 0) 10 else 0
+                        if (litWindow(bi, f)) {
+                            rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, look.windowLit, emissive = true, cullBack = true)
+                        } else {
+                            rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, glassFor(bi, f))
+                        }
+                        // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
                         val fz = zz + side.toFloat() * 0.004f
-                        val frame = Theme.shade(g, 0.58f)
-                        val fh = 0.07f
-                        rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame)
-                        rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh, fz, x0, y0 + fh, fz, frame)
+                        val frame = Theme.shade(color, 0.62f)
+                        val fh = 0.09f
+                        rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true)
+                        rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true)
                     }
                 }
             }
         }
-        // رخ‌های ±X (طول d)
         if (detail == 0 && d >= 6f) {
             val baysX = ((d - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 3)
             val totalZ = baysX * winW + (baysX - 1) * gapX
@@ -330,18 +383,22 @@ class WorldRenderer(private val gfxContext: Context) {
             val floorsX = minOf(floors, 4)
             for (side in -1..1 step 2) {
                 val xx = side.toFloat() * (w * 0.5f + inset)
+                val fx0 = xx + side.toFloat() * 0.004f
                 for (b in 0 until baysX) {
                     val z0 = startZ + b * (winW + gapX); val z1 = z0 + winW
                     for (f in 0 until floorsX) {
                         val y0 = sill0 + f * floorH; val y1 = y0 + winH
                         if (y1 > usableH - 0.45f) continue
-                        val g = glassFor(b + 20, f)
-                        // رخ ±X: مستطیل در صفحهٔ X ثابت، بازهٔ Z متغیر
-                        rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, g)
-                        val frame = Theme.shade(g, 0.58f)
-                        val fh = 0.07f
-                        rig.face(xx + side.toFloat() * 0.004f, y1 - fh, z0, xx + side.toFloat() * 0.004f, y1 - fh, z1, xx + side.toFloat() * 0.004f, y1, z1, xx + side.toFloat() * 0.004f, y1, z0, frame)
-                        rig.face(xx + side.toFloat() * 0.004f, y0, z0, xx + side.toFloat() * 0.004f, y0, z1, xx + side.toFloat() * 0.004f, y0 + fh, z1, xx + side.toFloat() * 0.004f, y0 + fh, z0, frame)
+                        val bi = b + if (side > 0) 30 else 20
+                        if (litWindow(bi, f)) {
+                            rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, look.windowLit, emissive = true, cullBack = true)
+                        } else {
+                            rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, glassFor(bi, f))
+                        }
+                        val frame = Theme.shade(color, 0.62f)
+                        val fh = 0.09f
+                        rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frame, cullBack = true)
+                        rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frame, cullBack = true)
                     }
                 }
             }
@@ -378,9 +435,10 @@ class WorldRenderer(private val gfxContext: Context) {
         rig.place(m.x, m.y, m.z, 0f, 1f)
         rig.tube(-ux * 2.1f, -uy * 2.1f, -uz * 2.1f, ux * 1.5f, uy * 1.5f, uz * 1.5f, 0.34f, 6, 0xFFB9BCB4.toInt())
         rig.tube(-ux * 4.6f, -uy * 4.6f, -uz * 4.6f, -ux * 2.0f, -uy * 2.0f, -uz * 2.0f, 0.26f, 6, Theme.ORANGE, false)
+        fx.light(scene, m.x - ux * 2.6f, m.y - uy * 2.6f, m.z - uz * 2.6f, 2.8f, fx.glowAmber, .95f, 3f)
     }
 
-    private fun zone(c: Canvas, x: Float, z: Float, radius: Float, color: Int) {
+    private fun zone(c: Canvas, x: Float, z: Float, radius: Float, color: Int, alpha: Float = .36f, width: Float = 1.4f) {
         val segments = 48
         var px = x + radius
         var pz = z
@@ -388,7 +446,7 @@ class WorldRenderer(private val gfxContext: Context) {
             val a = i * 2f * PI.toFloat() / segments
             val nx = x + cos(a) * radius
             val nz = z + sin(a) * radius
-            scene.line(px, .6f, pz, nx, .6f, nz, c, Theme.withAlpha(color, .36f), 1.4f)
+            scene.line(px, .6f, pz, nx, .6f, nz, c, Theme.withAlpha(color, alpha), width)
             px = nx
             pz = nz
         }
