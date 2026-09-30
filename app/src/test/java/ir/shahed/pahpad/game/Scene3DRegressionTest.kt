@@ -60,19 +60,25 @@ class Scene3DRegressionTest {
 
     @Test fun particlesAndSolidsShareBackToFrontDrawOrder() {
         val s=scene();val fx=Fx();val canvas=RecordingCanvas()
-        fx.tracer(0f,0f,20f);fx.tracer(0f,0f,5f)
+        // 0.0.9 renders tracers/flames as soft sprites through drawBitmap, which
+        // RecordingCanvas cannot observe. debris keeps the flat disc style, so the
+        // recorder still sees where particles land relative to the solid.
+        fx.debris(0f,0f,20f);fx.debris(0f,0f,5f)
         s.quad(-1f,1f,10f,1f,1f,10f,1f,-1f,10f,-1f,-1f,10f,Color.WHITE)
         fx.draw(canvas,s)
         assertTrue("Fx must enqueue, not immediately paint over solids",canvas.calls.isEmpty())
-        assertEquals(3,faces(s).size)
+        assertEquals(21,faces(s).size) // 10 far particles + 10 near + the solid
         s.flush(canvas)
-        assertEquals(listOf("circle","path","circle"),canvas.calls)
+        assertEquals(List(10){"circle"}+"path"+List(10){"circle"},canvas.calls)
         assertTrue(faces(s).isEmpty())
     }
 
     @Test fun fpvSuppressesOnlyEngineSmokeAndBlastAlsoQueues() {
         val s=scene();val fx=Fx();val canvas=RecordingCanvas()
         fx.engineSmoke(0f,0f,20f,false);fx.smoke(0f,0f,20f)
+        // 0.0.9 wreckage smoke fades in, so a freshly spawned puff is still fully
+        // transparent on frame 0. Age it the way the game loop would before drawing.
+        fx.update(.3f)
         fx.draw(canvas,s,true)
         assertEquals(1,faces(s).size)
         s.begin();fx.clear();fx.explosion(0f,0f,20f)
