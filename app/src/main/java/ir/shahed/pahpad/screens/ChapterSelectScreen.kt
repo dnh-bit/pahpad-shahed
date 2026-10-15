@@ -71,17 +71,25 @@ class ChapterSelectScreen(game: MainActivity) : BaseScreen(game) {
             val r = b.rect
 
             ui.panel(c, r, if (b.pressed) Theme.PANEL_HI else Theme.PANEL,
-                Theme.withAlpha(b.accent, if (unlocked) 0.6f else 0.2f), dp(16f))
-
+                Theme.withAlpha(b.accent, if (unlocked) 0.55f else 0.18f), dp(16f))
+            // نوار لهجه بالا
+            ui.fill.color = Theme.withAlpha(b.accent, if (unlocked) 0.88f else 0.28f)
+            c.drawRoundRect(r.left + dp(12f), r.top + dp(8f), r.right - dp(12f), r.top + dp(10f), dp(2f), dp(2f), ui.fill)
             val cx = r.centerX()
             // بنر تصویری منطقه (کویر/شهر/دریا/عملیات ویژه)
             val envName = when (ch.env.name) {
                 "DESERT" -> "env_desert"; "URBAN" -> "env_urban"
                 "NAVAL" -> "env_naval"; else -> "env_special"
             }
-            ui.image(ui.context, c, envName, r.left + dp(10f), r.top + dp(10f),
-                r.width() - dp(20f), dp(96f), radius = dp(10f))
-            ui.text(c, ch.title, cx, r.top + dp(126f), dp(15f), if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
+            ui.image(ui.context, c, envName, r.left + dp(10f), r.top + dp(16f),
+                r.width() - dp(20f), dp(88f), radius = dp(10f))
+            // چیپ شماره فصل
+            val chipW = dp(54f)
+            val chipTop = r.top + dp(16f) + dp(88f) + dp(10f)
+            ui.fill.color = Theme.withAlpha(b.accent, 0.16f)
+            c.drawRoundRect(cx - chipW/2, chipTop, cx + chipW/2, chipTop + dp(18f), dp(8f), dp(8f), ui.fill)
+            ui.text(c, "فصل " + Fa.num(ch.number), cx, chipTop + dp(9f), dp(11f), b.accent, bold = true)
+            ui.text(c, ch.title, cx, r.top + dp(150f), dp(14.5f), if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
             for ((i, line) in ui.wrap(ch.subtitle, dp(11.5f), r.width() - dp(24f)).withIndex()) {
                 ui.text(c, line, cx, r.top + dp(146f) + i * dp(16f), dp(11.5f), Theme.TEXT_DIM)
             }

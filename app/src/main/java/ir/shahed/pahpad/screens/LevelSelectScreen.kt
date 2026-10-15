@@ -61,11 +61,15 @@ class LevelSelectScreen(game: MainActivity, private val chapterNumber: Int) : Ba
             val unlocked = save.isLevelUnlocked(l.id)
             val stars = save.starsOf(l.id)
             val r = b.rect
+            val accent = if (stars > 0) Theme.MINT else Theme.difficultyColor(l.difficulty)
             ui.panel(c, r, if (b.pressed) Theme.PANEL_HI else Theme.PANEL,
-                Theme.withAlpha(if (stars > 0) Theme.MINT else Theme.LINE, if (unlocked) 0.7f else 0.25f), dp(14f))
+                Theme.withAlpha(if (stars > 0) Theme.MINT else Theme.LINE, if (unlocked) 0.65f else 0.22f), dp(14f))
+            // نوار لهجه بالا
+            ui.fill.color = Theme.withAlpha(accent, if (unlocked) 0.85f else 0.25f)
+            c.drawRoundRect(r.left + dp(12f), r.top + dp(8f), r.right - dp(12f), r.top + dp(10f), dp(2f), dp(2f), ui.fill)
             val cx = r.centerX()
 
-            ui.chip(c, cx, r.top + dp(20f), "مرحله " + Fa.num(l.code), Theme.difficultyColor(l.difficulty))
+            ui.chip(c, cx, r.top + dp(22f), "مرحله " + Fa.num(l.code), Theme.difficultyColor(l.difficulty))
             for ((i, line) in ui.wrap(l.title, dp(14f), r.width() - dp(18f), true).withIndex()) {
                 ui.text(c, line, cx, r.top + dp(48f) + i * dp(19f), dp(14f),
                     if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)

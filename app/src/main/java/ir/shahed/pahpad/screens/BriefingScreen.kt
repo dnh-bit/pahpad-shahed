@@ -221,8 +221,11 @@ class BriefingScreen(
         val chipsH = dp(62f)
         if (fits(chipsH)) {
             ui.panel(c, x, y, w, chipsH)
-            ui.text(c, "چالش این ماموریت", right - dp(14f), y + dp(16f), dp(12f), Theme.TEXT, bold = true,
+            ui.text(c, "چالش این ماموریت", right - dp(14f), y + dp(16f), dp(11.5f), Theme.TEXT, bold = true,
                 align = Paint.Align.RIGHT)
+            // لهجه نازک بالای پنل
+            ui.fill.color = Theme.withAlpha(Theme.MINT, 0.22f)
+            c.drawRoundRect(x + dp(10f), y + dp(7f), x + w - dp(10f), y + dp(9f), dp(2f), dp(2f), ui.fill)
             var cxChip = right - dp(50f)
             val chipY = y + dp(41f)
             val chips = ArrayList<Pair<String, Int>>()
