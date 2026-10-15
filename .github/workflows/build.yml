@@ -65,7 +65,7 @@ jobs:
         run: |
           mkdir -p out
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          cp "$APK" out/pahpad-shahed-v0.0.10.apk
+          cp "$APK" out/pahpad-shahed-v0.1.1.apk
 
       - name: Upload test results (diagnostics)
         if: always()
@@ -78,9 +78,9 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v0.0.10
-          name: "0.0.10"
-          files: out/pahpad-shahed-v0.0.10.apk
+          tag_name: v0.1.1
+          name: "0.1.1"
+          files: out/pahpad-shahed-v0.1.1.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

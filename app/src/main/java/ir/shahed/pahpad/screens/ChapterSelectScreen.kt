@@ -89,9 +89,9 @@ class ChapterSelectScreen(game: MainActivity) : BaseScreen(game) {
             ui.fill.color = Theme.withAlpha(b.accent, 0.16f)
             c.drawRoundRect(cx - chipW/2, chipTop, cx + chipW/2, chipTop + dp(18f), dp(8f), dp(8f), ui.fill)
             ui.text(c, "فصل " + Fa.num(ch.number), cx, chipTop + dp(9f), dp(11f), b.accent, bold = true)
-            ui.text(c, ch.title, cx, r.top + dp(150f), dp(14.5f), if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
-            for ((i, line) in ui.wrap(ch.subtitle, dp(11.5f), r.width() - dp(24f)).withIndex()) {
-                ui.text(c, line, cx, r.top + dp(146f) + i * dp(16f), dp(11.5f), Theme.TEXT_DIM)
+            ui.text(c, ch.title, cx, r.top + dp(150f), dp(13.5f), if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
+            for ((i, line) in ui.wrap(ch.subtitle, dp(11f), r.width() - dp(24f)).withIndex()) {
+                ui.text(c, line, cx, r.top + dp(168f) + i * dp(13f), dp(11f), Theme.TEXT_DIM)
             }
 
             if (unlocked) {
