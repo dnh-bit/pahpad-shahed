@@ -271,21 +271,30 @@ class SceneryArt(private val context: Context) {
 
     fun roads(scene: Scene3D, world: World) {
         if (world.level.env != Env.URBAN && world.level.env != Env.SPECIAL) return
+        // تعداد ردیف‌هایی که شهر واقعاً دارد (همان شرط ساخت ساختمان‌ها)
+        var cityRows = 0
+        while (CityLayout.rowZ(cityRows) < world.distance - 80f) cityRows++
+        if (cityRows < 2) return
+        // آخرین خیابان عرضی بین دو ردیف ماقبل آخر است؛ جاده بیرون شهر نکشد
+        val lastCross = cityRows - 2
         val cam = scene.cam
         val asphalt = 0xFF4B5052.toInt()
         val curb = 0xFF8E8C84.toInt()
         val paintLine = 0xFFD9D4B8.toInt()
+        // عرض شهر: ستون‌ها تا ±۴ + کمی طویل‌تر، نه امتداد بی‌نهایت
+        val spanX = 4f * CityLayout.COLUMN_SPACING + CityLayout.HALF_ROAD + 4f
         val row0 = floor((cam.z - 120f - CityLayout.START_Z) / CityLayout.ROW_SPACING).toInt() - 1
-        val row1 = row0 + 19
-        for (row in row0..row1) {
+        val row1 = minOf(lastCross, row0 + 19)
+        for (row in maxOf(0, row0)..row1) {
             val cross = CityLayout.crossZ(row)
             val hr = CityLayout.HALF_ROAD
-            scene.quad(-400f, .04f, cross - hr, 400f, .04f, cross - hr, 400f, .04f, cross + hr, -400f, .04f, cross + hr, asphalt)
+            scene.quad(-spanX, .04f, cross - hr, spanX, .04f, cross - hr, spanX, .04f, cross + hr, -spanX, .04f, cross + hr, asphalt)
             // kerbs
-            scene.quad(-400f, .06f, cross - hr - .9f, 400f, .06f, cross - hr - .9f, 400f, .06f, cross - hr, -400f, .06f, cross - hr, curb)
-            scene.quad(-400f, .06f, cross + hr, 400f, .06f, cross + hr, 400f, .06f, cross + hr + .9f, -400f, .06f, cross + hr + .9f, curb)
+            scene.quad(-spanX, .06f, cross - hr - .9f, spanX, .06f, cross - hr - .9f, spanX, .06f, cross - hr, -spanX, .06f, cross - hr, curb)
+            scene.quad(-spanX, .06f, cross + hr, spanX, .06f, cross + hr, spanX, .06f, cross + hr + .9f, -spanX, .06f, cross + hr + .9f, curb)
             for (col in -4..4) {
                 val x = col * CityLayout.COLUMN_SPACING + 39f
+                // گذر عمودی فقط بین دو خیابان عرضی مجاور
                 scene.quad(x - hr, .05f, cross, x + hr, .05f, cross, x + hr, .05f, cross + CityLayout.ROW_SPACING, x - hr, .05f, cross + CityLayout.ROW_SPACING, asphalt)
                 for (i in 0..2) {
                     val zz = cross + 14f + i * 26f

@@ -30,7 +30,9 @@ class BriefingScreen(
     private val start = UiButton("شروع ماموریت", Theme.MINT, filled = true) {
         game.show(GameScreen(game, level, mode, seed))
     }
-    private val hangar = UiButton("انتخاب پهباد", Theme.AMBER) { game.show(ShopScreen(game)) }
+    private val hangar = UiButton("انتخاب پهباد", Theme.AMBER) {
+        game.show(ShopScreen(game) { BriefingScreen(game, level, mode) })
+    }
     private val back = UiButton("بازگشت", Theme.TEXT_DIM) { goBack() }
 
     init {
@@ -261,7 +263,7 @@ class BriefingScreen(
             val stats = listOf(
                 Pair("برد", UpgradeKind.RANGE),
                 Pair("سرعت", UpgradeKind.SPEED),
-                Pair("انفجار", UpgradeKind.BLAST),
+                Pair("هدایت", UpgradeKind.GUIDANCE),
                 Pair("مقاومت", UpgradeKind.ARMOR)
             )
             val colW = (w - dp(120f)) / stats.size

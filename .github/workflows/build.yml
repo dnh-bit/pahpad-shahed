@@ -79,7 +79,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: v0.1.2
-          prerelease: true
           name: "0.1.2"
           body_path: CHANGES-0.1.2-FA.md
           files: out/pahpad-shahed-v0.1.2.apk

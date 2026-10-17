@@ -70,13 +70,13 @@ class Mission(
     private val lvlRange = save.upgradeLevel(model.id, UpgradeKind.RANGE)
     private val lvlSpeed = save.upgradeLevel(model.id, UpgradeKind.SPEED)
     private val lvlGuide = save.upgradeLevel(model.id, UpgradeKind.GUIDANCE)
-    private val lvlBlast = save.upgradeLevel(model.id, UpgradeKind.BLAST)
     private val lvlArmor = save.upgradeLevel(model.id, UpgradeKind.ARMOR)
 
     val maxRange: Float = model.rangeAt(lvlRange)
     val maxSpeedKmh: Float = model.speedAt(lvlSpeed)
     val guidance: Float = model.guidanceAt(lvlGuide)
-    val blastRadius: Float = model.blastAt(lvlBlast)
+    /** بدون ارتقا (قدرت انفجار حذف شد)؛ فقط خاصیت هر مدل */
+    val blastRadius: Float = model.blastAt(4)
     val armor: Int = model.armorAt(lvlArmor)
 
     private val minSpeedKmh = maxSpeedKmh * 0.42f
@@ -373,7 +373,7 @@ class Mission(
         val tx = leadX + (rnd.nextFloat() * 2f - 1f) * errScale
         val ty = (leadY + (rnd.nextFloat() * 2f - 1f) * errScale * 0.6f).coerceAtLeast(4f)
         val tz = leadZ + (rnd.nextFloat() * 2f - 1f) * errScale
-        val sx = a.x; val sy = 6f; val sz = a.z
+        val sx = a.x; val sy = a.muzzleHeight; val sz = a.z
         val len = Math.sqrt(
             ((tx - sx) * (tx - sx) + (ty - sy) * (ty - sy) + (tz - sz) * (tz - sz)).toDouble()
         ).toFloat().coerceAtLeast(1f)

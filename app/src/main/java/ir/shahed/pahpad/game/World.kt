@@ -49,9 +49,11 @@ class AASite(
     /** زاویه‌ی ارتفاع لوله یا لانچر بر حسب رادیان */
     var barrelPitch = 0.45f
     var flash = 0f
+    /** ارتفاع پایه؛ روی سقف ساختمان‌های شهری صفر نیست */
+    var y: Float = 0f
 
     /** ارتفاع دهانه‌ی لوله از زمین؛ برای محاسبه‌ی زاویه‌ی نشانه‌روی */
-    val muzzleHeight: Float get() = if (kind == KIND_SAM) 2.6f else 2.1f
+    val muzzleHeight: Float get() = y + if (kind == KIND_SAM) 2.6f else 2.1f
 
     companion object {
         /** پرتابگر موشک زمین‌به‌هوا */
@@ -162,6 +164,7 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
         buildTargets()
         buildDefenses()
         buildScenery()
+        placeRoofDefenses()
         clearObjectiveFootprints()
         buildBonuses()
     }
@@ -185,13 +188,42 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
             return qx * qx + qz * qz < r * r
         }
         props.removeAll { p ->
+            // ساختمانی که پدافند روی پشت‌بامش نشسته حفظ می‌شود — پدافند بالای آن است
+            if (hostedRoofDefenses.contains(p)) return@removeAll false
             targets.any { t ->
                 val r = kotlin.math.max(t.w, t.d) * .5f + 10f
                 // moving targets sweep along their heading: keep their lane clear too
                 if (t.moving) abs((if (abs(sin(t.heading)) > .5f) p.z - t.z else p.x - t.x)) < p.d * .5f + r * .6f && p.kind != PropKind.SHIP && p.kind != PropKind.FREIGHTER && abs(p.x - t.x) < 420f
                 else overlaps(p, t.x, t.z, r)
-            } || aaSites.any { a -> overlaps(p, a.x, a.z, 12f) } ||
+            } || aaSites.any { a -> a.y <= 0f && overlaps(p, a.x, a.z, 12f) } ||
                 radars.any { r -> overlaps(p, r.x, r.z, 14f) }
+        }
+    }
+
+    /**
+     * در ماموریت‌های شهریِ سخت، برخی پدافندها روی پشت‌بام بلندترین ساختمانِ
+     * نزدیک می‌نشینند (از دستور کاربر برای مراحل آخر). ساختمان میزبان در
+     * [hostedRoofDefenses] نگه داشته می‌شود تا پاک‌سازی اهداف آن را نسوزاند.
+     */
+    private val hostedRoofDefenses = HashSet<Prop>()
+
+    private fun placeRoofDefenses() {
+        if (level.difficulty < 4) return
+        if (level.env != Env.URBAN && level.env != Env.SPECIAL) return
+        for (a in aaSites) {
+            if (rnd.nextFloat() >= 0.65f) continue
+            var best: Prop? = null
+            var bestDist = 60f
+            for (p in props) {
+                if (p.kind != PropKind.BUILDING || p.h < 30f || p.w < 14f) continue
+                val dx = p.x - a.x; val dz = p.z - a.z
+                val d = Math.sqrt((dx * dx + dz * dz).toDouble()).toFloat()
+                if (d < bestDist) { bestDist = d; best = p }
+            }
+            best?.let { p ->
+                a.x = p.x; a.z = p.z; a.y = p.h + 0.4f
+                hostedRoofDefenses.add(p)
+            }
         }
     }
 

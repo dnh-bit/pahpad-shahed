@@ -194,11 +194,11 @@ class WorldRenderer(private val gfxContext: Context) {
             if (d2 > maxD2) continue
             zone(c, a.x, a.z, a.range, Theme.RED)
             val detail = lod(a, d2)
-            if (d2 < 550f * 550f) art.castShadow(c, scene, a.x, a.z, 6f, 8f, 3.2f, a.bodyYaw, .5f)
+            if (a.y <= 0f && d2 < 550f * 550f) art.castShadow(c, scene, a.x, a.z, 6f, 8f, 3.2f, a.bodyYaw, .5f)
             if (a.kind == AASite.KIND_GUN) {
-                hardware.aaGun(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, a.flash, detail)
+                hardware.aaGun(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, a.flash, detail, a.y)
             } else {
-                hardware.samLauncher(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, detail)
+                hardware.samLauncher(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, detail, a.y)
             }
         }
 
@@ -332,73 +332,105 @@ class WorldRenderer(private val gfxContext: Context) {
             }
             return
         }
-        if (detail > 1) return
-        if (usableH < 3.5f || w < 4f || d < 4f) return
-        val winW = 2.15f
-        val winH = 2.45f
-        val floorH = 3.55f
-        val gapX = 0.75f
-        val sill0 = 1.45f
-        val inset = 0.020f
-        val floorsFull = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 5)
-        val floors = if (detail == 0) floorsFull else minOf(floorsFull, 2)
-        val seed = (x * 31f + z * 17f).toInt()
-        val phase = ((seed % 7) + 7) % 7
-        val glass = look.windowGlass
-        val glassHi = Theme.mix(glass, look.upper, .45f)
-        fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % look.litChance) == 0
-        fun glassFor(b: Int, f: Int): Int =
-            if ((b + f + phase) % 3 == 0) glassHi else glass
-        val baysZ = ((w - 2.0f) / (winW + gapX)).toInt().coerceIn(1, if (detail == 0) 4 else 2)
-        run {
-            val total = baysZ * winW + (baysZ - 1) * gapX
-            val startX = -total * 0.5f
-            for (side in -1..1 step 2) {
-                val zz = side.toFloat() * (d * 0.5f + inset)
-                for (b in 0 until baysZ) {
-                    val x0 = startX + b * (winW + gapX); val x1 = x0 + winW
-                    for (f in 0 until floors) {
-                        val y0 = sill0 + f * floorH; val y1 = y0 + winH
-                        if (y1 > usableH - 0.45f) continue
-                        val bi = b + if (side > 0) 10 else 0
-                        if (litWindow(bi, f)) {
-                            rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, look.windowLit, emissive = true, cullBack = true)
-                        } else {
-                            rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, glassFor(bi, f))
+        // پنجره‌ها در همهٔ فاصله‌ها یکسان رسم می‌شوند (بدون تغییر بن‌مایه بین LODها)
+        // تا حرکت پهباد/زاویه دوربین باعث پاپ‌کردن پنجره‌ها نشود؛
+        // در دورترین LOD به‌جای حذف، نوار شیشهٔ ساده ترسیم می‌شود.
+        if (detail <= 1 && !destroyed && usableH >= 3.5f && w >= 4f && d >= 4f) {
+            val winW = 2.15f
+            val winH = 2.45f
+            val floorH = 3.55f
+            val gapX = 0.75f
+            val sill0 = 1.45f
+            val inset = 0.020f
+            val floorsFull = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 5)
+            val floors = floorsFull
+            val seed = (x * 31f + z * 17f).toInt()
+            val phase = ((seed % 7) + 7) % 7
+            val glass = look.windowGlass
+            val glassHi = Theme.mix(glass, look.upper, .45f)
+            fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % look.litChance) == 0
+            fun glassFor(b: Int, f: Int): Int =
+                if ((b + f + phase) % 3 == 0) glassHi else glass
+            val baysZ = ((w - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 4)
+            run {
+                val total = baysZ * winW + (baysZ - 1) * gapX
+                val startX = -total * 0.5f
+                for (side in -1..1 step 2) {
+                    val zz = side.toFloat() * (d * 0.5f + inset)
+                    for (b in 0 until baysZ) {
+                        val x0 = startX + b * (winW + gapX); val x1 = x0 + winW
+                        for (f in 0 until floors) {
+                            val y0 = sill0 + f * floorH; val y1 = y0 + winH
+                            if (y1 > usableH - 0.45f) continue
+                            val bi = b + if (side > 0) 10 else 0
+                            if (litWindow(bi, f)) {
+                                rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, look.windowLit, emissive = true, cullBack = true)
+                            } else {
+                                rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, glassFor(bi, f))
+                            }
+                            // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
+                            val fz = zz + side.toFloat() * 0.004f
+                            val frame = Theme.shade(color, 0.62f)
+                            val fh = 0.09f
+                            rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true)
+                            rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true)
                         }
-                        // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
-                        val fz = zz + side.toFloat() * 0.004f
-                        val frame = Theme.shade(color, 0.62f)
-                        val fh = 0.09f
-                        rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true)
-                        rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true)
                     }
                 }
             }
-        }
-        if (detail == 0 && d >= 6f) {
-            val baysX = ((d - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 3)
-            val totalZ = baysX * winW + (baysX - 1) * gapX
-            val startZ = -totalZ * 0.5f
-            val floorsX = minOf(floors, 4)
-            for (side in -1..1 step 2) {
-                val xx = side.toFloat() * (w * 0.5f + inset)
-                val fx0 = xx + side.toFloat() * 0.004f
-                for (b in 0 until baysX) {
-                    val z0 = startZ + b * (winW + gapX); val z1 = z0 + winW
-                    for (f in 0 until floorsX) {
-                        val y0 = sill0 + f * floorH; val y1 = y0 + winH
-                        if (y1 > usableH - 0.45f) continue
-                        val bi = b + if (side > 0) 30 else 20
-                        if (litWindow(bi, f)) {
-                            rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, look.windowLit, emissive = true, cullBack = true)
-                        } else {
-                            rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, glassFor(bi, f))
+            if (d >= 6f) {
+                val baysX = ((d - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 3)
+                val totalZ = baysX * winW + (baysX - 1) * gapX
+                val startZ = -totalZ * 0.5f
+                val floorsX = minOf(floors, 4)
+                for (side in -1..1 step 2) {
+                    val xx = side.toFloat() * (w * 0.5f + inset)
+                    val fx0 = xx + side.toFloat() * 0.004f
+                    for (b in 0 until baysX) {
+                        val z0 = startZ + b * (winW + gapX); val z1 = z0 + winW
+                        for (f in 0 until floorsX) {
+                            val y0 = sill0 + f * floorH; val y1 = y0 + winH
+                            if (y1 > usableH - 0.45f) continue
+                            val bi = b + if (side > 0) 30 else 20
+                            if (litWindow(bi, f)) {
+                                rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, look.windowLit, emissive = true, cullBack = true)
+                            } else {
+                                rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, glassFor(bi, f))
+                            }
+                            val frame = Theme.shade(color, 0.62f)
+                            val fh = 0.09f
+                            rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frame, cullBack = true)
+                            rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frame, cullBack = true)
                         }
-                        val frame = Theme.shade(color, 0.62f)
-                        val fh = 0.09f
-                        rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frame, cullBack = true)
-                        rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frame, cullBack = true)
+                    }
+                }
+            }
+        } else if (detail > 1 && !destroyed && usableH >= 3.5f) {
+            // دورترین دوری: نوارهای شیشهٔ سادهٔ هم‌عرض و هم‌ارتفاع با یک پنجره
+            // سازگار — ساختمان از دور هم «پنجره‌دار» دیده می‌شود و نبود/هستِ
+            // ناگهانی پنجره‌ها را ندارد.
+            val floorH = 3.55f
+            val sill0 = 1.45f
+            val floors = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 5)
+            val glass = look.windowGlass
+            run {
+                // رخ‌های Z
+                for (side in -1..1 step 2) {
+                    val zz = side.toFloat() * (d * 0.5f + 0.02f)
+                    for (f in 0 until floors) {
+                        val y0 = sill0 + f * floorH; val y1 = y0 + 2.45f
+                        if (y1 > usableH - 0.45f) continue
+                        rig.face(-w * .4f, y0, zz, w * .4f, y0, zz, w * .4f, y1, zz, -w * .4f, y1, zz, glass, cullBack = true)
+                    }
+                }
+                if (d >= 6f) {
+                    for (side in -1..1 step 2) {
+                        val xx = side.toFloat() * (w * 0.5f + 0.02f)
+                        for (f in 0 until minOf(floors, 4)) {
+                            val y0 = sill0 + f * floorH; val y1 = y0 + 2.45f
+                            if (y1 > usableH - 0.45f) continue
+                            rig.face(xx, y0, -d * .4f, xx, y0, d * .4f, xx, y1, d * .4f, xx, y1, -d * .4f, glass, cullBack = true)
+                        }
                     }
                 }
             }

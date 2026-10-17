@@ -2,7 +2,7 @@ package ir.shahed.pahpad.data
 
 import ir.shahed.pahpad.core.Theme
 
-/** انواع ارتقای پهباد */
+/** انواع ارتقای پهباد (ارتقای «قدرت انفجار» حذف شد — بی‌اثر بود) */
 enum class UpgradeKind(
     val key: String,
     val title: String,
@@ -12,7 +12,6 @@ enum class UpgradeKind(
     RANGE("range", "برد پرواز", "مسافتی که پهباد پیش از اتمام سوخت می‌پیماید", 120),
     SPEED("speed", "سرعت", "حداکثر سرعت پرواز پهباد", 140),
     GUIDANCE("guidance", "دقت هدایت", "چابکی و نرمی فرمان‌پذیری پهباد", 160),
-    BLAST("blast", "قدرت انفجار", "شعاع اثر سرجنگی در لحظه برخورد", 180),
     ARMOR("armor", "مقاومت", "تعداد ضربه‌های پدافندی قابل تحمل", 200);
 
     fun costFor(nextLevel: Int): Int {
@@ -27,7 +26,6 @@ enum class UpgradeKind(
             RANGE -> ir.shahed.pahpad.core.Fa.num(Math.round(model.rangeAt(lvl))) + " متر"
             SPEED -> ir.shahed.pahpad.core.Fa.num(Math.round(model.speedAt(lvl))) + " کیلومتر/ساعت"
             GUIDANCE -> ir.shahed.pahpad.core.Fa.num(model.guidanceAt(lvl), 1) + "×"
-            BLAST -> ir.shahed.pahpad.core.Fa.num(Math.round(model.blastAt(lvl))) + " متر"
             ARMOR -> ir.shahed.pahpad.core.Fa.num(model.armorAt(lvl)) + " ضربه"
         }
     }
@@ -46,7 +44,11 @@ object DroneModels {
         private val guidanceMul: Float,
         private val blastMul: Float,
         private val armorBonus: Int,
-        val hasEcm: Boolean
+        val hasEcm: Boolean,
+        /** سقف ارتقای مقاومت این مدل — از دستور کاربر */
+        val armorCap: Int,
+        /** سقف ارتقای برد/سرعت/هدایت این مدل — «محدودتر» از ۱۰ */
+        val techCap: Int
     ) {
         fun rangeAt(level: Int) = DroneModels.anchored(level, 1200f, 1900f, 2800f) * rangeMul
         fun speedAt(level: Int) = DroneModels.anchored(level, 150f, 250f, 400f) * speedMul
@@ -54,6 +56,9 @@ object DroneModels {
         fun blastAt(level: Int) = DroneModels.anchored(level, 18f, 30f, 45f) * blastMul
         fun armorAt(level: Int): Int =
             (Math.round(DroneModels.anchored(level, 1f, 3f, 5f)) + armorBonus).coerceAtLeast(1)
+
+        /** سقف سطح مجاز برای این نوع ارتقا روی این بدنه */
+        fun maxLevel(kind: UpgradeKind): Int = if (kind == UpgradeKind.ARMOR) armorCap else techCap
     }
 
     /** درون‌یابی خطی بین سه لنگر سطح ۱ ، ۵ و ۱۰ */
@@ -71,7 +76,8 @@ object DroneModels {
             tagline = "پهباد پایه؛ سبک، چابک و مناسب آموزش",
             color = Theme.MINT,
             rangeMul = 1.0f, speedMul = 1.0f, guidanceMul = 1.0f, blastMul = 1.0f,
-            armorBonus = 0, hasEcm = false
+            armorBonus = 0, hasEcm = false,
+            armorCap = 2, techCap = 4
         ),
         Model(
             id = "shahed136",
@@ -80,7 +86,8 @@ object DroneModels {
             tagline = "برد بیشتر و سرعت بالاتر برای ماموریت‌های دور",
             color = Theme.AMBER,
             rangeMul = 1.35f, speedMul = 1.20f, guidanceMul = 1.05f, blastMul = 1.15f,
-            armorBonus = 1, hasEcm = false
+            armorBonus = 1, hasEcm = false,
+            armorCap = 3, techCap = 5
         ),
         Model(
             id = "shahed238",
@@ -89,7 +96,8 @@ object DroneModels {
             tagline = "سرجنگی سنگین همراه با مقابله با جنگ الکترونیک",
             color = Theme.BLUE,
             rangeMul = 1.45f, speedMul = 1.55f, guidanceMul = 1.15f, blastMul = 1.45f,
-            armorBonus = 1, hasEcm = true
+            armorBonus = 1, hasEcm = true,
+            armorCap = 3, techCap = 6
         ),
         Model(
             id = "shahedx",
@@ -98,7 +106,8 @@ object DroneModels {
             tagline = "نسخه فوق پیشرفته با تمام قابلیت‌ها",
             color = Theme.VIOLET,
             rangeMul = 1.8f, speedMul = 1.7f, guidanceMul = 1.35f, blastMul = 1.7f,
-            armorBonus = 2, hasEcm = true
+            armorBonus = 2, hasEcm = true,
+            armorCap = 4, techCap = 7
         )
     )
 

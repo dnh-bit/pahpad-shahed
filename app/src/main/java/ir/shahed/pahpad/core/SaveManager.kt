@@ -152,11 +152,14 @@ class SaveManager(context: Context) {
         return totalStars >= d.requiredStars
     }
 
-    fun upgradeLevel(droneId: String, kind: UpgradeKind): Int =
-        sp.getInt("up_${droneId}_${kind.key}", 1).coerceIn(1, 10)
+    fun upgradeLevel(droneId: String, kind: UpgradeKind): Int {
+        val cap = DroneModels.byId(droneId)?.maxLevel(kind) ?: 1
+        return sp.getInt("up_${droneId}_${kind.key}", 1).coerceIn(1, cap)
+    }
 
     fun setUpgradeLevel(droneId: String, kind: UpgradeKind, level: Int) {
-        sp.edit().putInt("up_${droneId}_${kind.key}", level.coerceIn(1, 10)).apply()
+        val cap = DroneModels.byId(droneId)?.maxLevel(kind) ?: 1
+        sp.edit().putInt("up_${droneId}_${kind.key}", level.coerceIn(1, cap)).apply()
     }
 
     // ------------------------------------------------------------ حالت‌های ویژه

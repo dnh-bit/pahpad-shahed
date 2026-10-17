@@ -164,12 +164,12 @@ class Vehicles(private val context: Context) {
     /** پرتابگر متحرک موشک زمین‌به‌هوا با چهار لانچر شیب‌دار. */
     fun samLauncher(
         rig: Rig, x: Float, z: Float, bodyYaw: Float, aimYaw: Float, aimPitch: Float,
-        unit: Float, alive: Boolean, detail: Int
+        unit: Float, alive: Boolean, detail: Int, y: Float = 0f
     ) {
         val dead = !alive
         val body = skin(dead, OLIVE)
         val hide = skinTex(dead, camo)
-        rig.place(x, 0f, z, bodyYaw, unit)
+        rig.place(x, y, z, bodyYaw, unit)
         // شاسی ۸×۸
         rig.taper(0f, 0.90f, 0f, 1.55f, 5.40f, 1.42f, 5.10f, 0.95f, body, hide)
         rig.box(0f, 1.85f, 3.05f, 2.70f, 1.35f, 2.30f, Theme.shade(body, 1.04f), hide)
@@ -191,7 +191,7 @@ class Vehicles(private val context: Context) {
 
         // --- لانچر: چرخش افقی + زاویه‌ی ارتفاع
         val elev = aimPitch.coerceIn(0.18f, 1.15f)
-        rig.place(x, 0f, z, aimYaw, unit)
+        rig.place(x, y, z, aimYaw, unit)
         rig.box(0f, 1.85f, -1.30f, 2.30f, 0.70f, 2.60f, Theme.shade(body, 0.95f), hide)
         val baseY = 2.55f
         val len = 6.9f
@@ -218,12 +218,12 @@ class Vehicles(private val context: Context) {
     /** توپ پدافند خودکشیده با رادار جست‌وجو و دو لوله‌ی ۳۵ میلی‌متری. */
     fun aaGun(
         rig: Rig, x: Float, z: Float, bodyYaw: Float, aimYaw: Float, aimPitch: Float,
-        unit: Float, alive: Boolean, flash: Float, detail: Int
+        unit: Float, alive: Boolean, flash: Float, detail: Int, y: Float = 0f
     ) {
         val dead = !alive
         val body = skin(dead, OLIVE)
         val hide = skinTex(dead, camo)
-        rig.place(x, 0f, z, bodyYaw, unit)
+        rig.place(x, y, z, bodyYaw, unit)
         for (s in -1..1 step 2) {
             rig.box(s * 1.42f, 0f, 0f, 0.56f, 0.98f, 6.20f, skin(dead, TRACK), skinTex(dead, trackTex))
             if (detail == 0) {
@@ -238,7 +238,7 @@ class Vehicles(private val context: Context) {
         rig.wedge(0f, 1.40f, 2.10f, 2.90f, 1.60f, 0.18f, 0.70f, body, hide)
 
         // --- برجک چرخان
-        rig.place(x, 0f, z, aimYaw, unit)
+        rig.place(x, y, z, aimYaw, unit)
         rig.taper(0f, 1.40f, -0.40f, 1.45f, 1.70f, 1.20f, 1.45f, 1.25f, body, hide)
         // رادار جست‌وجوی چرخان روی سقف برجک
         rig.disc(0f, 2.72f, -1.30f, 0f, 0.42f, -0.90f, 1.05f, 9, skin(dead, PALE))
