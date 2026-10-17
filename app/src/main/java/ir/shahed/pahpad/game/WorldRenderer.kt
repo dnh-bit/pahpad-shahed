@@ -73,8 +73,8 @@ class WorldRenderer(private val gfxContext: Context) {
      * پس گذر از مرز هرگز پاپ‌کردن ایجاد نمی‌کند.
      */
     private val winStates = java.util.IdentityHashMap<Any, Int>()
-    private const val WIN_ENTER_PX = 9f
-    private const val WIN_EXIT_PX = 7f
+    private val WIN_ENTER_PX = 9f
+    private val WIN_EXIT_PX = 7f
 
     private fun windowLodEnabled(key: Any, windowPx: Float): Boolean {
         var s = winStates[key] ?: if (windowPx >= WIN_ENTER_PX) 1 else 0
