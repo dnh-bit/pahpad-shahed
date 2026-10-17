@@ -35,14 +35,15 @@ class Target(
  * kind نوع سامانه را مشخص می‌کند و رندرکننده بر همان اساس مدل سه‌بعدی می‌سازد.
  */
 class AASite(
-    val x: Float,
-    val z: Float,
     val range: Float,
     val reload: Float,
     val kind: Int = KIND_SAM,
     /** جهت ثابت شاسی؛ فقط برجک/لانچر می‌چرخد */
     val bodyYaw: Float = 0f
 ) {
+    /** x و z متغیرند تا پدافند روی پشت‌بام ساختمان جابه‌جا شود */
+    var x: Float = 0f
+    var z: Float = 0f
     var cooldown = 1.2f
     var alive = true
     var barrelYaw = 0f
@@ -316,7 +317,9 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
             val reload = ((if (sam) 2.6f else 1.9f) - 0.16f * level.difficulty).coerceAtLeast(1.0f)
             val bodyYaw = Math.atan2(-x.toDouble(), (distance * 0.2 - z).toDouble()).toFloat() +
                 (rnd.nextFloat() - 0.5f) * 0.7f
-            aaSites.add(AASite(x, z, range, reload, kind, bodyYaw))
+            val site = AASite(range, reload, kind, bodyYaw)
+            site.x = x; site.z = z
+            aaSites.add(site)
         }
         for (i in 0 until level.radarZones) {
             val z = distance * (0.55f + 0.35f * i)
