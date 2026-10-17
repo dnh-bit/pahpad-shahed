@@ -3,6 +3,7 @@ package ir.shahed.pahpad.screens
 import android.graphics.Canvas
 import android.graphics.Paint
 import ir.shahed.pahpad.MainActivity
+import ir.shahed.pahpad.core.AdManager
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.Fa
 import ir.shahed.pahpad.core.Theme
@@ -19,6 +20,21 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
     private val droneButtons = ArrayList<UiButton>()
     private val upgradeButtons = ArrayList<UiButton>()
     private val back = UiButton("بازگشت", Theme.TEXT_DIM) { game.show(MainMenuScreen(game)) }
+
+    /** پاداش ویدیویی داخل فروشگاه — تماشای ویدیو → سکه رایگان (تمدید مهمات/سوخت) */
+    private val bonus = UiButton("تماشای ویدیو ← ۱۰ سکه", Theme.VIOLET) { claimBonus() }
+    private var bonusClaimed = false
+
+    private fun claimBonus() {
+        if (bonusClaimed) return
+        AdManager.showRewarded(game) {
+            bonusClaimed = true
+            bonus.visible = false
+            save.addCoins(10)
+            audio.beep(880f, 140, 0.45f)
+            say("+۱۰ سکه هدیهٔ ویدیو اضافه شد ✦")
+        }
+    }
     private var message: String? = null
     private var messageTime = 0f
 
@@ -45,6 +61,7 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
         buttons.addAll(droneButtons)
         buttons.addAll(upgradeButtons)
         buttons.add(back)
+        buttons.add(bonus)
         refresh()
     }
 
@@ -114,9 +131,12 @@ class ShopScreen(game: MainActivity) : BaseScreen(game) {
             uy += dp(54f)
         }
         back.set(dp(20f), h - dp(52f), dp(110f), dp(40f))
+        // پاداش ویدیویی: خط پایین کنار بک‌باتم، بدون برخورد با لیست ارتقاها
+        bonus.set(dp(146f), h - dp(52f), dp(172f), dp(40f))
     }
 
     override fun update(dt: Float) {
+        bonus.visible = !bonusClaimed && AdManager.isRewardedAdReady()
         if (messageTime > 0f) {
             messageTime -= dt
             if (messageTime <= 0f) message = null

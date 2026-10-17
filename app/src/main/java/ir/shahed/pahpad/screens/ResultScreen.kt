@@ -2,7 +2,9 @@ package ir.shahed.pahpad.screens
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.widget.Toast
 import ir.shahed.pahpad.MainActivity
+import ir.shahed.pahpad.core.AdManager
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.Fa
 import ir.shahed.pahpad.core.Theme
@@ -41,6 +43,21 @@ class ResultScreen(
     }
     private val menu = UiButton("منوی اصلی", Theme.TEXT_DIM) { game.show(MainMenuScreen(game)) }
 
+    /** پاداش ویدیویی فقط برای ماموریت ناموفق — بونوس سکه برای تمدید مهمات/سوخت */
+    private val bonus = UiButton("تماشای ویدیو ← ۱۰ سکه", Theme.VIOLET) { claimBonus() }
+    private var bonusClaimed = false
+
+    private fun claimBonus() {
+        if (bonusClaimed) return
+        AdManager.showRewarded(game) {
+            bonusClaimed = true
+            bonus.visible = false
+            save.addCoins(10)
+            audio.beep(880f, 140, 0.45f)
+            Toast.makeText(game, "۱۰ سکه هدیه اضافه شد ✦", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private var revealed = 0
     private var revealTimer = 0f
 
@@ -55,7 +72,7 @@ class ResultScreen(
     private val steps = rules.size + rows.size
 
     init {
-        buttons.addAll(listOf(next, again, menu))
+        buttons.addAll(listOf(next, again, menu, bonus))
         next.visible = res.success && nextLevel != null
         if (!next.visible) next.enabled = false
     }
@@ -66,19 +83,22 @@ class ResultScreen(
     }
 
     override fun layoutUi(w: Float, h: Float) {
+        val shown = ArrayList<UiButton>()
+        if (next.visible) shown.add(next)
+        shown.add(again)
+        shown.add(menu)
+        if (bonus.visible) shown.add(bonus)
         val bw = w * 0.22f
         val bh = dp(44f)
         val y = h - dp(58f)
-        val total = if (next.visible) 3 else 2
         val gap = dp(10f)
-        val startX = (w - (bw * total + gap * (total - 1))) / 2f
-        var i = 0
-        if (next.visible) { next.set(startX, y, bw, bh); i++ }
-        again.set(startX + i * (bw + gap), y, bw, bh); i++
-        menu.set(startX + i * (bw + gap), y, bw, bh)
+        val startX = (w - (bw * shown.size + gap * (shown.size - 1))) / 2f
+        for ((i, b) in shown.withIndex()) b.set(startX + i * (bw + gap), y, bw, bh)
     }
 
     override fun update(dt: Float) {
+        // دکمهٔ پاداش فقط دو شرط: ماموریت ناموفق + ویدیویی باکش
+        bonus.visible = !bonusClaimed && !res.success && AdManager.isRewardedAdReady()
         revealTimer += dt
         if (revealTimer > 0.22f && revealed < steps) {
             revealed++

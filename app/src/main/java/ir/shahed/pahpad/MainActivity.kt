@@ -7,11 +7,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import ir.shahed.pahpad.core.AdManager
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.GameAudio
 import ir.shahed.pahpad.core.Gfx
 import ir.shahed.pahpad.core.SaveManager
 import ir.shahed.pahpad.core.Theme
+import ir.shahed.pahpad.screens.ResultScreen
 import ir.shahed.pahpad.screens.SplashScreen
 
 /**
@@ -36,11 +38,24 @@ class MainActivity : Activity() {
         setContentView(root)
         immersive()
 
+        // تبلیغات (تپسل‌پلاس) — یک بار؛ پیش‌کش خارج از مسیر رندر
+        AdManager.setup(this)
+
         show(SplashScreen(this))
     }
 
     /** نمایش یک صفحه‌ی جدید و آزادسازی صفحه‌ی قبلی */
     fun show(screen: BaseScreen) {
+        // پایان ماموریت → خروج از صفحهٔ نتیجه: اینترستيشال با سقف نمایش،
+        // سپس جابه‌جایی صفحه؛ در آفلاین/عدم آمادگی مستقیم جابه‌جا می‌شود.
+        if (current is ResultScreen && screen !is ResultScreen) {
+            AdManager.maybeShowInterstitial(this) { reallyShow(screen) }
+        } else {
+            reallyShow(screen)
+        }
+    }
+
+    private fun reallyShow(screen: BaseScreen) {
         current?.let {
             it.stopLoop()
             it.onExit()
