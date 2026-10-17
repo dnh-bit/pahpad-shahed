@@ -30,12 +30,14 @@ object AdManager {
     // ────────────────────────────────────────────────────────────────────────
     // ⚠️ TODO(Release): این سه مقدار «کلید تست رسمی تپسل» هستند. قبل از ریلیز
     //    سری تولیدی، کلیدهای اپ و زون‌های واقعی از پنل app.tapsell.ir بگذار.
+    //    (کلید تست = کلید رسمی نمونهٔ گیت‌هاب تپسل‌پلاس؛ زون‌های تست هم همان‌اند)
     // ────────────────────────────────────────────────────────────────────────
-    private const val APP_KEY = "alsoatsrtrotpqacegkehkaiieckldhrgsbspqtgqnbrsfasabstesbelligs"
+    private const val APP_KEY = "alsoatsrtrotpqacegkehkaiieckldhrgsbspqtgqnbrrfccrtbdomgjtahflchkqtqosa"
     private const val ZONE_INTERSTITIAL = "5cfaa942e8d17f0001ffb292"
     private const val ZONE_REWARDED = "5cfaa802e8d17f0001ffb28e"
 
     private var initialized = false
+    private var initAttempted = false
     private var interstitialId: String? = null
     private var rewardedId: String? = null
 
@@ -49,9 +51,11 @@ object AdManager {
 
     /** یک بار در onCreate صدا زده می‌شود؛ پیش‌کَش بلافاصله بعد از init موفق. */
     fun setup(activity: Activity) {
+        initAttempted = true
         TapsellPlus.initialize(activity, APP_KEY, object : TapsellPlusInitListener {
             override fun onInitializeSuccess(adNetworks: AdNetworks) {
                 initialized = true
+                TapsellPlus.setDebugMode(Log.DEBUG)
                 Log.d(TAG, "Tapsell initialized (${adNetworks.name})")
                 // پیش‌کش در پس‌زمینه — خارج از مسیر رندر
                 preloadInterstitial(activity)
@@ -66,6 +70,15 @@ object AdManager {
     }
 
     fun isRewardedAdReady(): Boolean = initialized && rewardedId != null
+
+    /** وضعیت مختصر برای خطِ «شبکهٔ تبلیغ» در تنظیمات */
+    fun status(): String = when {
+        initialized && rewardedId != null && interstitialId != null -> "آماده ✓"
+        initialized && (rewardedId != null || interstitialId != null) -> "اتصال موفق — کش شدن…"
+        initialized -> "اتصال موفق — هیچ ویدیویی کش نشد"
+        initAttempted -> "اتصال ناموفق (اینترنت؟)"
+        else -> "در حال اتصال…"
+    }
 
     // ───────────────────────────── پیش‌کش ──────────────────────────────────
 

@@ -33,6 +33,13 @@ class MainActivity : Activity() {
         save = SaveManager(this)
         audio = GameAudio(this, save)
 
+        // ذخیرهٔ آخرین کرش برای نمایش در تنظیمات (هیچ ارسالی؛ فقط محلی)
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            save.reportCrash(t, e)
+            defaultHandler?.uncaughtException(t, e)
+        }
+
         root = FrameLayout(this)
         root.setBackgroundColor(Theme.BG)
         setContentView(root)

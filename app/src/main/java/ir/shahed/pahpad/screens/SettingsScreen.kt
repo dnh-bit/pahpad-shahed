@@ -3,6 +3,7 @@ package ir.shahed.pahpad.screens
 import android.graphics.Canvas
 import android.graphics.Paint
 import ir.shahed.pahpad.MainActivity
+import ir.shahed.pahpad.core.AdManager
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.Theme
 import ir.shahed.pahpad.core.UiButton
@@ -77,8 +78,12 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
             b.set(dp(24f) + col * (bw + dp(14f)), y, bw, bh)
             if (col == cols - 1) y += bh + dp(12f)
         }
+        gridBottom = y
         back.set(dp(24f), h - dp(56f), dp(110f), dp(42f))
     }
+
+    /** انتهای ستون تنظیمات — برای جای‌گذاری پنل گزارش خطا در render */
+    private var gridBottom = 0f
 
     override fun render(c: Canvas) {
         ui.background(c, vw, vh)
@@ -87,5 +92,28 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
         drawButtons(c)
         ui.text(c, "کنترل تیلت به حس‌گر شتاب‌سنج گوشی نیاز دارد. اگر پرواز لرزان بود، جوی‌استیک را انتخاب کنید.",
             vw / 2f, vh - dp(36f), dp(11f), Theme.TEXT_FAINT)
+        ui.text(c, "شبکهٔ تبلیغ: " + AdManager.status(),
+            vw / 2f, vh - dp(18f), dp(10.5f), Theme.TEXT_FAINT)
+        drawCrashReport(c)
+    }
+
+    /**
+     * پنل «آخرین خطا»: هر کرشی که بازی بکند اینجا ذخیره و نمایش داده می‌شود تا
+     * با اسکرین‌شات قابل گزارش باشد (بازی ارسال خطا از راه دور ندارد).
+     */
+    private fun drawCrashReport(c: Canvas) {
+        val crash = save.lastCrash
+        if (crash.isEmpty()) return
+        val ph = dp(58f)
+        val y = (gridBottom + dp(8f)).coerceAtMost(vh - dp(96f))
+        ui.panel(c, dp(24f), y, vw - dp(48f), ph, Theme.withAlpha(Theme.RED, 0.08f), Theme.withAlpha(Theme.RED, 0.35f), dp(10f))
+        ui.text(c, "آخرین خطا — لطفاً اسکرین‌شات این پنل را بفرستید",
+            dp(24f) + (vw - dp(48f)) - dp(12f), y + dp(13f), dp(10f), Theme.RED, bold = true,
+            align = Paint.Align.RIGHT)
+        var ly = y + dp(30f)
+        for (line in crash.lines().filter { it.isNotBlank() }.take(2)) {
+            ui.text(c, line.take(58), dp(36f), ly, dp(8.5f), Theme.TEXT_FAINT, align = Paint.Align.LEFT)
+            ly += dp(11f)
+        }
     }
 }

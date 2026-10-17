@@ -47,6 +47,47 @@ class SaveManager(context: Context) {
         return true
     }
 
+    // ------------------------------------------------------------ گزارش کرش
+
+    /**
+     * آخرین کرش را در ذخیره‌ساز می‌نویسد تا کاربر بتواند در تنظیمات ببیند و
+     * اسکرین‌شات بفرستد (این بازی اینترنت گزارش-خطا ندارد، پس خودکار انجام می‌شود).
+     */
+    fun reportCrash(thread: Thread, error: Throwable) {
+        try {
+            val sb = StringBuilder()
+            sb.append(error.javaClass.name).append(": ").append(error.message ?: "").append('\n')
+            for (s in error.stackTrace.take(10)) {
+                sb.append("  at ").append(s.className)
+                    .append('.').append(s.methodName)
+                    .append(':').append(s.lineNumber).append('\n')
+            }
+            var cause = error.cause
+            var depth = 0
+            while (cause != null && depth < 2) {
+                sb.append("Caused by: ").append(cause.javaClass.name).append(": ")
+                    .append(cause.message ?: "").append('\n')
+                for (s in cause.stackTrace.take(5)) {
+                    sb.append("  at ").append(s.className)
+                        .append('.').append(s.methodName)
+                        .append(':').append(s.lineNumber).append('\n')
+                }
+                cause = cause.cause
+                depth++
+            }
+            sp.edit().putString("last_crash", sb.toString().take(1200)).apply()
+        } catch (_: Throwable) {
+            // گزارش‌گیری هرگز نباید جای crash handler اصلی را بگیرد
+        }
+    }
+
+    val lastCrash: String
+        get() = sp.getString("last_crash", "") ?: ""
+
+    fun clearLastCrash() {
+        sp.edit().remove("last_crash").apply()
+    }
+
     // ------------------------------------------------------------ مراحل
 
     fun starsOf(levelId: String): Int = sp.getInt("stars_$levelId", 0)
