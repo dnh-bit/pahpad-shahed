@@ -152,6 +152,9 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
     val radars = ArrayList<RadarZone>()
     val ewZones = ArrayList<EwZone>()
     val props = ArrayList<Prop>()
+
+    /** ساختمان‌هایی که پدافند روی پشت‌بامشان نشسته و باید حفظ شوند */
+    private val hostedRoofDefenses = HashSet<Prop>()
     val bonuses = ArrayList<Bonus>()
 
     val launchHeight = 80f
@@ -201,13 +204,9 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
         }
     }
 
-    /**
-     * در ماموریت‌های شهریِ سخت، برخی پدافندها روی پشت‌بام بلندترین ساختمانِ
+    /** در ماموریت‌های شهریِ سخت، برخی پدافندها روی پشت‌بام بلندترین ساختمانِ
      * نزدیک می‌نشینند (از دستور کاربر برای مراحل آخر). ساختمان میزبان در
-     * [hostedRoofDefenses] نگه داشته می‌شود تا پاک‌سازی اهداف آن را نسوزاند.
-     */
-    private val hostedRoofDefenses = HashSet<Prop>()
-
+     * [hostedRoofDefenses] نگه داشته می‌شود تا پاک‌سازی اهداف آن را نسوزاند. */
     private fun placeRoofDefenses() {
         if (level.difficulty < 4) return
         if (level.env != Env.URBAN && level.env != Env.SPECIAL) return
