@@ -190,9 +190,9 @@ class SaveManager(context: Context) {
         get() = sp.getBoolean("vibrate", true)
         set(v) = sp.edit().putBoolean("vibrate", v).apply()
 
-    /** true = ژیروسکوپ / تیلت گوشی ، false = جوی‌استیک مجازی */
+    /** true = ژیروسکوپ / تیلت گوشی ، false = جوی‌استیک مجازی — پیش‌فرض جوی‌استیک */
     var tiltControl: Boolean
-        get() = sp.getBoolean("tilt", true)
+        get() = sp.getBoolean("tilt", false)
         set(v) = sp.edit().putBoolean("tilt", v).apply()
 
     var showHints: Boolean

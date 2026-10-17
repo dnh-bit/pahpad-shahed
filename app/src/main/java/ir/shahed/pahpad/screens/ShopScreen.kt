@@ -201,6 +201,20 @@ class ShopScreen(
     private fun r_visible(r: RectF, top: Float, bottom: Float): Boolean =
         r.top >= top - dp(4f) && r.bottom <= bottom + dp(4f)
 
+    /** عرض دورهٔ مجاز متن توصیف داخل ردیف ارتقا */
+    private fun availDescW(rx: Float, rw: Float, descX: Float): Float =
+        ((rx + rw) - dp(14f) - descX).coerceAtLeast(dp(40f))
+
+    /** متن را تا حداکثر دو خط در محدودهٔ موجود می‌کشد تا از پنل بیرون نزند */
+    private fun drawWrapped(c: Canvas, text: String, x: Float, y: Float, maxW: Float, size: Float) {
+        val lines = ui.wrap(text, size, maxW.coerceAtLeast(dp(40f))).take(2)
+        var ly = y
+        for (l in lines) {
+            ui.text(c, l, x, ly, size, Theme.TEXT_FAINT, align = Paint.Align.LEFT)
+            ly += dp(11f)
+        }
+    }
+
     override fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean {
         if (::listRect.isInitialized && listRect.contains(x, y)) {
             dragPointer = pointerId
@@ -304,11 +318,11 @@ class ShopScreen(
                 c.drawRect(x0, uy + dp(28f), x0 + pipW, uy + dp(36f), ui.fill)
             }
             if (!maxed) {
-                ui.text(c, k.description, pipStart + cap * (pipW + pipGap) + dp(6f), uy + dp(16f), dp(9.5f),
-                    Theme.TEXT_FAINT, align = Paint.Align.LEFT)
+                drawWrapped(c, k.description, pipStart + cap * (pipW + pipGap) + dp(6f), uy + dp(12f),
+                    availDescW(rx, rw, pipStart + cap * (pipW + pipGap) + dp(6f)), dp(9.5f))
             } else {
-                ui.text(c, "سقف این بدنه در این قابلیت", pipStart + cap * (pipW + pipGap) + dp(6f), uy + dp(16f),
-                    dp(9.5f), Theme.TEXT_FAINT, align = Paint.Align.LEFT)
+                drawWrapped(c, "سقف این بدنه در این قابلیت", pipStart + cap * (pipW + pipGap) + dp(6f), uy + dp(12f),
+                    availDescW(rx, rw, pipStart + cap * (pipW + pipGap) + dp(6f)), dp(9.5f))
             }
             uy += rowH + dp(6f)
         }
