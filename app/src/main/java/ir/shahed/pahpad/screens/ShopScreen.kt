@@ -193,7 +193,7 @@ class ShopScreen(
     }
 
     private fun computeContent(): Float {
-        var y = dp(24f)                      // سربرگ نام پهباد
+        var y = dp(40f)                      // سربرگ: نام + شعار (دو خط)
         y += labelHV                          // عنوان «آشیانه»
         y += DroneModels.all.size * (cardH() + gapV)
         y += sectionGapV
@@ -204,7 +204,7 @@ class ShopScreen(
 
     private fun placeAll() {
         var y = 0f
-        headerY = y; y += dp(24f)
+        headerY = y; y += dp(40f)
         hangarLabelY = y; y += labelHV
 
         for ((i, b) in droneButtons.withIndex()) {
@@ -298,7 +298,15 @@ class ShopScreen(
         // ── سربرگ
         ui.text(c, selected.name, viewport.right, base + headerY + dp(14f), dp(14.5f),
             selected.color, bold = true, align = Paint.Align.RIGHT)
-        ui.text(c, selected.tagline, viewport.right, base + headerY + dp(27f), dp(9.5f),
+        var tag = selected.tagline
+        val tagMaxW = viewport.width() - dp(16f)
+        var tagSize = dp(9.5f)
+        while (ui.measure(tag, tagSize) > tagMaxW && tagSize > dp(8f)) tagSize -= dp(0.5f)
+        if (ui.measure(tag, tagSize) > tagMaxW) {
+            while (tag.length > 8 && ui.measure(tag + "…", tagSize) > tagMaxW) tag = tag.dropLast(1)
+            tag += "…"
+        }
+        ui.text(c, tag, viewport.right, base + headerY + dp(30f), tagSize,
             Theme.TEXT_DIM, align = Paint.Align.RIGHT)
 
         // ── آشیانه
