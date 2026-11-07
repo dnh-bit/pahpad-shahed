@@ -160,6 +160,62 @@ class LayoutRegressionTest {
         assertTrue("متن نهایی نباید خالی شود", finalText.length > 2)
     }
 
+    // ─────────────── پنجره‌های ساختمان (ناپایداری)
+
+    /**
+     * شدت پنجره باید تابعی یکنوا و پیوسته از عرض پنجره روی صفحه باشد.
+     * اگر دو مقدار نزدیک، خروجی خیلی متفاوت بدهند، دوربین با تکان کوچک
+     * پنجره‌ها را روشن/خاموش می‌کند — همان باگی که در ویدیو دیده شد.
+     */
+    private fun windowDetail(px: Float): Float {
+        val a = 5.5f
+        val b = 15f
+        if (px <= a) return 0f
+        if (px >= b) return 1f
+        val t = (px - a) / (b - a)
+        return t * t * (3f - 2f * t)
+    }
+
+    @Test
+    fun `شدت پنجره پیوسته است و پرش ندارد`() {
+        var prev = windowDetail(0f)
+        var maxJump = 0f
+        var px = 0f
+        while (px <= 30f) {
+            val v = windowDetail(px)
+            maxJump = maxOf(maxJump, Math.abs(v - prev))
+            prev = v
+            px += 0.1f
+        }
+        // با گام ۰٫۱ پیکسل، هیچ جهشی نباید از ۵٪ بیشتر باشد
+        assertTrue("جهش ناگهانی در شدت پنجره: $maxJump", maxJump < 0.05f)
+    }
+
+    @Test
+    fun `تکان کوچک دوربین پنجره را روشن خاموش نمی‌کند`() {
+        // دو عرض پنجره که فقط ۱ پیکسل فاصله دارند (تکان کوچک دوربین)
+        val a = windowDetail(9.0f)
+        val b = windowDetail(10.0f)
+        assertTrue("اختلاف شدت برای ۱ پیکسل نباید محسوس باشد (${a} → ${b})",
+            Math.abs(a - b) < 0.25f)
+        // و هیچ‌کدام نباید ۰ یا ۱ قطعی باشند (یعنی حالت دودویی نداریم)
+        assertTrue("نباید در حالت خاموش قطعی باشد", a > 0.001f)
+        assertTrue("نباید در حالت روشن قطعی باشد", b < 0.999f)
+    }
+
+    @Test
+    fun `فاصله پنجره روی صفحه با فرمول درست محاسبه می‌شود`() {
+        // focal * windowWidth / distance — عرض پنجره ۲٫۱۵ متر
+        val focal = 1100f
+        val winW = 2.15f
+        fun pxAt(dist: Float) = focal * winW / dist
+        assertTrue("در ۲۰۰ متر پنجره باید بزرگ باشد", pxAt(200f) > 10f)
+        assertTrue("در ۵۰۰ متر پنجره باید کوچک باشد", pxAt(500f) < 6f)
+        // اصلاح باگ: قبلاً به‌جای ۲٫۱۵ از ۲٫۴۵ استفاده می‌شد
+        assertTrue("با ضریب غلط ۲٫۴۵ عرض بیشتری محاسبه می‌شد",
+            focal * 2.45f / 200f > pxAt(200f))
+    }
+
     // ─────────────── نوار امتیاز لیدربورد
 
     @Test

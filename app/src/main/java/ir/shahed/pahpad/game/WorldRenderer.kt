@@ -61,7 +61,6 @@ class WorldRenderer(private val gfxContext: Context) {
             else -> 1f
         }
         lodStates.clear()
-        winStates.clear()
     }
 
     /** افکت‌های دود/جرقه خاموش شده‌اند؟ */
@@ -94,16 +93,32 @@ class WorldRenderer(private val gfxContext: Context) {
      * پنجره‌های مجزا فقط وقتی بزرگ‌اند رسم می‌شوند؛ زیرشان همیشه نوار شیشه هست،
      * پس گذر از مرز هرگز پاپ‌کردن ایجاد نمی‌کند.
      */
-    private val winStates = java.util.IdentityHashMap<Any, Int>()
-    private val WIN_ENTER_PX = 9f
-    private val WIN_EXIT_PX = 7f
+    /**
+     * شدت نمایش «پنجرهٔ مجزا» بر اساس عرض واقعی پنجره روی صفحه.
+     *
+     * چرا دیگر حالت روشن/خاموش نداریم:
+     *   هر ساختمان همیشه «نوار شیشه» را روی هر رخ می‌کشد (یک نوار افقی در هر
+     *   طبقه). پنجره‌های مجزا فقط جزئیات روی همان نوار هستند. اگر پنجرهٔ مجزا
+     *   را با رنگِ دقیقاً برابر رنگ نوار بکشیم، عملاً دیده نمی‌شود.
+     *
+     *   پس به‌جای آستانهٔ بولی + هیسترزیس، رنگ پنجره را به‌تدریج از «رنگ نوار»
+     *   به «رنگ پنجره» می‌بریم. در هر فاصله‌ای که باشیم، تغییر یک‌سویه و
+     *   نامحسوس است — هیچ روشن/خاموش شدنی وجود ندارد که دوربین بتواند
+     *   با تکان کوچک روی آن بلرزد.
+     *
+     * باگ قبلی: آستانه‌ها ۹ و ۷ پیکسل بودند، ولی ورودی windowPx در واقع
+     * عرض *ساختمان* تقسیم بر فاصله بود (عامل ۲٫۴۵ به‌جای ۲٫۱۵). فاصلهٔ
+     * مرده ۰٫۹ پیکسل شد و پنجره‌ها در پرواز مدام پرش می‌کردند.
+     */
+    private val WIN_FADE_IN_PX = 5.5f    // زیر این: پنجرهٔ مجزا کاملاً محو
+    private val WIN_FADE_FULL_PX = 15f   // بالای این: پنجرهٔ مجزا کامل
 
-    private fun windowLodEnabled(key: Any, windowPx: Float): Boolean {
-        var s = winStates[key] ?: if (windowPx >= WIN_ENTER_PX) 1 else 0
-        if (s == 0 && windowPx >= WIN_ENTER_PX) s = 1
-        if (s == 1 && windowPx <= WIN_EXIT_PX) s = 0
-        winStates[key] = s
-        return s == 1
+    /** ۰ = پنجره دیده نمی‌شود، ۱ = کامل. یکنوا و بدون حالت — پس ناپایدار نیست. */
+    private fun windowDetail(windowPx: Float): Float {
+        if (windowPx <= WIN_FADE_IN_PX) return 0f
+        if (windowPx >= WIN_FADE_FULL_PX) return 1f
+        val t = (windowPx - WIN_FADE_IN_PX) / (WIN_FADE_FULL_PX - WIN_FADE_IN_PX)
+        return t * t * (3f - 2f * t)   // smoothstep: شیب صفر در دو سر
     }
 
     fun update(dt: Float, mission: Mission) {
@@ -158,7 +173,6 @@ class WorldRenderer(private val gfxContext: Context) {
         scene.clear()
         art.clear()
         lodStates.clear()
-        winStates.clear()
         lodWorld = null
     }
 
@@ -171,7 +185,6 @@ class WorldRenderer(private val gfxContext: Context) {
         val world = mission.world
         if (lodWorld !== world) {
             lodStates.clear()
-            winStates.clear()
             lodWorld = world
         }
         look = EnvLook.of(world.level.env)
@@ -210,7 +223,9 @@ class WorldRenderer(private val gfxContext: Context) {
                     scene.box(p.x, 0f, p.z, p.w * .28f, p.h, p.d * .28f, p.color, p.rot)
                 }
                 PropKind.BUILDING -> building(p.x, p.z, p.w, p.h, p.d, p.rot, p.color, false, detail, p,
-                    scene.cam.focal * 2.45f / Math.sqrt(d2.toDouble()).toFloat().coerceAtLeast(1f))
+                    // عرض واقعی یک پنجره (۲٫۱۵ متر) روی صفحه — همان عددی که
+                    // building() با آن تصمیم می‌گیرد پنجرهٔ مجزا بکشد یا نه.
+                    scene.cam.focal * 2.15f / Math.sqrt(d2.toDouble()).toFloat().coerceAtLeast(1f))
             }
         }
 
@@ -405,8 +420,12 @@ class WorldRenderer(private val gfxContext: Context) {
                     }
                 }
             }
-            // ۲) پنجره‌های مجزا + قاب‌ها — فقط وقتی روی صفحه زیادند
-            if (detail <= 1 && winKey != null && windowLodEnabled(winKey, windowPx)) {
+            // ۲) پنجره‌های مجزا + قاب‌ها — با شدت پیوسته، نه روشن/خاموش.
+            //    زیر آستانه، پنجره‌ها رنگِ خود نوار شیشه را می‌گیرند و دیده
+            //    نمی‌شوند؛ بالای آستانه رنگ کامل خودشان را. بین این دو،
+            //    رنگ در هم می‌آمیزد.
+            val winFade = if (detail <= 1 && winKey != null) windowDetail(windowPx) else 0f
+            if (winFade > 0.001f) {
                 val winW = 2.15f
                 val winH = 2.45f
                 val floorH2 = 3.55f
@@ -416,9 +435,13 @@ class WorldRenderer(private val gfxContext: Context) {
                 val seed = (x * 31f + z * 17f).toInt()
                 val phase = ((seed % 7) + 7) % 7
                 val glassHi = Theme.mix(glass, look.upper, .45f)
+                // رنگ پنجره با شدت winFade از رنگ نوار به رنگ کامل می‌رود
+                fun blended(target: Int): Int = if (winFade >= 1f) target else Theme.mix(glass, target, winFade)
+                val litWin = blended(look.windowLit)
+                val glassFaded = blended(glassHi)
+                val frameBase = Theme.shade(color, 0.62f)
+                val frameCol = if (winFade >= 1f) frameBase else Theme.mix(glass, frameBase, winFade)
                 fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % look.litChance) == 0
-                fun glassFor(b: Int, f: Int): Int =
-                    if ((b + f + phase) % 3 == 0) glassHi else glass
                 val baysZ = ((w - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 4)
                 run {
                     val total = baysZ * winW + (baysZ - 1) * gapX
@@ -432,13 +455,16 @@ class WorldRenderer(private val gfxContext: Context) {
                                 if (y1 > usableH - 0.45f) continue
                                 val bi = b + if (side > 0) 10 else 0
                                 if (litWindow(bi, f)) {
-                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, look.windowLit, emissive = true, cullBack = true)
+                                    // در شدت کم، پنجرهٔ روشن هم نباید چشمک بزند
+                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, litWin,
+                                        emissive = winFade > 0.85f, cullBack = true)
                                 } else {
-                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, glassFor(bi, f))
+                                    val g = if ((b + f + phase) % 3 == 0) glassFaded else glass
+                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, g)
                                 }
                                 // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
                                 val fz = zz + side.toFloat() * 0.004f
-                                val frame = Theme.shade(color, 0.62f)
+                                val frame = frameCol
                                 val fh = 0.09f
                                 rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true)
                                 rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true)
@@ -461,11 +487,13 @@ class WorldRenderer(private val gfxContext: Context) {
                                 if (y1 > usableH - 0.45f) continue
                                 val bi = b + if (side > 0) 30 else 20
                                 if (litWindow(bi, f)) {
-                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, look.windowLit, emissive = true, cullBack = true)
+                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, litWin,
+                                        emissive = winFade > 0.85f, cullBack = true)
                                 } else {
-                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, glassFor(bi, f))
+                                    val g = if ((b + f + phase) % 3 == 0) glassFaded else glass
+                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, g)
                                 }
-                                val frame = Theme.shade(color, 0.62f)
+                                val frame = frameCol
                                 val fh = 0.09f
                                 rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frame, cullBack = true)
                                 rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frame, cullBack = true)

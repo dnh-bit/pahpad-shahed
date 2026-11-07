@@ -24,6 +24,9 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
     private var lastFrame = 0L
     private var looping = false
 
+    /** شناسهٔ انگشتی که ناحیهٔ اسکرول‌شونده آن را برداشته (-۱ = هیچ) */
+    private var claimedPointer = -1
+
     /** کش تنظیمات گرافیک: یک‌بار خوانده می‌شود و از setter استفاده می‌کند */
     private var showFpsCached = false
     private var frameCapCached = 1
@@ -166,6 +169,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
                 cancelTouches()
                 // ناحیهٔ اسکرول‌شونده اول حق دارد
                 if (claimsTouch(event.x, event.y)) {
+                    claimedPointer = event.getPointerId(0)
                     return onTouchDown(event.x, event.y, event.getPointerId(0))
                 }
                 val b = findButton(event.x, event.y)
@@ -180,6 +184,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val i = event.actionIndex
                 if (claimsTouch(event.getX(i), event.getY(i))) {
+                    claimedPointer = event.getPointerId(i)
                     return onTouchDown(event.getX(i), event.getY(i), event.getPointerId(i))
                 }
                 val b = findButton(event.getX(i), event.getY(i))
@@ -210,6 +215,12 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 val i = if (event.actionMasked == MotionEvent.ACTION_POINTER_UP) event.actionIndex else 0
+                // اگر این لمس مال ناحیهٔ اسکرول‌شونده بود، دکمه‌ها دخالت نکنند
+                if (event.getPointerId(i) == claimedPointer) {
+                    claimedPointer = -1
+                    onTouchUp(event.getX(i), event.getY(i), event.getPointerId(i))
+                    return true
+                }
                 val b = pressedButton
                 if (b != null && event.getPointerId(i) == buttonPointer) {
                     val hit = b.pressed && b.contains(event.getX(i), event.getY(i))
@@ -246,6 +257,14 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         return null
     }
 
+    /**
+     * آیا onTouchDown این انگشت را برای یک ناحیهٔ اسکرول‌شونده برداشت؟
+     *
+     * اگر بله، BaseScreen هرگز دکمه‌ای زیر آن انگشت را فعال نمی‌کند؛ مدیریت
+     * ضربه کاملاً به صفحه می‌رسد. پیش از این، ACTION_UP دکمه‌ای را که زیر
+     * انگشت بود فعال می‌کرد حتی وقتی صفحه آن لمس را برای اسکرول برداشته
+     * بود — یعنی کشیدن کوتاه روی لیست، ناخواسته یک پهباد را انتخاب می‌کرد.
+     */
     open fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean = true
     open fun onTouchMove(x: Float, y: Float, pointerId: Int) {}
     open fun onTouchUp(x: Float, y: Float, pointerId: Int) {}
