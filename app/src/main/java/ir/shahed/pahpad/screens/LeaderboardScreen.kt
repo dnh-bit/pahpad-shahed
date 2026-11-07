@@ -91,11 +91,27 @@ class LeaderboardScreen(game: MainActivity) : BaseScreen(game) {
             val best = save.bestScoreOf(l.id)
             val stars = save.starsOf(l.id)
             ui.panel(c, lx, y, lw, dp(34f), Theme.withAlpha(Theme.PANEL, 0.95f), Theme.LINE, dp(8f))
-            ui.text(c, Fa.num(l.code) + " · " + l.title, lx + lw - dp(12f), y + dp(17f), dp(12f),
-                if (best > 0) Theme.TEXT else Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
-            ui.stars(c, lx + dp(120f), y + dp(17f), dp(6f), stars)
-            ui.text(c, if (best > 0) Fa.grouped(best) else "—", lx + dp(14f), y + dp(17f), dp(12f),
+            // سه بخش با عرض مشخص: امتیاز (چپ) | عنوان (وسط) | ستاره‌ها (راست).
+            // قبلاً هر سه با آفست ثابت رسم می‌شدند و روی عنوان‌های بلند
+            // روی هم می‌افتادند.
+            val scoreText = if (best > 0) Fa.grouped(best) else "—"
+            val scoreW = dp(56f)
+            val starsW = dp(52f)
+            ui.text(c, scoreText, lx + dp(12f), y + dp(17f), dp(12f),
                 if (best > 0) Theme.AMBER else Theme.TEXT_FAINT, align = Paint.Align.LEFT)
+            ui.stars(c, lx + lw - starsW / 2f - dp(6f), y + dp(17f), dp(6f), stars)
+            val titleMaxW = (lw - scoreW - starsW - dp(20f)).coerceAtLeast(dp(40f))
+            var title = Fa.num(l.code) + " · " + l.title
+            var size = dp(12f)
+            while (ui.measure(title, size) > titleMaxW && size > dp(9f)) size -= dp(0.5f)
+            if (ui.measure(title, size) > titleMaxW) {
+                while (title.length > 4 && ui.measure(title + "…", size) > titleMaxW) {
+                    title = title.dropLast(1)
+                }
+                title += "…"
+            }
+            ui.text(c, title, lx + lw - starsW - dp(10f), y + dp(17f), size,
+                if (best > 0) Theme.TEXT else Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
             y += dp(38f)
         }
         c.restore()

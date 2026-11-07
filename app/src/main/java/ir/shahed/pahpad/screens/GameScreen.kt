@@ -36,7 +36,10 @@ class GameScreen(
 ) : BaseScreen(game), SensorEventListener {
 
     private val mission = Mission(level, save, mode, seed)
-    private val renderer = WorldRenderer(game)
+    private val renderer = WorldRenderer(game).also {
+        it.applyQuality(save.graphicsQuality)
+        it.effectsEnabled = save.effectsOn
+    }
     private val rnd = Random()
     private val mapClip = android.graphics.Path()
     private var explosionShake = 0f

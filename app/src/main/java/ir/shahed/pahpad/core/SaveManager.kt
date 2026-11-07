@@ -203,6 +203,28 @@ class SaveManager(context: Context) {
         get() = sp.getBoolean("invert_pitch", false)
         set(v) = sp.edit().putBoolean("invert_pitch", v).apply()
 
+    // ------------------------------------------------------------ گرافیک
+
+    /** سطح جزئیات گرافیک: 0 = سبک، 1 = متعادل، 2 = بالا */
+    var graphicsQuality: Int
+        get() = sp.getInt("gfx_quality", 1).coerceIn(0, 2)
+        set(v) = sp.edit().putInt("gfx_quality", v.coerceIn(0, 2)).apply()
+
+    /** افکت‌ها (دود، جرقه، شعله) */
+    var effectsOn: Boolean
+        get() = sp.getBoolean("gfx_effects", true)
+        set(v) = sp.edit().putBoolean("gfx_effects", v).apply()
+
+    /** تعداد فریم هدف: 0 = ۳۰، 1 = ۶۰ */
+    var frameCap: Int
+        get() = sp.getInt("gfx_fps", 1).coerceIn(0, 1)
+        set(v) = sp.edit().putInt("gfx_fps", v.coerceIn(0, 1)).apply()
+
+    /** نمایش FPS روی صفحه (برای عیب‌یابی) */
+    var showFps: Boolean
+        get() = sp.getBoolean("gfx_fps_show", false)
+        set(v) = sp.edit().putBoolean("gfx_fps_show", v).apply()
+
     var callSign: String
         get() = sp.getString("callsign", "اپراتور") ?: "اپراتور"
         set(v) = sp.edit().putString("callsign", v).apply()

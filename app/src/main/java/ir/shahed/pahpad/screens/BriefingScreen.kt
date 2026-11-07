@@ -87,8 +87,23 @@ class BriefingScreen(
         val bw2 = vw - bx - dp(16f)
         val bh2 = dp(54f)
         ui.image(ui.context, c, envName, bx, dp(12f), bw2, bh2, radius = dp(10f))
-        ui.text(c, title, vw / 2f - dp(30f), dp(12f) + bh2 / 2f + dp(5f), dp(17f), Theme.TEXT, bold = true)
-        ui.text(c, "بریفینگ ماموریت", vw / 2f, dp(12f) + bh2 + dp(20f), dp(12f), Theme.TEXT_DIM)
+        // عنوان باید داخل بنر بماند؛ اگر بلند بود کوچک‌تر می‌شود، نه اینکه
+        // با آفست ثابت از پنل بیرون بزند و روی متن‌های دیگر بیفتد.
+        val titleMaxW = bw2 - dp(24f)
+        var titleSize = dp(17f)
+        while (titleSize > dp(10f) && ui.measure(title, titleSize, bold = true) > titleMaxW) {
+            titleSize -= dp(0.5f)
+        }
+        val titleText = if (ui.measure(title, titleSize, bold = true) > titleMaxW) {
+            // حتی با کوچک‌ترین اندازه جا نشد → کوتاه کن
+            var t = title
+            while (t.length > 4 && ui.measure(t + "…", titleSize, bold = true) > titleMaxW) {
+                t = t.dropLast(1)
+            }
+            t + "…"
+        } else title
+        ui.text(c, titleText, bx + bw2 / 2f, dp(12f) + bh2 / 2f + dp(5f), titleSize, Theme.TEXT, bold = true)
+        ui.text(c, "بریفینگ ماموریت", bx + bw2 / 2f, dp(12f) + bh2 + dp(16f), dp(11f), Theme.TEXT_DIM)
 
         drawMap(c)
         drawInfo(c)

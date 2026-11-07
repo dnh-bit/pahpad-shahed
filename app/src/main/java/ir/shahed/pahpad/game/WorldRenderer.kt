@@ -45,10 +45,32 @@ class WorldRenderer(private val gfxContext: Context) {
         private const val CULL = 1700f
     }
 
+    /**
+     * ضریب کیفیت از تنظیمات کاربر: ۰ = سبک، ۱ = متعادل، ۲ = بالا.
+     *
+     * با کیفیت پایین‌تر، آستانه‌های جزئیات نزدیک‌تر می‌شوند (ساختمان‌های
+     * کم‌جزئیات زودتر فعال می‌شوند) و شعاع دید کوتاه‌تر می‌شود. این تنها
+     * جایی است که «سنگینی» بازی به آن حساس است.
+     */
+    private var qualityMul = 1f
+
+    fun applyQuality(level: Int) {
+        qualityMul = when (level) {
+            0 -> 0.55f
+            2 -> 1.35f
+            else -> 1f
+        }
+        lodStates.clear()
+        winStates.clear()
+    }
+
+    /** افکت‌های دود/جرقه خاموش شده‌اند؟ */
+    var effectsEnabled = true
+
     /** Schmitt trigger: retain detail inside a +/-10% distance band. */
     private fun lod(key: Any, distance2: Float, building: Boolean = false): Int {
-        val near = if (building) BUILDING_NEAR_LOD else NEAR_LOD
-        val mid = if (building) BUILDING_MID_LOD else MID_LOD
+        val near = (if (building) BUILDING_NEAR_LOD else NEAR_LOD) * qualityMul
+        val mid = (if (building) BUILDING_MID_LOD else MID_LOD) * qualityMul
         var state = lodStates[key] ?: when {
             distance2 < near * near -> 0
             distance2 < mid * mid -> 1
@@ -90,7 +112,7 @@ class WorldRenderer(private val gfxContext: Context) {
         drone.update(dt, mission)
         fx.update(dt)
         if (mission.fpv) fx.clearEngineSmoke()
-        if (mission.phase == Mission.Phase.FLYING && !mission.fpv) {
+        if (mission.phase == Mission.Phase.FLYING && !mission.fpv && effectsEnabled) {
             exhaustTimer += dt
             val interval = if (mission.boost) .075f else .12f
             if (exhaustTimer >= interval) {

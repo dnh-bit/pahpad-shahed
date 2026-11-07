@@ -194,12 +194,22 @@ class ShopScreen(
         bonus.set(w * 0.42f, dy, dp(190f), dp(40f))
     }
 
+    /** ناحیهٔ لیست پهبادها: لمسِ داخلش باید اسکرول کند، نه اینکه به کارت برسد */
+    override fun claimsTouch(x: Float, y: Float): Boolean =
+        ::viewportRect.isInitialized && viewportRect.contains(x, y)
+
     private fun clampScroll() {
         scrollY = scrollY.coerceIn(0f, maxScroll)
     }
 
+    /**
+     * کارتی که حتی بخشی از آن در ویوپورت دیده می‌شود باید قابل لمس باشد.
+     *
+     * باگ قبلی: شرط «کاملاً داخل» بود، پس کارت پایینی که نیمه‌پیدا بود
+     * غیرفعال می‌شد و کاربر نمی‌توانست آخرین پهباد را انتخاب کند.
+     */
     private fun r_visible(r: RectF, top: Float, bottom: Float): Boolean =
-        r.top >= top - dp(4f) && r.bottom <= bottom + dp(4f)
+        r.bottom > top && r.top < bottom
 
     /** عرض دورهٔ مجاز متن توصیف داخل ردیف ارتقا */
     private fun availDescW(rx: Float, rw: Float, descX: Float): Float =

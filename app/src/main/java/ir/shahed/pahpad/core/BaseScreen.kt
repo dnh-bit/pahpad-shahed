@@ -2,6 +2,7 @@ package ir.shahed.pahpad.core
 
 import android.annotation.SuppressLint
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.View
 import ir.shahed.pahpad.MainActivity
@@ -84,6 +85,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
 
     override fun onDraw(canvas: Canvas) {
         val now = System.nanoTime()
+        val frameStart = now
         val dt = if (lastFrame == 0L) 1f / 60f else ((now - lastFrame) / 1_000_000_000f)
         lastFrame = now
         // Preserve ordinary slow-frame elapsed time with bounded physics substeps.
@@ -101,7 +103,42 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
             }
             render(canvas)
         }
-        if (looping) postInvalidateOnAnimation()
+        if (looping) {
+            // محدودیت نرخ فریم: روی گوشی‌های ضعیف ۳۰ فریم کافی و روان‌تر است
+            val cap = if (save.frameCap == 0) 30f else 60f
+            val frameBudgetNs = (1_000_000_000.0 / cap).toLong()
+            val elapsed = System.nanoTime() - frameStart
+            if (elapsed < frameBudgetNs) {
+                postInvalidateDelayed((frameBudgetNs - elapsed) / 1_000_000L)
+            } else {
+                postInvalidateOnAnimation()
+            }
+        }
+        // شمارندهٔ FPS (فقط اگر کاربر خواسته باشد)
+        if (save.showFps) {
+            fpsFrames++
+            if (now - fpsWindow >= 1_000_000_000L) {
+                fpsValue = fpsFrames
+                fpsFrames = 0
+                fpsWindow = now
+            }
+            drawFps(canvas)
+        }
+    }
+
+    private var fpsFrames = 0
+    private var fpsValue = 0
+    private var fpsWindow = System.nanoTime()
+
+    // یک Paint مشترک — ساختن Paint در هر فریم باعث فشار روی GC می‌شد
+    private val fpsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF8CE04A.toInt()
+        textAlign = Paint.Align.LEFT
+    }
+
+    private fun drawFps(c: Canvas) {
+        fpsPaint.textSize = dp(11f)
+        c.drawText("$fpsValue fps", dp(8f), dp(16f), fpsPaint)
     }
 
     // -------------------------------------------------- لمس
@@ -111,6 +148,10 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 cancelTouches()
+                // ناحیهٔ اسکرول‌شونده اول حق دارد
+                if (claimsTouch(event.x, event.y)) {
+                    return onTouchDown(event.x, event.y, event.getPointerId(0))
+                }
                 val b = findButton(event.x, event.y)
                 if (b != null && pressedButton == null) {
                     b.pressed = true
@@ -122,6 +163,9 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 val i = event.actionIndex
+                if (claimsTouch(event.getX(i), event.getY(i))) {
+                    return onTouchDown(event.getX(i), event.getY(i), event.getPointerId(i))
+                }
                 val b = findButton(event.getX(i), event.getY(i))
                 if (b != null && pressedButton == null) {
                     b.pressed = true
@@ -168,6 +212,15 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         }
         return true
     }
+
+    /**
+     * اگر صفحه یک ناحیهٔ اسکرول‌شونده دارد، اینجا true برگردان تا لمسِ داخل آن
+     * ناحیه به‌جای دکمه‌های روی آن، به onTouchDown/onTouchMove برسد.
+     *
+     * چرا لازم است: قبلاً findButton هر لمسی را که روی کارت‌های لیست بود
+     * می‌بلعید و drag هرگز به صفحه نمی‌رسید → لیست اسکرول نمی‌شد.
+     */
+    open fun claimsTouch(x: Float, y: Float): Boolean = false
 
     private fun findButton(x: Float, y: Float): UiButton? {
         for (i in buttons.indices.reversed()) {
