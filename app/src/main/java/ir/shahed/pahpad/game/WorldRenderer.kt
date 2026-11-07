@@ -94,33 +94,64 @@ class WorldRenderer(private val gfxContext: Context) {
      * پس گذر از مرز هرگز پاپ‌کردن ایجاد نمی‌کند.
      */
     /**
-     * شدت نمایش «پنجرهٔ مجزا» بر اساس عرض واقعی پنجره روی صفحه.
+     * نمایش «پنجرهٔ مجزا» — کاملاً مستقل از دوربین.
      *
-     * چرا دیگر حالت روشن/خاموش نداریم:
-     *   هر ساختمان همیشه «نوار شیشه» را روی هر رخ می‌کشد (یک نوار افقی در هر
-     *   طبقه). پنجره‌های مجزا فقط جزئیات روی همان نوار هستند. اگر پنجرهٔ مجزا
-     *   را با رنگِ دقیقاً برابر رنگ نوار بکشیم، عملاً دیده نمی‌شود.
+     * تاریخچهٔ این باگ (سه تلاش):
+     *   ۱) آستانهٔ ۹/۷ پیکسل با هیسترزیس — ورودی اشتباه بود (عرض ساختمان
+     *      به‌جای عرض پنجره) و فاصلهٔ مرده ۰٫۹ پیکسل شد.
+     *   ۲) همان را پیوسته (smoothstep) کردم — ولی همچنان تابعی از فاصله تا
+     *      دوربین بود. هر بار پهباد جلو/عقب می‌رود یا دوربین می‌چرخد، عرض
+     *      پیکسلی پنجره عوض می‌شود و الگوی پنجره‌ها «می‌جوشد».
      *
-     *   پس به‌جای آستانهٔ بولی + هیسترزیس، رنگ پنجره را به‌تدریج از «رنگ نوار»
-     *   به «رنگ پنجره» می‌بریم. در هر فاصله‌ای که باشیم، تغییر یک‌سویه و
-     *   نامحسوس است — هیچ روشن/خاموش شدنی وجود ندارد که دوربین بتواند
-     *   با تکان کوچک روی آن بلرزد.
+     * نتیجهٔ واقعی: هر معیاری که به دوربین وابسته باشد، در پرواز ناپایدار
+     * *دیده می‌شود* — حتی اگر پیوسته باشد، چون کل شبکهٔ پنجره با حرکت
+     * دوربین نرم جابه‌جا/محو می‌شود و چشم آن را «لرزش» می‌بیند.
      *
-     * باگ قبلی: آستانه‌ها ۹ و ۷ پیکسل بودند، ولی ورودی windowPx در واقع
-     * عرض *ساختمان* تقسیم بر فاصله بود (عامل ۲٫۴۵ به‌جای ۲٫۱۵). فاصلهٔ
-     * مرده ۰٫۹ پیکسل شد و پنجره‌ها در پرواز مدام پرش می‌کردند.
+     * راه‌حل نهایی: تصمیم بر اساس **فاصلهٔ واقعی ساختمان تا مرکز صحنه**
+     * گرفته می‌شود، نه دوربین. پس برای هر ساختمان ثابت است و در تمام طول
+     * مأموریت هرگز عوض نمی‌شود. تنها چیزی که به دوربین بستگی دارد
+     * بزرگ‌نمایی طبیعی پرسپکتیو است — که همان چیزی است که چشم انتظار دارد.
+     *
+     * این تابع هیچ‌جا با فاصلهٔ دوربین صدا زده نمی‌شود.
      */
-    private val WIN_FADE_IN_PX = 5.5f    // زیر این: پنجرهٔ مجزا کاملاً محو
-    private val WIN_FADE_FULL_PX = 15f   // بالای این: پنجرهٔ مجزا کامل
+    private val WIN_DETAIL_NEAR = 260f   // نزدیک‌تر از این: جزئیات کامل
+    private val WIN_DETAIL_FAR = 520f    // دورتر از این: فقط نوار شیشه
 
-    /** ۰ = پنجره دیده نمی‌شود، ۱ = کامل. یکنوا و بدون حالت — پس ناپایدار نیست. */
-    private fun windowDetail(windowPx: Float): Float {
-        if (windowPx <= WIN_FADE_IN_PX) return 0f
-        if (windowPx >= WIN_FADE_FULL_PX) return 1f
-        val t = (windowPx - WIN_FADE_IN_PX) / (WIN_FADE_FULL_PX - WIN_FADE_IN_PX)
-        return t * t * (3f - 2f * t)   // smoothstep: شیب صفر در دو سر
+    private fun windowDetail(worldDist: Float): Float {
+        if (worldDist <= WIN_DETAIL_NEAR) return 1f
+        if (worldDist >= WIN_DETAIL_FAR) return 0f
+        val t = (worldDist - WIN_DETAIL_NEAR) / (WIN_DETAIL_FAR - WIN_DETAIL_NEAR)
+        val u = 1f - t
+        return u * u * (3f - 2f * u)
     }
 
+    /** Schmitt trigger: retain detail inside a +/-10% distance band. */
+    private fun lod(key: Any, distance2: Float, building: Boolean = false): Int {
+        val near = (if (building) BUILDING_NEAR_LOD else NEAR_LOD) * qualityMul
+        val mid = (if (building) BUILDING_MID_LOD else MID_LOD) * qualityMul
+        var state = lodStates[key] ?: when {
+            distance2 < near * near -> 0
+            distance2 < mid * mid -> 1
+            else -> 2
+        }
+        // Loops also handle camera teleports across both thresholds in one frame.
+        while (state < 2) {
+            val boundary = (if (state == 0) near else mid) * (1f + LOD_HYSTERESIS)
+            if (distance2 > boundary * boundary) state++ else break
+        }
+        while (state > 0) {
+            val boundary = (if (state == 1) near else mid) * (1f - LOD_HYSTERESIS)
+            if (distance2 < boundary * boundary) state-- else break
+        }
+        lodStates[key] = state
+        return state
+    }
+
+    /**
+     * وضعیت «پنجرهٔ مجزا» بر اساس اندازهٔ پنجره روی صفحه (پیکسل) با هیسترزیس.
+     * پنجره‌های مجزا فقط وقتی بزرگ‌اند رسم می‌شوند؛ زیرشان همیشه نوار شیشه هست،
+     * پس گذر از مرز هرگز پاپ‌کردن ایجاد نمی‌کند.
+     */
     fun update(dt: Float, mission: Mission) {
         clock += dt
         art.advance(dt)
@@ -223,9 +254,10 @@ class WorldRenderer(private val gfxContext: Context) {
                     scene.box(p.x, 0f, p.z, p.w * .28f, p.h, p.d * .28f, p.color, p.rot)
                 }
                 PropKind.BUILDING -> building(p.x, p.z, p.w, p.h, p.d, p.rot, p.color, false, detail, p,
-                    // عرض واقعی یک پنجره (۲٫۱۵ متر) روی صفحه — همان عددی که
-                    // building() با آن تصمیم می‌گیرد پنجرهٔ مجزا بکشد یا نه.
-                    scene.cam.focal * 2.15f / Math.sqrt(d2.toDouble()).toFloat().coerceAtLeast(1f))
+                    // فاصلهٔ ساختمان از مرکز صحنه — ثابت در تمام مأموریت،
+                    // مستقل از دوربین. (پیش‌تر فاصله تا دوربین بود و با هر
+                    // حرکت پهباد الگوی پنجره‌ها می‌جوشید.)
+                    Math.sqrt((p.x * p.x + p.z * p.z).toDouble()).toFloat())
             }
         }
 
@@ -332,7 +364,9 @@ class WorldRenderer(private val gfxContext: Context) {
     private fun building(
         x: Float, z: Float, w: Float, h: Float, d: Float, yaw: Float,
         baseColor: Int, destroyed: Boolean, detail: Int,
-        winKey: Any? = null, windowPx: Float = 0f
+        winKey: Any? = null,
+        /** فاصلهٔ ساختمان از مرکز صحنه (نه از دوربین) — برای پایداری پنجره‌ها */
+        worldDist: Float = 0f
     ) {
         rig.place(x, 0f, z, yaw, 1f)
         val color = if (destroyed) 0xFF393A36.toInt() else baseColor
@@ -424,7 +458,7 @@ class WorldRenderer(private val gfxContext: Context) {
             //    زیر آستانه، پنجره‌ها رنگِ خود نوار شیشه را می‌گیرند و دیده
             //    نمی‌شوند؛ بالای آستانه رنگ کامل خودشان را. بین این دو،
             //    رنگ در هم می‌آمیزد.
-            val winFade = if (detail <= 1 && winKey != null) windowDetail(windowPx) else 0f
+            val winFade = if (detail <= 1 && winKey != null) windowDetail(worldDist) else 0f
             if (winFade > 0.001f) {
                 val winW = 2.15f
                 val winH = 2.45f

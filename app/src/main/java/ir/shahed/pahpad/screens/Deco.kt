@@ -23,10 +23,10 @@ object Deco {
         ui.stroke.strokeWidth = ui.dp(1.2f)
         c.drawLine(s.vw * 0.28f, ui.dp(70f), s.vw * 0.72f, ui.dp(70f), ui.stroke)
 
-        // نشانگر بیلد تست — تا با نسخهٔ اصلی روی گوشی قاطی نشود
+        // نشانگر بیلد تست — پایین هدر، جایی که هیچ متن دیگری نیست.
+        // (قبلاً بالا-راست بود و روی نوار سکه/ستاره می‌افتاد.)
         if (BuildConfig.MODDED) {
-            ui.chip(c, s.vw - ui.dp(58f), ui.dp(18f), "نسخهٔ تست", Theme.VIOLET)
-            ui.chip(c, ui.dp(58f), ui.dp(18f), "همه باز", Theme.MINT)
+            ui.chip(c, s.vw / 2f, ui.dp(74f), "نسخهٔ تست — همهٔ مراحل و پهبادها باز", Theme.VIOLET)
         }
     }
 

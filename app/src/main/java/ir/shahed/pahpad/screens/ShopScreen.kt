@@ -13,20 +13,20 @@ import ir.shahed.pahpad.data.DroneModels
 import ir.shahed.pahpad.data.UpgradeKind
 
 /**
- * فروشگاه و آشیانه — بازطراحی کامل.
+ * فروشگاه و آشیانه.
  *
- * چیدمان تازه: صفحه **یک** ستون اسکرول‌شونده است که دو بخش پشت‌سرهم دارد:
+ * اصل طراحی: **هر ردیف ارتقا به دو ناحیهٔ کاملاً جدا تقسیم می‌شود.**
  *
- *   ۱) آشیانه — کارت پهبادها یکی زیر دیگری، تمام‌عرض.
- *   ۲) ارتقاها — ردیف‌های ارتقای پهباد انتخاب‌شده.
+ *   ┌──────────────────────────────┬───────────┐
+ *   │ عنوان / مقدار / توضیح / سطح  │ دکمهٔ خرید │
+ *   │        (ناحیهٔ متن)           │ (ناحیهٔ دکمه)│
+ *   └──────────────────────────────┴───────────┘
  *
- * چرا تک‌ستونه: نسخهٔ قبل دو ستون مستقل داشت — لیست پهباد در چپ و ارتقاها در
- * راست، با اسکرول فقط روی ستون چپ. روی گوشی landscape ستون چپ به ۲۸٪ عرض
- * می‌رسید و متن‌های عنوان/وضعیت همپوشانی می‌کردند، و کاربر مجبور بود انگشتش
- * را دقیقاً داخل همان نوار باریک بگذارد تا اسکرول کند.
+ * دکمهٔ خرید هرگز داخل ناحیهٔ متن نیست، پس هیچ متنی نمی‌تواند زیر آن برود.
+ * این تقسیم فضا، همپوشانی «مقدار» و «قیمت» را که در نسخهٔ قبل دیده می‌شد
+ * ساختاراً غیرممکن می‌کند — نه با تنظیم آفست، بلکه با تفکیک ناحیه‌ها.
  *
- * حالا کل صفحه یک ناحیهٔ اسکرول است؛ هر جای صفحه بکشی، اسکرول می‌شود. و
- * ترتیب عمودی حذف کاملِ همپوشانی است: هیچ دو متنی در یک مختصات نیستند.
+ * همهٔ اندازه‌های متن با اندازه‌گیری واقعی ([ui.measure]) محاسبه می‌شوند.
  */
 class ShopScreen(
     game: MainActivity,
@@ -52,7 +52,6 @@ class ShopScreen(
         if (bonusClaimed) return
         AdManager.showRewarded(game) {
             bonusClaimed = true
-            bonus.visible = false
             save.addCoins(10)
             audio.beep(880f, 140, 0.45f)
             say("+۱۰ سکه هدیهٔ ویدیو اضافه شد")
@@ -68,14 +67,13 @@ class ShopScreen(
             val b = UiButton(m.name, m.color) {
                 if (moved) {
                     moved = false
-                } else if (save.isDroneUnlocked(m.id)) {
+                } else {
+                    // حتی پهباد قفل هم قابل انتخاب است تا کاربر ببیند چه
+                    // چیزی در انتظارش است؛ خرید با دکمه انجام می‌شود.
                     selected = m
                     save.selectedDroneId = m.id
                     refresh()
                     layoutUi(vw, vh)
-                } else {
-                    say("برای آنلاک به " + Fa.num(m.requiredStars) + " ستاره نیاز دارید")
-                    audio.beep(320f, 90, 0.3f)
                 }
             }
             b.tag = m
@@ -100,6 +98,11 @@ class ShopScreen(
 
     private fun buy(kind: UpgradeKind) {
         if (moved) { moved = false; return }
+        if (!save.isDroneUnlocked(selected.id)) {
+            say("این پهباد قفل است — " + Fa.num(selected.requiredStars) + " ستاره لازم است")
+            audio.beep(320f, 110, 0.3f)
+            return
+        }
         val current = save.upgradeLevel(selected.id, kind)
         val cap = selected.maxLevel(kind)
         if (current >= cap) {
@@ -119,19 +122,19 @@ class ShopScreen(
     }
 
     private fun refresh() {
+        val unlocked = save.isDroneUnlocked(selected.id)
         for (b in upgradeButtons) {
             val k = b.tag as UpgradeKind
             val lvl = save.upgradeLevel(selected.id, k)
             val cap = selected.maxLevel(k)
-            if (lvl >= cap) {
-                b.label = "حداکثر"
-                b.enabled = false
-                b.subLabel = null
-            } else {
-                val cost = k.costFor(lvl + 1)
-                b.label = Fa.grouped(cost) + " سکه"
-                b.enabled = save.coins >= cost
-                b.subLabel = null
+            when {
+                !unlocked -> { b.label = "قفل"; b.enabled = false }
+                lvl >= cap -> { b.label = "سقف"; b.enabled = false }
+                else -> {
+                    val cost = k.costFor(lvl + 1)
+                    b.label = Fa.grouped(cost) + " سکه"
+                    b.enabled = save.coins >= cost
+                }
             }
         }
         for (b in droneButtons) {
@@ -149,7 +152,6 @@ class ShopScreen(
 
     // ------------------------------------------------------------ چیدمان
 
-    /** کل صفحه یک ویوپورت است، زیر هدر و بالای نوار پایین */
     private val viewport = RectF()
     private var scrollY = 0f
     private var maxScroll = 0f
@@ -159,99 +161,71 @@ class ShopScreen(
     private var lastY = 0f
     private var moved = false
 
-    // موقعیت‌های محاسبه‌شده که render از آن‌ها استفاده می‌کند
-    private val droneRowH = FloatArray(8)
-    private val upgradeRowH = FloatArray(8)
+    private val droneYs = FloatArray(16)
+    private val upgradeYs = FloatArray(16)
+    private var headerY = 0f
     private var hangarLabelY = 0f
     private var upgradeLabelY = 0f
-    private var taglineY = 0f
-    private var statsY = 0f
 
-    private val droneCardH = 62f
-    private val upgradeRowHeight = 58f
-    private val sectionGap = 18f
-    private val labelH = 22f
+    private fun cardH() = dp(56f)
+    private fun rowH() = dp(62f)
+    private val gapV get() = dp(7f)
+    private val sectionGapV get() = dp(14f)
+    private val labelHV get() = dp(22f)
+
+    /** عرض ناحیهٔ دکمهٔ خرید در ردیف ارتقا */
+    private fun btnAreaW() = dp(94f)
+
+    /** عرض ناحیهٔ متن — همیشه با فاصله از ناحیهٔ دکمه */
+    private fun textAreaW() = (viewport.width() - btnAreaW() - dp(16f)).coerceAtLeast(dp(120f))
 
     override fun layoutUi(w: Float, h: Float) {
-        val top = dp(78f)
-        val bottom = h - dp(58f)
-        viewport.set(dp(14f), top, w - dp(14f), bottom)
+        viewport.set(dp(12f), dp(78f), w - dp(12f), h - dp(52f))
 
-        val vw2 = viewport.width()
-        var y = 0f
-
-        // ── سربرگ: نام پهباد انتخاب‌شده + آمار خیلی کوتاه
-        taglineY = y
-        y += dp(18f)
-        statsY = y
-        y += dp(20f)
-        y += dp(10f)
-
-        // ── عنوان بخش آشیانه
-        hangarLabelY = y
-        y += dp(labelH)
-
-        // ── کارت‌های پهباد (تک‌ستون)
-        for ((i, b) in droneButtons.withIndex()) {
-            droneRowH[i] = y
-            b.set(viewport.left, viewport.top + y - scrollY, vw2, dp(droneCardH))
-            y += dp(droneCardH) + dp(8f)
-        }
-
-        y += dp(sectionGap)
-        upgradeLabelY = y
-        y += dp(labelH)
-
-        // ── ردیف‌های ارتقا
-        for ((i, b) in upgradeButtons.withIndex()) {
-            upgradeRowH[i] = y
-            b.set(
-                viewport.right - dp(104f),
-                viewport.top + y - scrollY + dp(upgradeRowHeight) - dp(40f),
-                dp(92f), dp(32f),
-            )
-            y += dp(upgradeRowHeight) + dp(8f)
-        }
-
-        y += dp(sectionGap)
-
-        contentH = y
+        contentH = computeContent()
         maxScroll = (contentH - viewport.height()).coerceAtLeast(0f)
         scrollY = scrollY.coerceIn(0f, maxScroll)
-
-        // بازاعمال موقعیت با scrollY نهایی
-        y = 0f
-        taglineY = y; y += dp(18f)
-        statsY = y; y += dp(20f); y += dp(10f)
-        hangarLabelY = y; y += dp(labelH)
-        for ((i, b) in droneButtons.withIndex()) {
-            droneRowH[i] = y
-            b.set(viewport.left, viewport.top + y - scrollY, vw2, dp(droneCardH))
-            y += dp(droneCardH) + dp(8f)
-        }
-        y += dp(sectionGap)
-        upgradeLabelY = y; y += dp(labelH)
-        for ((i, b) in upgradeButtons.withIndex()) {
-            upgradeRowH[i] = y
-            b.set(
-                viewport.right - dp(104f),
-                viewport.top + y - scrollY + dp(upgradeRowHeight) - dp(40f),
-                dp(92f), dp(32f),
-            )
-            y += dp(upgradeRowHeight) + dp(8f)
-        }
-
-        // دکمه‌های بیرون ویوپورت غیرفعال تا لمس نگیرند
-        for (b in droneButtons) {
-            b.visible = b.rect.bottom > viewport.top && b.rect.top < viewport.bottom
-        }
-        for (b in upgradeButtons) {
-            b.visible = b.rect.bottom > viewport.top && b.rect.top < viewport.bottom
-        }
+        placeAll()
 
         bonus.visible = !bonusClaimed && AdManager.isRewardedAdReady()
-        bonus.set(viewport.left, h - dp(48f), dp(196f), dp(36f))
-        back.set(viewport.right - dp(104f), h - dp(48f), dp(104f), dp(36f))
+        bonus.set(viewport.left, h - dp(44f), dp(186f), dp(32f))
+        back.set(viewport.right - dp(96f), h - dp(44f), dp(96f), dp(32f))
+    }
+
+    private fun computeContent(): Float {
+        var y = dp(24f)                      // سربرگ نام پهباد
+        y += labelHV                          // عنوان «آشیانه»
+        y += DroneModels.all.size * (cardH() + gapV)
+        y += sectionGapV
+        y += labelHV                          // عنوان «ارتقاها»
+        y += upgradeButtons.size * (rowH() + gapV)
+        return y
+    }
+
+    private fun placeAll() {
+        var y = 0f
+        headerY = y; y += dp(24f)
+        hangarLabelY = y; y += labelHV
+
+        for ((i, b) in droneButtons.withIndex()) {
+            droneYs[i] = y
+            b.set(viewport.left, viewport.top + y - scrollY, viewport.width(), cardH())
+            y += cardH() + gapV
+        }
+
+        y += sectionGapV
+        upgradeLabelY = y; y += labelHV
+
+        for ((i, b) in upgradeButtons.withIndex()) {
+            upgradeYs[i] = y
+            // ناحیهٔ دکمه: چپ‌ترین بخش ردیف
+            b.set(
+                viewport.left + dp(10f),
+                viewport.top + y - scrollY + (rowH() - dp(32f)) / 2f,
+                btnAreaW() - dp(16f), dp(32f),
+            )
+            y += rowH() + gapV
+        }
     }
 
     override fun claimsTouch(x: Float, y: Float): Boolean = viewport.contains(x, y)
@@ -272,22 +246,22 @@ class ShopScreen(
         if (Math.abs(dy) >= 0.5f) {
             moved = true
             scrollY = (scrollY - dy).coerceIn(0f, maxScroll)
-            layoutUi(vw, vh)
+            placeAll()
         }
     }
 
     override fun onTouchUp(x: Float, y: Float, pointerId: Int) {
         if (pointerId == dragPointer && !moved) {
-            // ضربهٔ کوتاه = انتخاب پهباد یا خرید ارتقا
             var handled = false
-            for (b in droneButtons.reversed()) {
-                if (b.visible && b.contains(x, y)) {
+            // دکمه‌های خرید اول (کوچک‌ترند)
+            for (b in upgradeButtons.reversed()) {
+                if (b.visible && b.rect.contains(x, y)) {
                     audio.click(); b.onClick(); handled = true; break
                 }
             }
             if (!handled) {
-                for (b in upgradeButtons.reversed()) {
-                    if (b.visible && b.enabled && b.contains(x, y)) {
+                for (b in droneButtons.reversed()) {
+                    if (b.visible && b.contains(x, y)) {
                         audio.click(); b.onClick(); break
                     }
                 }
@@ -312,39 +286,36 @@ class ShopScreen(
     // ------------------------------------------------------------ رسم
 
     override fun render(c: Canvas) {
-        ui.background(c, vw, vh, Theme.AMBER)
+        ui.background(c, vw, vh, Theme.BLUE)
         Deco.header(this, c, "فروشگاه و آشیانه", null, Theme.AMBER)
         Deco.resources(this, c)
 
         c.save()
         c.clipRect(viewport)
 
-        // ── سربرگ پهباد انتخاب‌شده
-        val cx = viewport.centerX()
-        ui.text(c, selected.name, cx, viewport.top + taglineY - scrollY + dp(13f),
-            dp(14f), selected.color, bold = true)
-        ui.text(c, selected.tagline, cx, viewport.top + statsY - scrollY + dp(12f),
-            dp(10.5f), Theme.TEXT_DIM)
+        val base = viewport.top - scrollY
 
-        // ── بخش آشیانه
-        sectionLabel(c, "آشیانه — انتخاب پهباد", viewport.top + hangarLabelY - scrollY, Theme.AMBER)
+        // ── سربرگ
+        ui.text(c, selected.name, viewport.right, base + headerY + dp(14f), dp(14.5f),
+            selected.color, bold = true, align = Paint.Align.RIGHT)
+        ui.text(c, selected.tagline, viewport.right, base + headerY + dp(27f), dp(9.5f),
+            Theme.TEXT_DIM, align = Paint.Align.RIGHT)
+
+        // ── آشیانه
+        sectionLabel(c, "آشیانه", base + hangarLabelY, Theme.AMBER)
 
         for ((i, b) in droneButtons.withIndex()) {
             val m = b.tag as DroneModels.Model
-            val top = viewport.top + droneRowH[i] - scrollY
-            val bottom = top + dp(droneCardH)
-            if (bottom < viewport.top || top > viewport.bottom) continue
+            val y = base + droneYs[i]
+            if (y + cardH() < viewport.top || y > viewport.bottom) continue
             val unlocked = save.isDroneUnlocked(m.id)
             val isSel = m.id == selected.id
-            val r = RectF(viewport.left, top, viewport.right, bottom)
+            val r = RectF(viewport.left, y, viewport.right, y + cardH())
 
-            ui.panel(c, r, if (isSel) Theme.withAlpha(m.color, 0.14f) else Theme.PANEL,
-                Theme.withAlpha(if (isSel) m.color else Theme.LINE, if (isSel) 0.95f else 0.35f), dp(12f))
-
-            // نوار لهجهٔ سمت راست کارت
-            ui.fill.color = Theme.withAlpha(m.color, if (unlocked) 0.85f else 0.25f)
-            ui.fill.shader = null
-            c.drawRoundRect(r.right - dp(4f), r.top + dp(8f), r.right, r.bottom - dp(8f), dp(2f), dp(2f), ui.fill)
+            ui.panel(c, r,
+                if (isSel) Theme.withAlpha(m.color, 0.16f) else Theme.PANEL,
+                Theme.withAlpha(if (isSel) m.color else Theme.LINE, if (isSel) 1f else 0.28f),
+                dp(10f))
 
             val sideName = when (m.id) {
                 "shahed136" -> "drone_136_side"
@@ -352,95 +323,99 @@ class ShopScreen(
                 "shahedx" -> "drone_x_side"
                 else -> "drone_131_side"
             }
-            ui.imageFit(ui.context, c, sideName, r.left + dp(6f), r.top + dp(8f),
-                dp(52f), r.height() - dp(16f), if (unlocked) 255 else 80)
+            ui.imageFit(ui.context, c, sideName, r.left + dp(6f), r.top + dp(5f),
+                dp(46f), r.height() - dp(10f), if (unlocked) 255 else 70)
 
-            // متن‌ها راست‌چین با عرض محدود — نه آفست ثابت
-            val textRight = r.right - dp(14f)
-            val textMaxW = (r.width() - dp(72f)).coerceAtLeast(dp(80f))
-
-            var nameSize = dp(13.5f)
-            while (ui.measure(m.name, nameSize, true) > textMaxW && nameSize > dp(10f)) nameSize -= dp(0.5f)
-            ui.text(c, m.name, textRight, r.top + dp(22f), nameSize,
+            val tx = r.right - dp(12f)
+            val maxW = r.width() - dp(110f)
+            ui.text(c, m.name, tx, r.top + dp(23f),
+                fitSize(m.name, dp(13.5f), maxW, bold = true),
                 if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true, align = Paint.Align.RIGHT)
 
-            val sub = when {
-                !unlocked -> "نیازمند " + Fa.num(m.requiredStars) + " ستاره"
+            val status = when {
+                !unlocked -> "قفل — " + Fa.num(m.requiredStars) + " ستاره"
                 isSel -> "انتخاب‌شده"
-                else -> "برای انتخاب بزنید"
+                else -> "آمادهٔ انتخاب"
             }
-            ui.text(c, sub, textRight, r.top + dp(42f), dp(10.5f),
+            ui.text(c, status, tx, r.top + dp(41f), dp(10f),
                 when {
-                    !unlocked -> Theme.TEXT_FAINT
+                    !unlocked -> Theme.RED
                     isSel -> Theme.MINT
                     else -> Theme.TEXT_DIM
                 }, align = Paint.Align.RIGHT)
 
-            if (!unlocked) ui.iconLock(c, r.left + dp(32f), r.centerY(), dp(9f))
+            // نشان انتخاب: خطِ عمودی سمت راست کارت (جدا از همهٔ متن‌ها)
+            if (isSel) {
+                ui.fill.color = Theme.MINT
+                ui.fill.shader = null
+                c.drawRoundRect(r.right - dp(3f), r.top + dp(9f), r.right, r.bottom - dp(9f),
+                    dp(1.5f), dp(1.5f), ui.fill)
+            }
         }
 
-        // ── بخش ارتقاها
-        sectionLabel(c, "ارتقای " + selected.name, viewport.top + upgradeLabelY - scrollY, Theme.MINT)
+        // ── ارتقاها
+        sectionLabel(c, "ارتقای " + selected.name, base + upgradeLabelY, Theme.MINT)
 
         for ((i, b) in upgradeButtons.withIndex()) {
             val k = b.tag as UpgradeKind
-            val top = viewport.top + upgradeRowH[i] - scrollY
-            val bottom = top + dp(upgradeRowHeight)
-            if (bottom < viewport.top || top > viewport.bottom) continue
+            val y = base + upgradeYs[i]
+            if (y + rowH() < viewport.top || y > viewport.bottom) continue
 
             val lvl = save.upgradeLevel(selected.id, k)
             val cap = selected.maxLevel(k)
-            val maxed = lvl >= cap
-            val r = RectF(viewport.left, top, viewport.right, bottom - dp(4f))
+            val unlocked = save.isDroneUnlocked(selected.id)
+            val r = RectF(viewport.left, y, viewport.right, y + rowH() - dp(3f))
+            ui.panel(c, r, Theme.withAlpha(Theme.PANEL, 0.97f), Theme.LINE, dp(9f))
 
-            ui.panel(c, r, Theme.withAlpha(Theme.PANEL, 0.96f), Theme.LINE, dp(11f))
+            // ناحیهٔ متن: از لبهٔ راست تا شروع ناحیهٔ دکمه
+            val textRight = r.right - dp(12f)
+            val tW = textAreaW()
 
-            val textRight = r.right - dp(14f)
-            val textMaxW = (r.width() - dp(122f)).coerceAtLeast(dp(90f))
+            // خط ۱ — عنوان (بالا، راست‌چین)
+            ui.text(c, k.title, textRight, r.top + dp(17f),
+                fitSize(k.title, dp(12.5f), tW, bold = true),
+                Theme.TEXT, bold = true, align = Paint.Align.RIGHT)
 
-            // خط ۱: عنوان قابلیت (راست)
-            var titleSize = dp(12.5f)
-            while (ui.measure(k.title, titleSize, true) > textMaxW * 0.62f && titleSize > dp(10f)) {
-                titleSize -= dp(0.5f)
+            // خط ۲ — مقدار فعلی (وسط، راست‌چین)
+            val valueNow = k.valueAt(lvl, selected)
+            ui.text(c, valueNow, textRight, r.top + dp(33f),
+                fitSize(valueNow, dp(11.5f), tW),
+                if (unlocked) Theme.MINT else Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
+
+            // خط ۳ — توضیح (پایین، رو به چپ از ناحیهٔ متن)
+            val desc = k.description
+            var dSize = dp(9f)
+            var dText = desc
+            val dMaxW = tW - dp(6f)
+            while (ui.measure(dText, dSize) > dMaxW && dSize > dp(8f)) dSize -= dp(0.5f)
+            if (ui.measure(dText, dSize) > dMaxW) {
+                while (dText.length > 6 && ui.measure(dText + "…", dSize) > dMaxW) dText = dText.dropLast(1)
+                dText += "…"
             }
-            ui.text(c, k.title, textRight, r.top + dp(17f), titleSize, Theme.TEXT, bold = true,
+            ui.text(c, dText, textRight, r.top + dp(47f), dSize, Theme.TEXT_FAINT,
                 align = Paint.Align.RIGHT)
 
-            // خط ۲: مقدار فعلی (راست)
-            val valText = if (maxed) k.valueAt(lvl, selected) + " · حداکثر" else k.valueAt(lvl, selected)
-            ui.text(c, valText, textRight, r.top + dp(36f), dp(11.5f), Theme.MINT,
-                align = Paint.Align.RIGHT)
-
-            // خط ۳: توضیح (چپ، یک خط با کوتاه‌سازی)
-            var descSize = dp(9.5f)
-            var desc = k.description
-            val descMaxW = (r.width() - dp(120f)).coerceAtLeast(dp(60f))
-            while (ui.measure(desc, descSize) > descMaxW && descSize > dp(8f)) descSize -= dp(0.5f)
-            if (ui.measure(desc, descSize) > descMaxW) {
-                while (desc.length > 6 && ui.measure(desc + "…", descSize) > descMaxW) desc = desc.dropLast(1)
-                desc += "…"
-            }
-            ui.text(c, desc, r.left + dp(12f), r.top + dp(16f), descSize, Theme.TEXT_FAINT,
-                align = Paint.Align.LEFT)
-
-            // نشانگر سطح: خانه‌ها (چپ، زیر توضیح)
-            val pipW = dp(6f)
-            val pipGap = dp(3f)
-            val pipY = r.top + dp(34f)
-            var px = r.left + dp(12f)
-            for (n in 0 until cap) {
-                ui.fill.color = if (n < lvl) Theme.AMBER else Theme.withAlpha(Theme.TEXT_FAINT, 0.28f)
-                ui.fill.shader = null
-                c.drawRoundRect(px, pipY, px + pipW, pipY + dp(8f), dp(2f), dp(2f), ui.fill)
-                px += pipW + pipGap
-            }
-            if (maxed) {
-                ui.text(c, "سقف", px + dp(4f), pipY + dp(8f), dp(9f), Theme.AMBER,
-                    align = Paint.Align.LEFT)
+            // نشانگر سطح: بالای دکمهٔ خرید، داخل ناحیهٔ دکمه.
+            // جای دیگری نیست، پس با هیچ متنی قاطی نمی‌شود.
+            val pipW = dp(4.5f); val pipGap = dp(2.5f)
+            val totalPipsW = cap * (pipW + pipGap) - pipGap
+            var px = r.left + dp(10f) + (btnAreaW() - dp(16f) - totalPipsW) / 2f
+            val pipY = b.rect.top - dp(11f)
+            if (pipY > r.top + dp(2f)) {
+                for (n in 0 until cap) {
+                    ui.fill.color = when {
+                        !unlocked -> Theme.withAlpha(Theme.TEXT_FAINT, 0.18f)
+                        n < lvl -> Theme.AMBER
+                        else -> Theme.withAlpha(Theme.TEXT_FAINT, 0.3f)
+                    }
+                    ui.fill.shader = null
+                    c.drawRoundRect(px, pipY, px + pipW, pipY + dp(4.5f), dp(1f), dp(1f), ui.fill)
+                    px += pipW + pipGap
+                }
             }
         }
 
-        // دکمه‌های ارتقا (روی ردیف‌ها)
+        // دکمه‌های خرید — همیشه در ناحیهٔ خودشان
         for (b in upgradeButtons) ui.button(c, b)
 
         c.restore()
@@ -448,10 +423,10 @@ class ShopScreen(
         // نشانگر اسکرول
         if (maxScroll > 0f) {
             val trackH = viewport.height()
-            val thumbH = (trackH * (trackH / contentH)).coerceAtLeast(dp(30f))
+            val thumbH = (trackH * (trackH / contentH)).coerceAtLeast(dp(28f))
             val t = scrollY / maxScroll
             val thumbY = viewport.top + t * (trackH - thumbH)
-            ui.fill.color = Theme.withAlpha(Theme.AMBER, 0.30f)
+            ui.fill.color = Theme.withAlpha(Theme.AMBER, 0.32f)
             ui.fill.shader = null
             c.drawRoundRect(viewport.right - dp(2f), thumbY, viewport.right, thumbY + thumbH,
                 dp(2f), dp(2f), ui.fill)
@@ -462,17 +437,24 @@ class ShopScreen(
 
         message?.let {
             val a = (messageTime / 0.6f).coerceIn(0f, 1f)
-            ui.text(c, it, vw / 2f, vh - dp(22f), dp(11.5f), Theme.AMBER, bold = true, alpha = a)
+            ui.text(c, it, vw / 2f, vh - dp(18f), dp(11f), Theme.AMBER, bold = true, alpha = a)
         }
     }
 
-    /** عنوان بخش: راست‌چین + خط زیرش تا انتهای ویوپورت */
+    /** عنوان بخش — راست‌چین با خط زیر */
     private fun sectionLabel(c: Canvas, text: String, y: Float, accent: Int) {
-        if (y < viewport.top - dp(24f) || y > viewport.bottom + dp(24f)) return
+        if (y < viewport.top - dp(18f) || y > viewport.bottom + dp(18f)) return
         ui.text(c, text, viewport.right, y + dp(13f), dp(12f), accent, bold = true,
             align = Paint.Align.RIGHT)
         ui.stroke.color = Theme.withAlpha(accent, 0.22f)
         ui.stroke.strokeWidth = dp(1f)
-        c.drawLine(viewport.left, y + dp(19f), viewport.right - dp(120f), y + dp(19f), ui.stroke)
+        c.drawLine(viewport.left, y + dp(18f), viewport.right - dp(104f), y + dp(18f), ui.stroke)
+    }
+
+    /** بزرگ‌ترین اندازه‌ای که متن در آن جا شود (کف ۹dp) */
+    private fun fitSize(text: String, start: Float, maxW: Float, bold: Boolean = false): Float {
+        var s = start
+        while (s > dp(9f) && ui.measure(text, s, bold) > maxW) s -= dp(0.5f)
+        return s
     }
 }

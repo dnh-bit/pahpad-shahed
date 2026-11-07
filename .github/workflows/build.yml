@@ -57,6 +57,19 @@ jobs:
           done
           gradle testDebugUnitTest --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g"
 
+      - name: Render screens (visual QA)
+        run: |
+          gradle testDebugUnitTest --tests '*ScreenshotTest*' --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g" || true
+          ls -la app/build/screens/ 2>/dev/null || echo "no screens"
+
+      - name: Upload rendered screens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-screens
+          path: app/build/screens/
+          if-no-files-found: warn
+
       - name: Build release APK
         run: |
           gradle --version
