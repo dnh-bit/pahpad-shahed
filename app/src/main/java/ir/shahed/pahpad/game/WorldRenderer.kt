@@ -66,33 +66,6 @@ class WorldRenderer(private val gfxContext: Context) {
     /** افکت‌های دود/جرقه خاموش شده‌اند؟ */
     var effectsEnabled = true
 
-    /** Schmitt trigger: retain detail inside a +/-10% distance band. */
-    private fun lod(key: Any, distance2: Float, building: Boolean = false): Int {
-        val near = (if (building) BUILDING_NEAR_LOD else NEAR_LOD) * qualityMul
-        val mid = (if (building) BUILDING_MID_LOD else MID_LOD) * qualityMul
-        var state = lodStates[key] ?: when {
-            distance2 < near * near -> 0
-            distance2 < mid * mid -> 1
-            else -> 2
-        }
-        // Loops also handle camera teleports across both thresholds in one frame.
-        while (state < 2) {
-            val boundary = (if (state == 0) near else mid) * (1f + LOD_HYSTERESIS)
-            if (distance2 > boundary * boundary) state++ else break
-        }
-        while (state > 0) {
-            val boundary = (if (state == 1) near else mid) * (1f - LOD_HYSTERESIS)
-            if (distance2 < boundary * boundary) state-- else break
-        }
-        lodStates[key] = state
-        return state
-    }
-
-    /**
-     * وضعیت «پنجرهٔ مجزا» بر اساس اندازهٔ پنجره روی صفحه (پیکسل) با هیسترزیس.
-     * پنجره‌های مجزا فقط وقتی بزرگ‌اند رسم می‌شوند؛ زیرشان همیشه نوار شیشه هست،
-     * پس گذر از مرز هرگز پاپ‌کردن ایجاد نمی‌کند.
-     */
     /**
      * نمایش «پنجرهٔ مجزا» — کاملاً مستقل از دوربین.
      *
@@ -147,11 +120,6 @@ class WorldRenderer(private val gfxContext: Context) {
         return state
     }
 
-    /**
-     * وضعیت «پنجرهٔ مجزا» بر اساس اندازهٔ پنجره روی صفحه (پیکسل) با هیسترزیس.
-     * پنجره‌های مجزا فقط وقتی بزرگ‌اند رسم می‌شوند؛ زیرشان همیشه نوار شیشه هست،
-     * پس گذر از مرز هرگز پاپ‌کردن ایجاد نمی‌کند.
-     */
     fun update(dt: Float, mission: Mission) {
         clock += dt
         art.advance(dt)
