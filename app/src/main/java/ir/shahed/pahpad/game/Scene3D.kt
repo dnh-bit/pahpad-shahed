@@ -143,8 +143,11 @@ class Scene3D {
     var tileMode: Shader.TileMode = Shader.TileMode.CLAMP
         set(v) { if (field != v) { field = v; shaders.clear() } }
 
-    /** اندازهٔ یک تکرار کامل بافت بر حسب متر */
-    var textureMeters: Float = 6f
+    /**
+     * اندازهٔ یک تکرار کامل بافت بر حسب متر.
+     * ۰ = بدون تکرار (کشیده روی کل وجه) — رفتار قبلی و لازم برای اسپرایت‌ها.
+     */
+    var textureMeters: Float = 0f
     private val corners=Array(4){FloatArray(3)}
     private val spriteRect=RectF()
     private val screenBlend=PorterDuffXfermode(PorterDuff.Mode.SCREEN)

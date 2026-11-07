@@ -182,10 +182,16 @@ class WorldRenderer(private val gfxContext: Context) {
         scene.roofTexture = null
     }
 
-    /** یک‌بار در سازنده: بافت دیوار در فضای جهانی تکرار شود */
+    /**
+     * تکرار بافت دیوار در فضای جهانی.
+     *
+     * همیشه روشن است ولی فقط روی `rig.box` دیوارها اثر دارد: آن‌جا طول
+     * واقعی وجه با متر اندازه‌گیری می‌شود. اسپرایت‌ها و بیلبوردها از مسیر
+     * `imagePlane` می‌آیند و tileMode روی آن‌ها اثری ندارد.
+     */
     private fun setupWallTiling() {
         scene.tileMode = android.graphics.Shader.TileMode.REPEAT
-        scene.textureMeters = 7f   // هر ۷ متر یک تکرار کامل بافت
+        scene.textureMeters = 7f
     }
 
     fun draw(c: Canvas, mission: Mission, w: Float, h: Float) {
