@@ -58,11 +58,20 @@ class ScreenshotTest {
 
     @Test
     fun renderAllScreens() {
-        // MainActivity مقداردهی Tapsell/Play Services دارد که در محیط تست
-        // موجود نیست. صفحه‌ها فقط save/audio/show را از آن می‌خواهند، پس
-        // یک نمونهٔ ساده کافی است.
-        val activity = Robolectric.buildActivity(MainActivity::class.java)
-            .setup().get()
+        // MainActivity در onCreate سراغ Tapsell/Play Services می‌رود که در
+        // محیط تست موجود نیست؛ صفحه‌ها فقط save/audio/show می‌خواهند، پس
+        // همان دو فیلد را دستی پر می‌کنیم و onCreate را اجرا نمی‌کنیم.
+        val activity = Robolectric.buildActivity(MainActivity::class.java).get()
+        val save = ir.shahed.pahpad.core.SaveManager(activity)
+        fun fill(name: String) {
+            val f = MainActivity::class.java.getDeclaredField(name)
+            f.isAccessible = true
+            when (name) {
+                "save" -> f.set(activity, save)
+                "audio" -> f.set(activity, ir.shahed.pahpad.core.GameAudio(activity, save))
+            }
+        }
+        fill("save"); fill("audio")
 
         for ((tag, dims) in sizes) {
             val (w, h) = dims
