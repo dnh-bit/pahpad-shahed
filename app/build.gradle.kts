@@ -51,6 +51,12 @@ android {
         buildTypes { getByName("release") { signingConfig = signingConfigs.getByName("upload") } }
     }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    // تست‌های رندر باید به assets واقعی (بافت‌ها و فونت) دسترسی داشته باشند
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 // Native Android Canvas only; ad SDK = Tapsell Plus (mavenCentral)
 dependencies {
