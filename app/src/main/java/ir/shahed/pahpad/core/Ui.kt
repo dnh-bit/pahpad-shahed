@@ -59,6 +59,18 @@ class Ui(val context: Context, val density: Float) {
 
     // --------------------------------------------------------------- متن
 
+    /**
+     * هر متنی که رسم می‌شود، مستطیل اشغال‌شده‌اش در این لیست ثبت می‌شود.
+     *
+     * چرا: باگ «متن‌ها روی هم می‌افتند» را نمی‌شود با چشم همه‌جا دید. وقتی
+     * این ثبت روشن است، تست می‌تواند دقیقاً بگوید کدام دو متن روی هم
+     * افتاده‌اند. در بیلد عادی خاموش است (هزینهٔ صفر).
+     */
+    val textBoxes = ArrayList<TextBox>()
+    var recordTextBoxes = false
+
+    data class TextBox(val text: String, val l: Float, val t: Float, val r: Float, val b: Float)
+
     fun text(
         c: Canvas,
         str: String,
@@ -75,6 +87,16 @@ class Ui(val context: Context, val density: Float) {
         textPaint.color = Theme.withAlpha(color, alpha * android.graphics.Color.alpha(color) / 255f)
         textPaint.textAlign = align
         c.drawText(str, cx, cy + size * 0.35f, textPaint)
+        if (recordTextBoxes && str.isNotBlank() && alpha > 0.05f) {
+            val w = textPaint.measureText(str)
+            val baseline = cy + size * 0.35f
+            val left = when (align) {
+                Paint.Align.LEFT -> cx
+                Paint.Align.RIGHT -> cx - w
+                else -> cx - w / 2f
+            }
+            textBoxes.add(TextBox(str, left, baseline - size * 0.88f, left + w, baseline + size * 0.22f))
+        }
     }
 
     fun measure(str: String, size: Float, bold: Boolean = false): Float {
