@@ -25,7 +25,7 @@ import java.io.File
  * artifact می‌گذارد.
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest = Config.NONE, sdk = [28])
+@Config(sdk = [28])
 class ScreenshotTest {
 
     private val outDir = File("build/screens").apply { mkdirs() }
@@ -58,8 +58,11 @@ class ScreenshotTest {
 
     @Test
     fun renderAllScreens() {
+        // MainActivity مقداردهی Tapsell/Play Services دارد که در محیط تست
+        // موجود نیست. صفحه‌ها فقط save/audio/show را از آن می‌خواهند، پس
+        // یک نمونهٔ ساده کافی است.
         val activity = Robolectric.buildActivity(MainActivity::class.java)
-            .create().start().resume().get()
+            .setup().get()
 
         for ((tag, dims) in sizes) {
             val (w, h) = dims
