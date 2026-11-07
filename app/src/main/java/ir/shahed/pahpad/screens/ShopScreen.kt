@@ -196,7 +196,7 @@ class ShopScreen(
 
     /** ناحیهٔ لیست پهبادها: لمسِ داخلش باید اسکرول کند، نه اینکه به کارت برسد */
     override fun claimsTouch(x: Float, y: Float): Boolean =
-        ::viewportRect.isInitialized && viewportRect.contains(x, y)
+        viewportRect.contains(x, y)
 
     private fun clampScroll() {
         scrollY = scrollY.coerceIn(0f, maxScroll)
@@ -248,9 +248,19 @@ class ShopScreen(
 
     override fun onTouchUp(x: Float, y: Float, pointerId: Int) {
         if (pointerId == dragPointer && !moved) {
-            // یک لمسِ «بدون حرکت» روی دکمه‌ها به کار خودشان سپرده شد؛ فقط وضعیت را پاک کن
+            // لمسِ بدون حرکت = انتخاب پهباد زیر انگشت.
+            // از دکمه‌های لیست (نه ارتقاها) جستجو می‌کنیم؛ عناصر بیرون ویوپورت
+            // visible=false هستند و contains() آن‌ها را رد می‌کند.
+            for (b in droneButtons.reversed()) {
+                if (b.contains(x, y)) {
+                    audio.click()
+                    b.onClick()
+                    break
+                }
+            }
         }
         if (pointerId == dragPointer) dragPointer = -1
+        moved = false
     }
 
     override fun update(dt: Float) {
