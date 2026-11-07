@@ -100,7 +100,9 @@ class LeaderboardScreen(game: MainActivity) : BaseScreen(game) {
             ui.text(c, scoreText, lx + dp(12f), y + dp(17f), dp(12f),
                 if (best > 0) Theme.AMBER else Theme.TEXT_FAINT, align = Paint.Align.LEFT)
             ui.stars(c, lx + lw - starsW / 2f - dp(6f), y + dp(17f), dp(6f), stars)
-            val titleMaxW = (lw - scoreW - starsW - dp(20f)).coerceAtLeast(dp(40f))
+            // فاصله باید بیشتر از پدینگ امتیاز (dp 12) باشد، وگرنه عنوان
+            // روی انتهای عدد امتیاز می‌افتد.
+            val titleMaxW = (lw - scoreW - starsW - dp(32f)).coerceAtLeast(dp(40f))
             var title = Fa.num(l.code) + " · " + l.title
             var size = dp(12f)
             while (ui.measure(title, size) > titleMaxW && size > dp(9f)) size -= dp(0.5f)

@@ -53,7 +53,9 @@ class LevelSelectScreen(game: MainActivity, private val chapterNumber: Int) : Ba
 
         // حداقل عرض خوانا برای یک کارت؛ هرچه جا شد ستون بیشتر
         val minCardW = dp(148f)
-        var cols = ((availW + gap) / (minCardW + gap)).toInt().coerceIn(1, n)
+        // سقف ۳ ستون: با ۵ مرحله، ۳+۲ ردیف کارت‌های بزرگ‌تر و خواناتر
+        // می‌دهد؛ بیشتر از آن کارت‌ها بی‌دلیل پهن و کم‌ارتفاع می‌شوند.
+        var cols = ((availW + gap) / (minCardW + gap)).toInt().coerceIn(1, minOf(n, 3))
         if (cols > n) cols = n
         val rows = (n + cols - 1) / cols
 

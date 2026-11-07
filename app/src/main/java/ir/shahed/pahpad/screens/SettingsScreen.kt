@@ -63,6 +63,8 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
     }
 
     private fun refresh() {
+        // تنظیمات گرافیک کش BaseScreen را هم به‌روز کن تا همان لحظه اثر کند
+        refreshGraphicsCache()
         sound.subLabel = if (save.soundOn) "روشن" else "خاموش"
         vibrate.subLabel = if (save.vibrateOn) "روشن" else "خاموش"
         control.subLabel = if (save.tiltControl) "تیلت گوشی" else "جوی‌استیک"

@@ -23,6 +23,20 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
 
     private var lastFrame = 0L
     private var looping = false
+
+    /** کش تنظیمات گرافیک: یک‌بار خوانده می‌شود و از setter استفاده می‌کند */
+    private var showFpsCached = false
+    private var frameCapCached = 1
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        refreshGraphicsCache()
+    }
+
+    fun refreshGraphicsCache() {
+        showFpsCached = save.showFps
+        frameCapCached = save.frameCap
+    }
     var time = 0f
         protected set
     var vw = 0f
@@ -105,7 +119,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         }
         if (looping) {
             // محدودیت نرخ فریم: روی گوشی‌های ضعیف ۳۰ فریم کافی و روان‌تر است
-            val cap = if (save.frameCap == 0) 30f else 60f
+            val cap = if (frameCapCached == 0) 30f else 60f
             val frameBudgetNs = (1_000_000_000.0 / cap).toLong()
             val elapsed = System.nanoTime() - frameStart
             if (elapsed < frameBudgetNs) {
@@ -114,8 +128,10 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
                 postInvalidateOnAnimation()
             }
         }
-        // شمارندهٔ FPS (فقط اگر کاربر خواسته باشد)
-        if (save.showFps) {
+        // شمارندهٔ FPS (تنظیم یک‌بار در onAttachedToWindow خوانده می‌شود،
+        // نه در هر فریم — خواندن SharedPreferences در هر فریم روی گوشی ضعیف
+        // هزینه دارد)
+        if (showFpsCached) {
             fpsFrames++
             if (now - fpsWindow >= 1_000_000_000L) {
                 fpsValue = fpsFrames

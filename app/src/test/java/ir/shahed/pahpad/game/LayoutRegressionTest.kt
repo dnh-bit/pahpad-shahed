@@ -30,20 +30,22 @@ class LayoutRegressionTest {
     fun `آخرین پهباد با اسکرول کامل قابل دیدن است`() {
         val cardH = 66f
         val gap = 8f
-        val vp = Viewport(110f, 694f) // ارتفاع واقعی landscape
-        // ۴ پهباد
-        val tops = (0 until 4).map { 112f + it * (cardH + gap) }
+        // ویوپورت واقعی: از dp(84+26) تا dp(60) بالای پایین صفحه، در مقیاس 2.75
+        val dp = 2.75f
+        val vp = Viewport((84f + 26f) * dp, 1080f - 60f * dp)
+        val count = 4
+        val tops = (0 until count).map { vp.top + 2f + it * (cardH * dp + gap * dp) }
 
-        val firstScreen = visibleCount(tops, cardH, vp)
-        assertTrue("باید حداقل ۲ کارت اول دیده شود", firstScreen >= 2)
-        assertTrue("همه ۴ کارت نباید یک‌جا جا شوند (وگرنه اسکرول لازم نیست)", firstScreen < 4)
+        val firstScreen = visibleCount(tops, cardH * dp, vp)
+        assertTrue("باید حداقل ۲ کارت اول دیده شود (شد $firstScreen)", firstScreen >= 2)
+        assertTrue("همه کارت‌ها نباید یک‌جا جا شوند — وگرنه اسکرول لازم نیست", firstScreen < count)
 
-        // شبیه‌سازی اسکرول تا انتها
-        val maxScroll = (4 * (cardH + gap) - gap) - vp.height
-        assertTrue("محتوای لیست باید بلندتر از ویوپورت باشد تا اسکرول معنا داشته باشد", maxScroll > 0f)
+        val contentH = count * (cardH * dp + gap * dp) - gap * dp
+        val maxScroll = (contentH - vp.height).coerceAtLeast(0f)
+        assertTrue("محتوای لیست باید بلندتر از ویوپورت باشد (maxScroll=$maxScroll)", maxScroll > 0f)
 
         val scrolled = tops.map { it - maxScroll }
-        val lastVisible = scrolled.last() + cardH > vp.top && scrolled.last() < vp.bottom
+        val lastVisible = scrolled.last() + cardH * dp > vp.top && scrolled.last() < vp.bottom
         assertTrue("آخرین پهباد پس از اسکرول کامل باید دیده شود", lastVisible)
     }
 
@@ -80,12 +82,15 @@ class LayoutRegressionTest {
     @Test
     fun `پنج مرحله در گرید حداکثر سه ستون می‌گیرد`() {
         val n = 5
-        val availW = 2340f - 88f
-        val gap = 27.5f
-        val minCardW = 407f
+        val dp = 2.75f
+        // همان فرمول LevelSelectScreen: availW در px، minCardW هم در px
+        val availW = 2340f - 16f * dp * 2f
+        val gap = 10f * dp
+        val minCardW = 148f * dp
         val cols = ((availW + gap) / (minCardW + gap)).toInt().coerceIn(1, n)
         val rows = (n + cols - 1) / cols
-        assertTrue("حداکثر ۳ ستون", cols <= 3)
+        assertTrue("حداکثر ۳ ستون (شد $cols)", cols <= 3)
+        assertTrue("حداقل ۲ ستون تا متن خوانا بماند (شد $cols)", cols >= 2)
         assertTrue("حداقل ۲ ردیف برای ۵ مرحله", rows >= 2)
     }
 
@@ -158,13 +163,21 @@ class LayoutRegressionTest {
 
     @Test
     fun `سه ستون لیدربورد هرگز روی هم نمی‌افتند`() {
+        val dp = 2.75f
         val lw = 1400f
-        val scoreW = 56f * 2.75f
-        val starsW = 52f * 2.75f
-        val titleMaxW = (lw - scoreW - starsW - 20f * 2.75f)
-        val scoreEnd = 12f * 2.75f + scoreW
-        val titleStart = lw - starsW - 10f * 2.75f - titleMaxW
-        assertTrue("عنوان نباید روی امتیاز بیفتد", titleStart >= scoreEnd)
+        val scoreW = 56f * dp
+        val starsW = 52f * dp
+        val pad = 20f * dp
+        val titleMaxW = (lw - scoreW - starsW - pad).coerceAtLeast(40f * dp)
+        // امتیاز از x=dp(12) شروع می‌شود (تراز چپ)
+        val scoreStart = 12f * dp
+        val scoreEnd = scoreStart + scoreW
+        // عنوان با تراز راست تا starsW + dp(10) از لبه فاصله دارد
+        val titleRight = lw - starsW - 10f * dp
+        val titleLeft = titleRight - titleMaxW
+        assertTrue("عنوان نباید روی امتیاز بیفتد (titleLeft=$titleLeft، scoreEnd=$scoreEnd)",
+            titleLeft >= scoreEnd)
         assertTrue("فضای عنوان باید مثبت بماند", titleMaxW > 0f)
+        assertTrue("ستاره‌ها نباید روی عنوان بیفتند", titleRight >= titleLeft)
     }
 }
