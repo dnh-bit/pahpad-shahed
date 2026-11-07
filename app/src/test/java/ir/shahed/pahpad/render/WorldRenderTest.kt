@@ -36,6 +36,11 @@ class WorldRenderTest {
         val level = Levels.all.first { it.chapter == 3 }   // عملیات شهری
 
         val mission = Mission(level, save, MissionMode.STORY, 42L)
+        // بررسی می‌کنیم بافت‌ها واقعاً لود می‌شوند، وگرنه رندر بی‌معناست
+        for (n in listOf("material_wall", "material_roof")) {
+            val b = ir.shahed.pahpad.core.Gfx.get(activity, n)
+            println("بافت $n: " + (if (b == null) "NULL ❌" else "${b.width}x${b.height} ✅"))
+        }
         val renderer = WorldRenderer(activity)
         renderer.applyQuality(2)
 
