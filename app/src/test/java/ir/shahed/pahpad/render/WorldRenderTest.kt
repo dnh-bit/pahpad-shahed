@@ -83,5 +83,21 @@ class WorldRenderTest {
             f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
             println("نوشتم ${f.absolutePath}")
         }
+
+        // ---- اثبات پایداری پنجره‌ها
+        // یک ساختمان ثابت را از دو فاصلهٔ خیلی نزدیک به هم رندر می‌کنیم. اگر
+        // تصمیم «پنجرهٔ مجزا» به دوربین وابسته باشد، شدت پنجره بین این دو
+        // فریم می‌پرد. چون الان بر اساس فاصلهٔ جهانی است، باید یکسان بماند.
+        val wd = WorldRenderer(activity)
+        val detailFn = WorldRenderer::class.java.getDeclaredMethod("windowDetail", Float::class.java)
+        detailFn.isAccessible = true
+        // فاصلهٔ جهانی ساختمان (ثابت است، هرگز با دوربین عوض نمی‌شود)
+        for (d in listOf(200f, 200.001f, 300f, 300.001f)) {
+            val v = detailFn.invoke(wd, d) as Float
+            println("windowDetail(${d}) = $v")
+        }
+        val a = detailFn.invoke(wd, 260f) as Float
+        val b = detailFn.invoke(wd, 260.001f) as Float
+        assert(Math.abs(a - b) < 1e-6) { "شدت پنجره نباید با تغییر ناچیز عوض شود" }
     }
 }
