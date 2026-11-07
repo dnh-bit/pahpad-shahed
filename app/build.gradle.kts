@@ -12,8 +12,8 @@ android {
         applicationId = "ir.shahed.pahpad"
         minSdk = 24
         targetSdk = 34
-        versionCode = 13
-        versionName = "0.1.3"
+        versionCode = 14
+        versionName = "0.1.4"
         resourceConfigurations += listOf("fa")
     }
     buildTypes {
