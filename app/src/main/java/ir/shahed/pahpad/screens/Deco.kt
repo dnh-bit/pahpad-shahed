@@ -3,6 +3,7 @@ package ir.shahed.pahpad.screens
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import ir.shahed.pahpad.BuildConfig
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.Fa
 import ir.shahed.pahpad.core.Theme
@@ -21,6 +22,12 @@ object Deco {
         ui.stroke.color = Theme.withAlpha(accent, 0.35f)
         ui.stroke.strokeWidth = ui.dp(1.2f)
         c.drawLine(s.vw * 0.28f, ui.dp(70f), s.vw * 0.72f, ui.dp(70f), ui.stroke)
+
+        // نشانگر بیلد تست — تا با نسخهٔ اصلی روی گوشی قاطی نشود
+        if (BuildConfig.MODDED) {
+            ui.chip(c, s.vw - ui.dp(58f), ui.dp(18f), "نسخهٔ تست", Theme.VIOLET)
+            ui.chip(c, ui.dp(58f), ui.dp(18f), "همه باز", Theme.MINT)
+        }
     }
 
     /** نوار منابع بازیکن: سکه، ستاره، رتبه */

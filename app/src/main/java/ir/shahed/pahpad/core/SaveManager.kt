@@ -2,6 +2,7 @@ package ir.shahed.pahpad.core
 
 import android.content.Context
 import android.content.SharedPreferences
+import ir.shahed.pahpad.BuildConfig
 import ir.shahed.pahpad.data.DroneModels
 import ir.shahed.pahpad.data.Levels
 import ir.shahed.pahpad.data.Ranks
@@ -117,6 +118,8 @@ class SaveManager(context: Context) {
         }
 
     fun isLevelUnlocked(levelId: String): Boolean {
+        // بیلد تست: همهٔ مراحل باز
+        if (BuildConfig.MODDED) return true
         val level = Levels.byId(levelId) ?: return false
         val chapter = Levels.chapter(level.chapter) ?: return false
         if (totalStars < chapter.requiredStars) return false
@@ -127,6 +130,7 @@ class SaveManager(context: Context) {
     }
 
     fun isChapterUnlocked(chapterNumber: Int): Boolean {
+        if (BuildConfig.MODDED) return true
         val chapter = Levels.chapter(chapterNumber) ?: return false
         return totalStars >= chapter.requiredStars
     }
@@ -148,6 +152,8 @@ class SaveManager(context: Context) {
         set(v) = sp.edit().putString("drone", v).apply()
 
     fun isDroneUnlocked(droneId: String): Boolean {
+        // بیلد تست: همهٔ پهبادها باز
+        if (BuildConfig.MODDED) return true
         val d = DroneModels.byId(droneId) ?: return false
         return totalStars >= d.requiredStars
     }

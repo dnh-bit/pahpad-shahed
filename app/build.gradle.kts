@@ -9,13 +9,21 @@ android {
     namespace = "ir.shahed.pahpad"
     compileSdk = 34
     defaultConfig {
-        applicationId = "ir.shahed.pahpad"
+        // بیلد تست با شناسهٔ جدا نصب می‌شود تا نسخهٔ اصلی روی گوشی جای آن را نگیرد
+        val moddedBuild = (project.findProperty("modded") as String?)?.toBoolean() ?: false
+        applicationId = if (moddedBuild) "ir.shahed.pahpad.mod" else "ir.shahed.pahpad"
         minSdk = 24
         targetSdk = 34
         versionCode = 14
         versionName = "0.1.4"
         resourceConfigurations += listOf("fa")
+
+        // حالت تست: همهٔ مراحل و پهبادها باز. فقط با
+        //   -Pmodded=true
+        // فعال می‌شود؛ بیلد عادی هیچ تغییری نمی‌کند.
+        buildConfigField("boolean", "MODDED", moddedBuild.toString())
     }
+    buildFeatures { buildConfig = true }
     buildTypes {
         release {
             isMinifyEnabled = true

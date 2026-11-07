@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      modded:
+        description: 'همهٔ مراحل و پهبادها باز (بیلد تست)'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -24,6 +29,16 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.2'
+
+      - name: Read version
+        id: ver
+        run: |
+          VN=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          VC=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
+          echo "name=$VN" >> $GITHUB_OUTPUT
+          echo "code=$VC" >> $GITHUB_OUTPUT
+          echo "tag=v$VN+$VC" >> $GITHUB_OUTPUT
+          echo "نسخه: $VN ($VC)"
 
       - name: Decode signing key
         env:
@@ -61,21 +76,20 @@ jobs:
             echo "$(basename "$apk"): $bytes bytes"
           done
 
-      - name: Read version
-        id: ver
-        run: |
-          VN=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-          VC=$(grep -m1 'versionCode' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
-          echo "name=$VN" >> $GITHUB_OUTPUT
-          echo "code=$VC" >> $GITHUB_OUTPUT
-          echo "tag=v$VN+$VC" >> $GITHUB_OUTPUT
-          echo "نسخه: $VN ($VC)"
-
       - name: Rename APK
         run: |
           mkdir -p out
           APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           cp "$APK" "out/pahpad-shahed-v${{ steps.ver.outputs.name }}.apk"
+
+      - name: Build modded APK (all unlocked)
+        if: ${{ inputs.modded == true }}
+        run: |
+          gradle clean assembleRelease -Pmodded=true --no-daemon "-Dorg.gradle.jvmargs=-Xmx3g"
+          mkdir -p out
+          APK=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+          cp "$APK" "out/pahpad-v${{ steps.ver.outputs.name }}-test.apk"
+          ls -la out/
 
       - name: Upload test results (diagnostics)
         if: always()
@@ -92,6 +106,28 @@ jobs:
           name: ${{ steps.ver.outputs.name }}
           body_path: CHANGES-${{ steps.ver.outputs.name }}-FA.md
           files: out/pahpad-shahed-v${{ steps.ver.outputs.name }}.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release modded (pre-release)
+        if: ${{ inputs.modded == true }}
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}-test
+          name: ${{ steps.ver.outputs.name }} — نسخهٔ تست
+          body: |
+            🧪 **نسخهٔ تست — همهٔ مراحل و پهبادها باز**
+
+            برای تست سریع گیم‌پلی. این نسخه:
+
+            - همهٔ ۲۰ مرحله باز است
+            - همهٔ ۴ پهباد باز است
+            - شناسهٔ جدا (`ir.shahed.pahpad.mod`) دارد، پس کنار نسخهٔ اصلی نصب می‌شود
+            - برچسب «نسخهٔ تست» روی هدر همهٔ صفحه‌ها دیده می‌شود
+
+            ⚠️ برای انتشار عمومی استفاده نکن.
+          prerelease: true
+          files: out/pahpad-v${{ steps.ver.outputs.name }}-test.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
