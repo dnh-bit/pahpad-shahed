@@ -128,6 +128,23 @@ class Scene3D {
     private val a=FloatArray(3); private val b=FloatArray(3)
     private val matrix=Matrix()
     private val shaders=HashMap<Bitmap,BitmapShader>()
+
+    /**
+     * تکرار بافت در فضای جهانی (متر)، نه کشیده‌شدن روی کل وجه.
+     *
+     * چرا: بافت دیوار ۲۵۶×۲۵۶ است و داخلش ۴×۴ کاشی دارد. اگر روی کل وجه
+     * کشیده شود، روی یک ساختمان ۱۲×۳۰ متری هر کاشی ۳×۷٫۵ متر می‌شود و
+     * با حرکت دوربین درزها «می‌خزند» — همان چیزی که به‌صورت پنجره‌های
+     * ناپایدار دیده می‌شد.
+     *
+     * حالا بافت هر [TEX_METERS] متر یک‌بار تکرار می‌شود، پس اندازهٔ کاشی
+     * در دنیای واقعی ثابت است و با حرکت دوربین تغییر نمی‌کند.
+     */
+    var tileMode: Shader.TileMode = Shader.TileMode.CLAMP
+        set(v) { if (field != v) { field = v; shaders.clear() } }
+
+    /** اندازهٔ یک تکرار کامل بافت بر حسب متر */
+    var textureMeters: Float = 6f
     private val corners=Array(4){FloatArray(3)}
     private val spriteRect=RectF()
     private val screenBlend=PorterDuffXfermode(PorterDuff.Mode.SCREEN)
@@ -204,16 +221,32 @@ class Scene3D {
         val g=(d3*e2-d2*e3)/det;val h=(d1*e3-d3*e1)/det
         // A convex quad has positive homogeneous corner weights.
         if(1.0+g<=0.0 || 1.0+h<=0.0 || 1.0+g+h<=0.0)return false
+
+        // ---- تکرار بافت در فضای جهانی (متر)
+        // طول واقعی دو لبهٔ وجه در فضای دوربین (که همان متر جهان است، چون
+        // تبدیل دوربین فقط چرخش و جابه‌جایی است).
+        val ux=q[0]-p[0]; val uy=q[1]-p[1]; val uz=q[2]-p[2]
+        val vx=s[0]-p[0]; val vy=s[1]-p[1]; val vz=s[2]-p[2]
+        val edgeU=sqrt(ux*ux+uy*uy+uz*uz)
+        val edgeV=sqrt(vx*vx+vy*vy+vz*vz)
+        // تقسیم دقیق (نه گرد) تا در همهٔ ساختمان‌ها اندازهٔ کاشی در دنیای
+        // واقعی یکسان بماند. reps بر اساس هندسهٔ ثابت ساختمان است، نه دوربین،
+        // پس با حرکت پهباد تغییر نمی‌کند.
+        val repsU=if(textureMeters>0.001f) (edgeU/textureMeters).coerceIn(0.25f,64f) else 1f
+        val repsV=if(textureMeters>0.001f) (edgeV/textureMeters).coerceIn(0.25f,64f) else 1f
+        val bw=bitmap.width*repsU.toDouble()
+        val bh=bitmap.height*repsV.toDouble()
+
         for(k in 0..2) {
-            val a=((1.0+g)*q[k]-p[k])/bitmap.width
-            val b=((1.0+h)*s[k]-p[k])/bitmap.height
+            val a=((1.0+g)*q[k]-p[k])/bw
+            val b=((1.0+h)*s[k]-p[k])/bh
             val c=p[k].toDouble()
             if(k==2){out[6]=a.toFloat();out[7]=b.toFloat();out[8]=c.toFloat()}
             else {
                 val sign=if(k==0)cam.focal else -cam.focal
                 val center=if(k==0)cam.screenCx else cam.screenCy
-                val za=((1.0+g)*q[2]-p[2])/bitmap.width
-                val zb=((1.0+h)*s[2]-p[2])/bitmap.height
+                val za=((1.0+g)*q[2]-p[2])/bw
+                val zb=((1.0+h)*s[2]-p[2])/bh
                 out[k*3]=(sign*a+center*za).toFloat()
                 out[k*3+1]=(sign*b+center*zb).toFloat()
                 out[k*3+2]=(sign*c+center*p[2]).toFloat()
@@ -302,7 +335,7 @@ class Scene3D {
             val bitmap=f.bitmap
             if(bitmap!=null) {
                 matrix.setValues(f.textureMatrix)
-                val shader=shaders.getOrPut(bitmap){BitmapShader(bitmap,Shader.TileMode.CLAMP,Shader.TileMode.CLAMP)}
+                val shader=shaders.getOrPut(bitmap){BitmapShader(bitmap,tileMode,tileMode)}
                 shader.setLocalMatrix(matrix);paint.shader=shader
                 paint.alpha=if(f.transparent)(255*f.opacity*(1f-f.fog*.75f)).toInt() else (226*(1f-f.fog)).toInt()
                 paint.colorFilter=f.filter

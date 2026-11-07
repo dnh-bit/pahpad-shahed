@@ -52,6 +52,8 @@ class WorldRenderer(private val gfxContext: Context) {
      * کم‌جزئیات زودتر فعال می‌شوند) و شعاع دید کوتاه‌تر می‌شود. این تنها
      * جایی است که «سنگینی» بازی به آن حساس است.
      */
+    init { setupWallTiling() }
+
     private var qualityMul = 1f
 
     fun applyQuality(level: Int) {
@@ -178,6 +180,12 @@ class WorldRenderer(private val gfxContext: Context) {
     private fun plain() {
         scene.wallTexture = null
         scene.roofTexture = null
+    }
+
+    /** یک‌بار در سازنده: بافت دیوار در فضای جهانی تکرار شود */
+    private fun setupWallTiling() {
+        scene.tileMode = android.graphics.Shader.TileMode.REPEAT
+        scene.textureMeters = 7f   // هر ۷ متر یک تکرار کامل بافت
     }
 
     fun draw(c: Canvas, mission: Mission, w: Float, h: Float) {
