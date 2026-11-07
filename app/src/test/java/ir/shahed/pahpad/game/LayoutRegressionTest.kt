@@ -87,7 +87,8 @@ class LayoutRegressionTest {
         val availW = 2340f - 16f * dp * 2f
         val gap = 10f * dp
         val minCardW = 148f * dp
-        val cols = ((availW + gap) / (minCardW + gap)).toInt().coerceIn(1, n)
+        // همان سقف ۳ ستونِ LevelSelectScreen
+        val cols = ((availW + gap) / (minCardW + gap)).toInt().coerceIn(1, minOf(n, 3))
         val rows = (n + cols - 1) / cols
         assertTrue("حداکثر ۳ ستون (شد $cols)", cols <= 3)
         assertTrue("حداقل ۲ ستون تا متن خوانا بماند (شد $cols)", cols >= 2)
@@ -167,7 +168,7 @@ class LayoutRegressionTest {
         val lw = 1400f
         val scoreW = 56f * dp
         val starsW = 52f * dp
-        val pad = 20f * dp
+        val pad = 32f * dp   // همان مقدار LeaderboardScreen
         val titleMaxW = (lw - scoreW - starsW - pad).coerceAtLeast(40f * dp)
         // امتیاز از x=dp(12) شروع می‌شود (تراز چپ)
         val scoreStart = 12f * dp
