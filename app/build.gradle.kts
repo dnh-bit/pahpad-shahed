@@ -56,5 +56,5 @@ android {
 dependencies {
     implementation("ir.tapsell.plus:tapsell-plus-sdk-android:2.3.3")
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.12.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

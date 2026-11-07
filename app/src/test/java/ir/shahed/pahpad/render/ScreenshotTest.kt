@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
@@ -25,6 +26,9 @@ import java.io.File
  * artifact می‌گذارد.
  */
 @RunWith(RobolectricTestRunner::class)
+// حالت گرافیک بومی: Robolectric واقعاً با Skia رستر می‌کند، پس فونت فارسی
+// و متن‌ها در تصویر خروجی دیده می‌شوند (حالت پیش‌فرض متن را نمی‌کشد).
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [28])
 class ScreenshotTest {
 
