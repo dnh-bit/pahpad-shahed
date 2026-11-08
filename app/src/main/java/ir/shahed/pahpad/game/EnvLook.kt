@@ -44,7 +44,7 @@ class EnvLook(
             bounceR = .46f, bounceG = .38f, bounceB = .28f,
             cloudMul = 0xFFFFF4E4.toInt(), cloudAdd = 0xFF100804.toInt(), cloudAlpha = 210,
             sunDisc = 0xFFFFF4D6.toInt(), sunHalo = 0xFFFFD99A.toInt(), stars = false,
-            windowLit = 0xFF9FB7BE.toInt(), windowGlass = 0xFF3E5863.toInt(), litChance = 6,
+            windowLit = 0xFF9FB7BE.toInt(), windowGlass = 0xFF6C8FA3.toInt(), litChance = 6,
             fogStart = 320f, fogEnd = 1650f
         )
         /** Hazy city dusk; low warm sun on the right, cool ambient. */
@@ -57,7 +57,7 @@ class EnvLook(
             bounceR = .34f, bounceG = .30f, bounceB = .28f,
             cloudMul = 0xFFF2C6B4.toInt(), cloudAdd = 0xFF1A0E10.toInt(), cloudAlpha = 200,
             sunDisc = 0xFFFFE2BE.toInt(), sunHalo = 0xFFFFA468.toInt(), stars = false,
-            windowLit = 0xFFFFCB84.toInt(), windowGlass = 0xFF33414F.toInt(), litChance = 4,
+            windowLit = 0xFFFFCB84.toInt(), windowGlass = 0xFF5A7C93.toInt(), litChance = 4,
             fogStart = 280f, fogEnd = 1500f
         )
         /** Clear maritime noon; high sun behind-left keeps ships readable. */
@@ -70,7 +70,7 @@ class EnvLook(
             bounceR = .30f, bounceG = .38f, bounceB = .44f,
             cloudMul = 0xFFFFFFFF.toInt(), cloudAdd = 0xFF000000.toInt(), cloudAlpha = 225,
             sunDisc = 0xFFFFFFF2.toInt(), sunHalo = 0xFFFFF1CF.toInt(), stars = false,
-            windowLit = 0xFFA9C4CF.toInt(), windowGlass = 0xFF3B5663.toInt(), litChance = 6,
+            windowLit = 0xFFA9C4CF.toInt(), windowGlass = 0xFF688DA2.toInt(), litChance = 6,
             fogStart = 360f, fogEnd = 1750f
         )
         /** Blue-hour special ops: stars overhead, ember horizon, lit windows. */
@@ -83,7 +83,7 @@ class EnvLook(
             bounceR = .26f, bounceG = .23f, bounceB = .27f,
             cloudMul = 0xFFB9A2C0.toInt(), cloudAdd = 0xFF140A14.toInt(), cloudAlpha = 170,
             sunDisc = 0xFFFFD6B0.toInt(), sunHalo = 0xFFFF8A5C.toInt(), stars = true,
-            windowLit = 0xFFFFC874.toInt(), windowGlass = 0xFF252C3E.toInt(), litChance = 3,
+            windowLit = 0xFFFFC874.toInt(), windowGlass = 0xFF4A6382.toInt(), litChance = 3,
             fogStart = 260f, fogEnd = 1400f
         )
 
