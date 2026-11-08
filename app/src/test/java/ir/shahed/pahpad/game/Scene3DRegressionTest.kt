@@ -52,6 +52,36 @@ class Scene3DRegressionTest {
         assertEquals(5,face.count);assertSame(bitmap,face.bitmap);assertFalse(face.transparent)
     }
 
+    /**
+     * رگرسیون: بدنهٔ پهپاد یک اسپرایت است. اگر تکرار بافت (که برای دیوار
+     * ساختمان‌ها لازم است) روی آن هم اعمال شود، با مقیاس ۷ متر تقسیم می‌شود
+     * و مدل کاملاً داغان دیده می‌شود — همان باگ نسخهٔ 0.1.6.
+     */
+    @Test fun droneSpriteIsNeverTiled() {
+        val s = scene()
+        s.tileMode = android.graphics.Shader.TileMode.REPEAT
+        s.textureMeters = 7f
+        val bmp = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        // همان مسیر DroneArt: imagePlane
+        s.imagePlane(arrayOf(
+            floatArrayOf(-5f, 5f, 10f), floatArrayOf(5f, 5f, 10f),
+            floatArrayOf(5f, -5f, 10f), floatArrayOf(-5f, -5f, 10f)
+        ), bmp, 1f)
+        val face = faces(s).single()
+        // نگاشت باید ۱:۱ باشد: لبهٔ ۱۰ متری روی کل بافت نگاشت شود، نه ۱۰/۷
+        val m = face.textureMatrix
+        val w0 = m[6] * 0f + m[7] * 0f + m[8]
+        val w1 = m[6] * 64f + m[7] * 0f + m[8]
+        assertTrue("عرض نگاشت باید محدود بماند", w0.isFinite() && w1.isFinite())
+        // اگر تکرار اعمال می‌شد، ضریب افقی ۷/۱۰ برابر می‌شد
+        val px0 = (m[0] * 0f + m[2]) / w0
+        val px1 = (m[0] * 64f + m[2]) / w1
+        val spanPx = kotlin.math.abs(px1 - px0)
+        // پهنای واقعی روی صفحه = focal * 10 / 10 = focal
+        val expected = s.cam.focal
+        assertEquals("اسپرایت باید بدون تکرار روی کل وجه کشیده شود", expected, spanPx, expected * 0.02f)
+    }
+
     private class RecordingCanvas:Canvas() {
         val calls=ArrayList<String>()
         override fun drawCircle(cx:Float,cy:Float,radius:Float,paint:android.graphics.Paint) { calls.add("circle") }

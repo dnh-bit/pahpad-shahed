@@ -191,7 +191,7 @@ class WorldRenderer(private val gfxContext: Context) {
      */
     private fun setupWallTiling() {
         scene.tileMode = android.graphics.Shader.TileMode.REPEAT
-        scene.textureMeters = 7f
+        scene.textureMeters = 7f   // فقط روی وجه‌هایی که tiledFaces دارند
     }
 
     fun draw(c: Canvas, mission: Mission, w: Float, h: Float) {
@@ -355,7 +355,9 @@ class WorldRenderer(private val gfxContext: Context) {
         val wall = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_wall")
         val roof = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_roof")
         val cap = max(.5f, h * .04f).coerceAtMost(h * .2f)
-        rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false)
+        // اینجا (و فقط اینجا) بافت دیوار با مقیاس متری تکرار می‌شود.
+        // بدنهٔ پهپاد/تانک/کشتی از این مسیر نمی‌گذرند یا tiledFaces ندارند.
+        rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false, tiledFaces = true)
         // لبهٔ پشت‌بام (parapet)
         rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false)
         val parapet = if (detail == 0 && !destroyed) min(1.1f, max(.35f, h * .018f)) else 0f

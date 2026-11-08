@@ -144,8 +144,12 @@ class Scene3D {
         set(v) { if (field != v) { field = v; shaders.clear() } }
 
     /**
-     * اندازهٔ یک تکرار کامل بافت بر حسب متر.
-     * ۰ = بدون تکرار (کشیده روی کل وجه) — رفتار قبلی و لازم برای اسپرایت‌ها.
+     * اندازهٔ یک تکرار کامل بافت بر حسب متر — فقط برای وجه‌هایی که با
+     * [quadTiled] ساخته می‌شوند.
+     *
+     * چرا تفکیک شد: قبلاً این یک تنظیم جهانی بود و روی همهٔ وجه‌های بافت‌دار
+     * اثر می‌گذاشت. نتیجه این شد که بدنهٔ پهپاد (که یک اسپرایت است و با
+     * imagePlane رسم می‌شود) هم با مقیاس ۷ متر تقسیم و کاملاً داغان شد.
      */
     var textureMeters: Float = 0f
     private val corners=Array(4){FloatArray(3)}
@@ -164,7 +168,7 @@ class Scene3D {
         val t=((depth-fogStart)/(fogEnd-fogStart)).coerceIn(0f,1f)
         return (t*t*(3f-2f*t))*.97f
     }
-    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f) {
+    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f,tiled:Boolean=false) {
         val lightKey=pendingLight;pendingLight=-1
         val near=cam.near+0.002f
         var count=0
@@ -194,7 +198,7 @@ class Scene3D {
         }
         // Expanded bounds accommodate the outer Canvas roll transform.
         if(maxX < -cam.width || minX > cam.width*2 || maxY < -cam.height || minY > cam.height*2){used--;return}
-        if(texture!=null && n==4 && textureMapping(texture,f.textureMatrix)) {
+        if(texture!=null && n==4 && textureMapping(texture,f.textureMatrix,tiled)) {
             f.bitmap=texture; f.transparent=transparent
             if(!transparent && lightKey>=0)f.filter=filterFor(lightKey)
         } else if(transparent) {
@@ -209,7 +213,7 @@ class Scene3D {
      * The clipped path supplies coverage only; it must not redefine the UV corners.
      * Like setPolyToPoly, this assumes a planar, convex, non-degenerate quad.
      */
-    private fun textureMapping(bitmap:Bitmap,out:FloatArray):Boolean {
+    private fun textureMapping(bitmap:Bitmap,out:FloatArray,tiled:Boolean):Boolean {
         val p=input[0];val q=input[1];val r=input[2];val s=input[3]
         val ax=(q[0]-p[0]).toDouble();val ay=(q[1]-p[1]).toDouble();val az=(q[2]-p[2]).toDouble()
         val bx=(s[0]-p[0]).toDouble();val by=(s[1]-p[1]).toDouble();val bz=(s[2]-p[2]).toDouble()
@@ -241,8 +245,9 @@ class Scene3D {
         // تکرار کامل (نه رُند‌شده): اندازهٔ کاشی در دنیای واقعی روی همهٔ
         // ساختمان‌ها یکسان می‌ماند. سقف ۲۰۰ فقط برای جلوگیری از اعداد
         // بی‌معنا روی وجه‌های بسیار بزرگ است و در عمل هرگز فعال نمی‌شود.
-        val repsU=if(textureMeters>0.001f) (edgeU/textureMeters).coerceIn(0.05f,200f) else 1f
-        val repsV=if(textureMeters>0.001f) (edgeV/textureMeters).coerceIn(0.05f,200f) else 1f
+        val uv = if(tiled && textureMeters>0.001f) textureMeters else 0f
+        val repsU=if(uv>0.001f) (edgeU/uv).coerceIn(0.05f,200f) else 1f
+        val repsV=if(uv>0.001f) (edgeV/uv).coerceIn(0.05f,200f) else 1f
         val bw=bitmap.width*repsU.toDouble()
         val bh=bitmap.height*repsV.toDouble()
 
@@ -266,6 +271,11 @@ class Scene3D {
     fun quad(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,outline:Int=0,texture:Bitmap?=null,transparent:Boolean=false) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
         submit(4,color,outline,texture,transparent)
+    }
+    /** همان quad، ولی بافت به‌جای کشیده‌شدن روی کل وجه، هر [textureMeters] متر تکرار می‌شود. */
+    fun quadTiled(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,texture:Bitmap?) {
+        cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
+        submit(4,color,0,texture,false,1f,true)
     }
     fun triangle(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,color:Int) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);submit(3,color,0,null,false)

@@ -76,7 +76,8 @@ class Rig(private val scene: Scene3D) {
         bx: Float, by: Float, bz: Float,
         cx: Float, cy2: Float, cz: Float,
         dx: Float, dy: Float, dz: Float,
-        color: Int, texture: Bitmap? = null, emissive: Boolean = false, cullBack: Boolean = false
+        color: Int, texture: Bitmap? = null, emissive: Boolean = false, cullBack: Boolean = false,
+        tiled: Boolean = false
     ) {
         world(ax, ay, az, pa)
         world(bx, by, bz, pb)
@@ -106,11 +107,19 @@ class Rig(private val scene: Scene3D) {
             if (nx * fx + ny * fy + nz * fz >= 0f) return
         }
         val shaded = if (emissive) color else scene.lit(color, nx, ny, nz)
-        scene.quad(
-            pa[0], pa[1], pa[2], pb[0], pb[1], pb[2],
-            pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
-            shaded, texture = texture
-        )
+        if (tiled && texture != null) {
+            scene.quadTiled(
+                pa[0], pa[1], pa[2], pb[0], pb[1], pb[2],
+                pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
+                shaded, texture
+            )
+        } else {
+            scene.quad(
+                pa[0], pa[1], pa[2], pb[0], pb[1], pb[2],
+                pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
+                shaded, texture = texture
+            )
+        }
     }
 
     fun tri(
@@ -139,12 +148,22 @@ class Rig(private val scene: Scene3D) {
     // --------------------------------------------------------------- شش‌وجهی
 
     /** هشت رأس: ۰..۳ پایین (خلاف ساعت)، ۴..۷ بالا با همان ترتیب. */
-    private fun hexa(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean = true) {
+    /**
+     * مکعب شش‌وجهی.
+     *
+     * [tiledFaces] = true فقط برای دیوار ساختمان‌ها استفاده می‌شود: بافت با
+     * مقیاس متری تکرار می‌شود. بقیهٔ اشیا (تانک، پهپاد، کشتی) تکسچرشان
+     * همان‌طور که هست کشیده می‌شود — وگرنه بدنهٔ کوچک با مقیاس ۷ متر داغان
+     * می‌شود.
+     */
+    private fun hexa(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean = true,
+                     tiledFaces: Boolean = false) {
         cull = true
-        try { hexaFaces(p, color, side, top, bottom) } finally { cull = false }
+        try { hexaFaces(p, color, side, top, bottom, tiledFaces) } finally { cull = false }
     }
 
-    private fun hexaFaces(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean) {
+    private fun hexaFaces(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean,
+                          tiledFaces: Boolean = false) {
         fun v(i: Int, k: Int) = p[i * 3 + k]
         if (bottom) {
             face(v(3, 0), v(3, 1), v(3, 2), v(2, 0), v(2, 1), v(2, 2),
@@ -152,12 +171,12 @@ class Rig(private val scene: Scene3D) {
                 Theme.shade(color, 0.72f), null)
         }
         face(v(4, 0), v(4, 1), v(4, 2), v(5, 0), v(5, 1), v(5, 2),
-            v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top)
+            v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top, tiled = tiledFaces)
         for (i in 0..3) {
             val j = (i + 1) % 4
             face(v(i, 0), v(i, 1), v(i, 2), v(j, 0), v(j, 1), v(j, 2),
                 v(j + 4, 0), v(j + 4, 1), v(j + 4, 2), v(i + 4, 0), v(i + 4, 1), v(i + 4, 2),
-                color, side)
+                color, side, tiled = tiledFaces)
         }
     }
 
@@ -171,7 +190,8 @@ class Rig(private val scene: Scene3D) {
     fun box(
         cx: Float, baseY: Float, cz: Float,
         sx: Float, sy2: Float, sz: Float,
-        color: Int, side: Bitmap? = null, top: Bitmap? = side, bottom: Boolean = true
+        color: Int, side: Bitmap? = null, top: Bitmap? = side, bottom: Boolean = true,
+        tiledFaces: Boolean = false
     ) {
         val hx = sx * 0.5f
         val hz = sz * 0.5f
@@ -185,7 +205,7 @@ class Rig(private val scene: Scene3D) {
         setCorner(5, cx + hx, ty, cz - hz)
         setCorner(6, cx + hx, ty, cz + hz)
         setCorner(7, cx - hx, ty, cz + hz)
-        hexa(corner, color, side, top, bottom)
+        hexa(corner, color, side, top, bottom, tiledFaces)
     }
 
     /** هرم ناقص: نیم‌عرض پایین و بالا جدا؛ برای بدنه‌ی شیب‌دار، برجک و دودکش. */
