@@ -50,12 +50,17 @@ class FlightPathRenderTest {
         for (b in tall) println("  x=${b.x} z=${b.z} w=${b.w} h=${b.h} d=${b.d} rot=${b.rot}")
 
         val cams = if (tall.size >= 3) {
-            // دوربین نزدیک ساختمان‌های بلند، در ارتفاع متوسط
+            // دوربین باید **داخل** شهر و رو‌به ساختمان‌ها باشد.
+            // قبلاً ارتفاع ۲۵٪ و فاصله ۱.۶ برابر عمق بود → دوربین بیرون
+            // شهر می‌افتاد و فقط بیابان دیده می‌شد.
             val a = tall[0]; val b = tall[1]; val c = tall[2]
             listOf(
-                "low" to Triple(a.x, a.h * 0.25f, a.z + a.d * 1.4f),
-                "mid" to Triple(b.x + b.w * 0.8f, b.h * 0.55f, b.z + b.d * 1.6f),
-                "high" to Triple(c.x, c.h * 0.85f, c.z + c.d * 1.9f),
+                // ارتفاع کم، ۳۰ متر عقب‌تر از ساختمان، رو‌به آن
+                "low" to Triple(a.x, a.h * 0.55f, a.z - a.d * 0.5f - 30f),
+                // کنار ساختمان دوم، هم‌ارتفاع وسط
+                "mid" to Triple(b.x - b.w * 0.5f - 26f, b.h * 0.6f, b.z),
+                // بالاتر، بالای ساختمان سوم
+                "high" to Triple(c.x, c.h * 0.9f, c.z - c.d * 0.5f - 40f),
             )
         } else {
             listOf(
@@ -73,8 +78,11 @@ class FlightPathRenderTest {
             val cam = renderer.scene.cam
             cam.fov = 74f
             cam.x = cx; cam.y = cy; cam.z = cz
-            cam.yaw = 0f
-            cam.pitch = -0.02f
+            // رو‌به مرکز ساختمان نگاه کن
+            val tx = if (tall.isNotEmpty()) tall[0].x else 0f
+            val tz = if (tall.isNotEmpty()) tall[0].z else 200f
+            cam.yaw = Math.atan2(tx - cx, tz - cz)
+            cam.pitch = 0.05f
             cam.roll = 0f
             cam.viewport(w.toFloat(), h.toFloat())
 
