@@ -422,22 +422,47 @@ class WorldRenderer(private val gfxContext: Context) {
             // طبقات از ارتفاع واقعی ساختمان — سقف ۵ باعث می‌شد برج ۴۹ متری
             // فقط ۵ ردیف پنجره داشته باشد در حالی که جا برای ۱۲ ردیف هست.
             val floors = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 12)
+                val maxWindows = 56
+                val slotWish = winW + gapX          // ۲.۹ متر
+                var baysZraw = ((w - 1.2f) / slotWish).toInt().coerceIn(1, 16)
+                var floorsRaw = floors
+                val total = baysZraw * floorsRaw
+                if (total > maxWindows) {
+                    val k = Math.sqrt(maxWindows.toDouble() / total).toFloat()
+                    baysZraw = (baysZraw * k).toInt().coerceIn(2, 16)
+                    floorsRaw = (floorsRaw * k).toInt().coerceIn(2, 12)
+                }
+                val baysZ = baysZraw
+                val floorsEff = floorsRaw
+
+                // ارتفاع هر طبقه را از ارتفاع واقعی دیوار بازمحاسبه کن تا
+                // شبکه از پایین تا بالای دیوار پخش شود. (قبلاً طبقات کم
+                // می‌شدند ولی گام ثابت ۳.۵۵ متر می‌ماند → بالای ساختمان
+                // بی‌پنجره می‌ماند؛ روی برج ۴۹ متری ۱۳.۶ متر خالی.)
+                val bandTop = usableH - 0.45f
+                val availV = (bandTop - sill0).coerceAtLeast(1f)
+                val slotH = (availV / floorsEff).coerceAtLeast(0.6f)
+                // پنجره ۶۶٪ گام ارتفاع را می‌گیرد؛ بقیه فاصلهٔ بین طبقات
+                val pwH = (slotH * 0.62f).coerceAtLeast(0.4f)
+                // گام و عرض پنجره را از عرض دیوار بازمحاسبه کن تا شبکه
+                // دقیقاً از لبه تا لبه پخش شود.
+                val usableW = (w * 0.90f).coerceAtLeast(2f)
+                val slotW = (usableW / baysZ).coerceAtLeast(0.9f)
+                val pwW = (slotW * 0.66f).coerceAtLeast(0.5f)
             // ۱) نوار شیشه همیشه (پشت پنجره‌های مجزا می‌نشیند)
             run {
                 for (side in -1..1 step 2) {
                     val zz = side.toFloat() * (d * 0.5f + 0.06f)
-                    for (f in 0 until floors) {
-                        val y0 = sill0 + f * floorH; val y1 = y0 + 2.45f
-                        if (y1 > usableH - 0.45f) continue
+                    for (f in 0 until floorsEff) {
+                        val y0 = sill0 + f * slotH; val y1 = y0 + pwH
                         rig.face(-w * .4f, y0, zz, w * .4f, y0, zz, w * .4f, y1, zz, -w * .4f, y1, zz, glass, cullBack = true, depthBias = 0.15f)
                     }
                 }
                 if (d >= 6f) {
                     for (side in -1..1 step 2) {
                         val xx = side.toFloat() * (w * 0.5f + 0.06f)
-                        for (f in 0 until minOf(floors, 4)) {
-                            val y0 = sill0 + f * floorH; val y1 = y0 + 2.45f
-                            if (y1 > usableH - 0.45f) continue
+                        for (f in 0 until floorsEff) {
+                            val y0 = sill0 + f * slotH; val y1 = y0 + pwH
                             rig.face(xx, y0, -d * .4f, xx, y0, d * .4f, xx, y1, d * .4f, xx, y1, -d * .4f, glass, cullBack = true, depthBias = 0.15f)
                         }
                     }
@@ -481,23 +506,6 @@ class WorldRenderer(private val gfxContext: Context) {
                 // کلی وجه. مهم: بعد از کم‌کردن تعداد، عرض پنجره و گام هم
                 // باید بازمحاسبه شوند تا شبکه **تمام عرض** را بپوشاند؛
                 // وگرنه چند پنجره ریز در گوشه می‌ماند و بقیهٔ دیوار خالی.
-                val maxWindows = 56
-                val slotWish = winW + gapX          // ۲.۹ متر
-                var baysZraw = ((w - 1.2f) / slotWish).toInt().coerceIn(1, 16)
-                var floorsRaw = floors
-                val total = baysZraw * floorsRaw
-                if (total > maxWindows) {
-                    val k = Math.sqrt(maxWindows.toDouble() / total).toFloat()
-                    baysZraw = (baysZraw * k).toInt().coerceIn(2, 16)
-                    floorsRaw = (floorsRaw * k).toInt().coerceIn(2, 12)
-                }
-                val baysZ = baysZraw
-                val floorsEff = floorsRaw
-                // گام و عرض پنجره را از عرض دیوار بازمحاسبه کن تا شبکه
-                // دقیقاً از لبه تا لبه پخش شود.
-                val usableW = (w * 0.90f).coerceAtLeast(2f)
-                val slotW = (usableW / baysZ).coerceAtLeast(0.9f)
-                val pwW = (slotW * 0.66f).coerceAtLeast(0.5f)
                 run {
                     val total = baysZ * slotW
                     val startX = -total * 0.5f + (slotW - pwW) * 0.5f
@@ -506,8 +514,7 @@ class WorldRenderer(private val gfxContext: Context) {
                         for (b in 0 until baysZ) {
                             val x0 = startX + b * slotW; val x1 = x0 + pwW
                             for (f in 0 until floorsEff) {
-                                val y0 = sill0 + f * floorH2; val y1 = y0 + winH
-                                if (y1 > usableH - 0.45f) continue
+                                val y0 = sill0 + f * slotH; val y1 = y0 + pwH
                                 val bi = b + if (side > 0) 10 else 0
                                 if (litWindow(bi, f)) {
                                     // در شدت کم، پنجرهٔ روشن هم نباید چشمک بزند
@@ -540,8 +547,7 @@ class WorldRenderer(private val gfxContext: Context) {
                         for (b in 0 until baysX) {
                             val z0 = startZ + b * slotD; val z1 = z0 + pwD
                             for (f in 0 until floorsX) {
-                                val y0 = sill0 + f * floorH2; val y1 = y0 + winH
-                                if (y1 > usableH - 0.45f) continue
+                                val y0 = sill0 + f * slotH; val y1 = y0 + pwH
                                 val bi = b + if (side > 0) 30 else 20
                                 if (litWindow(bi, f)) {
                                     rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, litWin,
