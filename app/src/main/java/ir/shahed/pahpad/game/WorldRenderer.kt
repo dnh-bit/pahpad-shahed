@@ -422,6 +422,12 @@ class WorldRenderer(private val gfxContext: Context) {
             // طبقات از ارتفاع واقعی ساختمان — سقف ۵ باعث می‌شد برج ۴۹ متری
             // فقط ۵ ردیف پنجره داشته باشد در حالی که جا برای ۱۲ ردیف هست.
             val floors = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 12)
+                // ابعاد نامی پنجره — مبنای محاسبهٔ تعداد و گام
+                val winW = 2.15f
+                val gapX = 0.75f
+                val winH = 2.45f
+                val floorH2 = 3.55f
+
                 val maxWindows = 56
                 val slotWish = winW + gapX          // ۲.۹ متر
                 var baysZraw = ((w - 1.2f) / slotWish).toInt().coerceIn(1, 16)
@@ -474,11 +480,6 @@ class WorldRenderer(private val gfxContext: Context) {
             //    رنگ در هم می‌آمیزد.
             val winFade = if (detail <= 1 && winKey != null) windowDetail(worldDist) else 0f
             if (winFade > 0.001f) {
-                val winW = 2.15f
-                val winH = 2.45f
-                val floorH2 = 3.55f
-                val gapX = 0.75f
-                val sill0 = 1.45f
                 val inset = 0.06f     // بیرون‌زدگی پنجره از دیوار (متر)
                 // پنجره‌ها با بایاس عمق مرتب می‌شوند، پس لازم نیست چندان
                 // بیرون بزنند؛ ۶ سانتی‌متر برای جلوگیری از z-fight کافی است.
