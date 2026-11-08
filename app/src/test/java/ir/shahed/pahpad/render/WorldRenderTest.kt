@@ -84,6 +84,26 @@ class WorldRenderTest {
             println("نوشتم ${f.absolutePath}")
         }
 
+        // ---- نمای نزدیک ساختمان: پنجره‌ها باید شبکهٔ منظم واقعی باشند
+        run {
+            val m3 = Mission(level, save, MissionMode.STORY, 42L)
+            // یک ساختمان شهری را از نزدیک می‌بینیم
+            m3.x = 0f; m3.y = 55f; m3.z = 0f
+            m3.yaw = 0f; m3.pitch = -0.35f; m3.roll = 0f
+            val cam = renderer.scene.cam
+            cam.fov = 62f
+            cam.x = 0f; cam.y = 48f; cam.z = -95f
+            cam.yaw = 0f; cam.pitch = -0.10f; cam.roll = 0f
+            cam.viewport(w.toFloat(), h.toFloat())
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val c = Canvas(bmp)
+            renderer.update(1f / 60f, m3)
+            renderer.draw(c, m3, w.toFloat(), h.toFloat())
+            val f = File(outDir, "building_closeup.png")
+            f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            println("نوشتم ${f.absolutePath}")
+        }
+
         // ---- نمای نزدیک پهپاد: مدل نباید داغان باشد
         run {
             val m2 = Mission(level, save, MissionMode.STORY, 42L)
