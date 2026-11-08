@@ -420,20 +420,20 @@ class WorldRenderer(private val gfxContext: Context) {
             // ۱) نوار شیشه همیشه (پشت پنجره‌های مجزا می‌نشیند)
             run {
                 for (side in -1..1 step 2) {
-                    val zz = side.toFloat() * (d * 0.5f + 0.014f)
+                    val zz = side.toFloat() * (d * 0.5f + 0.06f)
                     for (f in 0 until floors) {
                         val y0 = sill0 + f * floorH; val y1 = y0 + 2.45f
                         if (y1 > usableH - 0.45f) continue
-                        rig.face(-w * .4f, y0, zz, w * .4f, y0, zz, w * .4f, y1, zz, -w * .4f, y1, zz, glass, cullBack = true)
+                        rig.face(-w * .4f, y0, zz, w * .4f, y0, zz, w * .4f, y1, zz, -w * .4f, y1, zz, glass, cullBack = true, depthBias = 0.15f)
                     }
                 }
                 if (d >= 6f) {
                     for (side in -1..1 step 2) {
-                        val xx = side.toFloat() * (w * 0.5f + 0.014f)
+                        val xx = side.toFloat() * (w * 0.5f + 0.06f)
                         for (f in 0 until minOf(floors, 4)) {
                             val y0 = sill0 + f * floorH; val y1 = y0 + 2.45f
                             if (y1 > usableH - 0.45f) continue
-                            rig.face(xx, y0, -d * .4f, xx, y0, d * .4f, xx, y1, d * .4f, xx, y1, -d * .4f, glass, cullBack = true)
+                            rig.face(xx, y0, -d * .4f, xx, y0, d * .4f, xx, y1, d * .4f, xx, y1, -d * .4f, glass, cullBack = true, depthBias = 0.15f)
                         }
                     }
                 }
@@ -449,7 +449,10 @@ class WorldRenderer(private val gfxContext: Context) {
                 val floorH2 = 3.55f
                 val gapX = 0.75f
                 val sill0 = 1.45f
-                val inset = 0.020f
+                val inset = 0.06f     // بیرون‌زدگی پنجره از دیوار (متر)
+                // پنجره‌ها با بایاس عمق مرتب می‌شوند، پس لازم نیست چندان
+                // بیرون بزنند؛ ۶ سانتی‌متر برای جلوگیری از z-fight کافی است.
+                val winBias = 0.35f   // متر — پنجره همیشه جلوتر از دیوار
                 val seed = (x * 31f + z * 17f).toInt()
                 val phase = ((seed % 7) + 7) % 7
                 val glassHi = Theme.mix(glass, look.upper, .45f)
@@ -475,17 +478,17 @@ class WorldRenderer(private val gfxContext: Context) {
                                 if (litWindow(bi, f)) {
                                     // در شدت کم، پنجرهٔ روشن هم نباید چشمک بزند
                                     rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, litWin,
-                                        emissive = winFade > 0.85f, cullBack = true)
+                                        emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
                                 } else {
                                     val g = if ((b + f + phase) % 3 == 0) glassFaded else glass
-                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, g)
+                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, g, depthBias = winBias)
                                 }
                                 // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
                                 val fz = zz + side.toFloat() * 0.004f
                                 val frame = frameCol
                                 val fh = 0.09f
-                                rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true)
-                                rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true)
+                                rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
+                                rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
                             }
                         }
                     }
@@ -506,15 +509,15 @@ class WorldRenderer(private val gfxContext: Context) {
                                 val bi = b + if (side > 0) 30 else 20
                                 if (litWindow(bi, f)) {
                                     rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, litWin,
-                                        emissive = winFade > 0.85f, cullBack = true)
+                                        emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
                                 } else {
                                     val g = if ((b + f + phase) % 3 == 0) glassFaded else glass
-                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, g)
+                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, g, depthBias = winBias)
                                 }
                                 val frame = frameCol
                                 val fh = 0.09f
-                                rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frame, cullBack = true)
-                                rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frame, cullBack = true)
+                                rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frame, cullBack = true, depthBias = winBias + 0.1f)
+                                rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frame, cullBack = true, depthBias = winBias + 0.1f)
                             }
                         }
                     }

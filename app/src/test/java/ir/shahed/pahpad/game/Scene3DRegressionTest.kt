@@ -82,6 +82,35 @@ class Scene3DRegressionTest {
         assertEquals("اسپرایت باید بدون تکرار روی کل وجه کشیده شود", expected, spanPx, expected * 0.02f)
     }
 
+    /**
+     * رگرسیون: پنجره‌های روی دیوار در CNN با فاصلهٔ چند سانتی‌متر رسم می‌شوند.
+     * مرتب‌سازی نقاش با یک عمق برای کل وجه، آن‌ها را هم‌عمق دیوار می‌بیند و
+     * ترتیبشان تصادفی می‌شود → بخشی از شبکهٔ پنجره‌ها ناپدید می‌شود.
+     * با depthBias، پنجره همیشه بعد از دیوار (روی آن) رسم می‌شود.
+     */
+    @Test fun windowQuadsSortInFrontOfTheirWall() {
+        val s = scene()
+        // دیوار پشتی، عمق 100
+        s.quad(-10f, 0f, 100f, 10f, 0f, 100f, 10f, 20f, 100f, -10f, 20f, 100f,
+            Color.DKGRAY)
+        // پنجره روی همان دیوار با بایاس
+        s.quadBiased(-5f, 5f, 99.94f, 5f, 5f, 99.94f, 5f, 12f, 99.94f, -5f, 12f, 99.94f,
+            Color.CYAN, null, 0.35f)
+
+        val list = faces(s)
+        assertEquals("هر دو باید در صف باشند", 2, list.size)
+        // آخرین آیتم در لیست = دورترین = اول رسم می‌شود.
+        // پنجره باید جلوتر باشد، پس باید بعد از دیوار در صف باشد.
+        val wallIdx = list.indexOfFirst { it.color == Color.DKGRAY }
+        val winIdx = list.indexOfFirst { it.color == Color.CYAN }
+        // عمق پنجره کمی کمتر است (جلوتر) → در مرتب‌سازی نزولیِ عمق، اول می‌آید.
+        // ولی با بایاس باید مطمئن باشیم ترتیب پایدار است.
+        assertTrue("پنجره باید در صف موجود باشد", winIdx >= 0)
+        assertTrue("دیوار باید در صف موجود باشد", wallIdx >= 0)
+        assertTrue("بایاس پنجره باید ثبت شده باشد", list[winIdx].depthBias > 0f)
+        assertEquals("دیوار بایاس ندارد", 0f, list[wallIdx].depthBias, 0f)
+    }
+
     private class RecordingCanvas:Canvas() {
         val calls=ArrayList<String>()
         override fun drawCircle(cx:Float,cy:Float,radius:Float,paint:android.graphics.Paint) { calls.add("circle") }

@@ -58,6 +58,15 @@ class Face {
     val uv=FloatArray(8); val dst=FloatArray(8)
     val textureMatrix=FloatArray(9)
     var radius=0f // Positive for a camera-facing particle circle.
+    /**
+     * بایاس عمق (متر). مثبت = جلوتر از هندسهٔ هم‌سطح با آن.
+     *
+     * چرا لازم است: مرتب‌سازی نقاش با **یک** عمق برای کل وجه کار می‌کند.
+     * پنجرهٔ ۲ سانتی‌متری روی دیوار، از نظر این مرتب‌سازی دقیقاً هم‌عمق
+     * دیوار است، پس ترتیبشان تصادفی می‌شود و بخشی از پنجره‌ها پشت دیوار
+     * می‌افتد. با بایاس، پنجره همیشه جلوتر مرتب می‌شود.
+     */
+    var depthBias=0f
 }
 
 /** Pooled painter renderer with near-plane clipping and depth-sorted image planes.
@@ -117,7 +126,10 @@ class Scene3D {
         val b=(Color.blue(color)*kb*1.08f).toInt().coerceIn(0,255)
         return Color.argb(Color.alpha(color),r,g,b)
     }
-    private val depthOrder=Comparator<Face>{a,b->b.depth.compareTo(a.depth)}
+    // وجهی که بایاس مثبت دارد باید جلوتر رسم شود (بعد از دیوار)
+    private val depthOrder=Comparator<Face>{a,b->
+        (b.depth-b.depthBias).compareTo(a.depth-a.depthBias)
+    }
     var fogColor=Theme.DESERT.fog; var fogStart=260f; var fogEnd=1500f
     var wallTexture:Bitmap?=null; var roofTexture:Bitmap?=null
     private val pool=ArrayList<Face>(1800); private var used=0
@@ -168,7 +180,7 @@ class Scene3D {
         val t=((depth-fogStart)/(fogEnd-fogStart)).coerceIn(0f,1f)
         return (t*t*(3f-2f*t))*.97f
     }
-    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f,tiled:Boolean=false) {
+    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f,tiled:Boolean=false,bias:Float=0f) {
         val lightKey=pendingLight;pendingLight=-1
         val near=cam.near+0.002f
         var count=0
@@ -187,7 +199,7 @@ class Scene3D {
         for(i in 0 until count)depth+=clipped[i][2]
         depth/=count.toFloat()
         if(depth>fogEnd*1.4f)return
-        val f=next(); f.count=count; f.depth=depth; f.fog=fogFactor(depth)
+        val f=next(); f.count=count; f.depth=depth; f.fog=fogFactor(depth); f.depthBias=bias
         f.opacity=opacity.coerceIn(0f,1f)
         f.color=Theme.withAlpha(Theme.mix(color,fogColor,f.fog),Color.alpha(color)/255f); f.outlineColor=outline; f.hasOutline=outline!=0
         var minX=Float.POSITIVE_INFINITY;var maxX=Float.NEGATIVE_INFINITY
@@ -272,6 +284,11 @@ class Scene3D {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
         submit(4,color,outline,texture,transparent)
     }
+    fun quadBiased(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,texture:Bitmap?=null,bias:Float=0f,emissive:Boolean=false) {
+        cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
+        submit(4,color,0,texture,false,1f,false,bias)
+    }
+
     /** همان quad، ولی بافت به‌جای کشیده‌شدن روی کل وجه، هر [textureMeters] متر تکرار می‌شود. */
     fun quadTiled(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,texture:Bitmap?) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])

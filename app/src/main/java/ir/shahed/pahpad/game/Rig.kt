@@ -77,7 +77,9 @@ class Rig(private val scene: Scene3D) {
         cx: Float, cy2: Float, cz: Float,
         dx: Float, dy: Float, dz: Float,
         color: Int, texture: Bitmap? = null, emissive: Boolean = false, cullBack: Boolean = false,
-        tiled: Boolean = false
+        tiled: Boolean = false,
+        /** بایاس عمق: پنجره‌های روی دیوار باید همیشه جلوتر از دیوار مرتب شوند */
+        depthBias: Float = 0f
     ) {
         world(ax, ay, az, pa)
         world(bx, by, bz, pb)
@@ -112,6 +114,12 @@ class Rig(private val scene: Scene3D) {
                 pa[0], pa[1], pa[2], pb[0], pb[1], pb[2],
                 pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
                 shaded, texture
+            )
+        } else if (depthBias != 0f) {
+            scene.quadBiased(
+                pa[0], pa[1], pa[2], pb[0], pb[1], pb[2],
+                pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
+                shaded, texture, depthBias
             )
         } else {
             scene.quad(
