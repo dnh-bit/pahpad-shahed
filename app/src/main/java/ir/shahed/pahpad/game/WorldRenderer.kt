@@ -414,8 +414,7 @@ class WorldRenderer(private val gfxContext: Context) {
         // گذر از هر مرزی = پنجره روی نوار می‌نشیند یا بیرون می‌رود — نه پنجره صفر/صد.
         if (!destroyed && usableH >= 3.0f && w >= 4f && d >= 4f) {
             // نوار پشت (زمینهٔ طبقه) — تیره‌تر از پنجره‌های مجزا
-            val glass = Theme.shade(look.windowGlass, 0.55f)
-            // شیشهٔ پنجرهٔ مجزا — روشن‌تر، تا شبکه دیده شود
+            // شیشهٔ پنجره — روشن‌تر از دیوار، تا شبکهٔ پنجره دیده شود
             val paneGlass = look.windowGlass
             val floorH = 3.55f
             val sill0 = 1.45f
@@ -455,30 +454,24 @@ class WorldRenderer(private val gfxContext: Context) {
                 val usableW = (w * 0.90f).coerceAtLeast(2f)
                 val slotW = (usableW / baysZ).coerceAtLeast(0.9f)
                 val pwW = (slotW * 0.66f).coerceAtLeast(0.5f)
-            // ۱) نوار شیشه همیشه (پشت پنجره‌های مجزا می‌نشیند)
-            run {
-                for (side in -1..1 step 2) {
-                    val zz = side.toFloat() * (d * 0.5f + 0.06f)
-                    for (f in 0 until floorsEff) {
-                        val y0 = sill0 + f * slotH; val y1 = y0 + pwH
-                        rig.face(-w * .4f, y0, zz, w * .4f, y0, zz, w * .4f, y1, zz, -w * .4f, y1, zz, glass, cullBack = true, depthBias = 0.15f)
-                    }
-                }
-                if (d >= 6f) {
-                    for (side in -1..1 step 2) {
-                        val xx = side.toFloat() * (w * 0.5f + 0.06f)
-                        for (f in 0 until floorsEff) {
-                            val y0 = sill0 + f * slotH; val y1 = y0 + pwH
-                            rig.face(xx, y0, -d * .4f, xx, y0, d * .4f, xx, y1, d * .4f, xx, y1, -d * .4f, glass, cullBack = true, depthBias = 0.15f)
-                        }
-                    }
-                }
-            }
+            // نوار شیشهٔ تمام‌عرض حذف شد.
+            //
+            // چرا: آن نوار یک مستطیل به عرض کل دیوار و ارتفاع هر طبقه بود.
+            // در نمای مایل، لبهٔ بالایی و پایینی‌اش با پرسپکتیو دیوار هم‌راستا
+            // نمی‌شد و مثل «شکاف افقی تخت» دیده می‌شد — همان چیزی که کاربر
+            // به‌عنوان پنجرهٔ خراب می‌دید. حالا فقط پنجره‌های مجزا (که هر
+            // کدام با چهار گوشهٔ خودشان تصویر می‌شوند) رسم می‌شوند.
+
             // ۲) پنجره‌های مجزا + قاب‌ها — با شدت پیوسته، نه روشن/خاموش.
             //    زیر آستانه، پنجره‌ها رنگِ خود نوار شیشه را می‌گیرند و دیده
             //    نمی‌شوند؛ بالای آستانه رنگ کامل خودشان را. بین این دو،
             //    رنگ در هم می‌آمیزد.
-            val winFade = if (detail <= 1 && winKey != null) windowDetail(worldDist) else 0f
+            // از وقتی نوار پشتی حذف شد، پنجره‌ها باید همیشه رسم شوند؛
+            // «محو تدریجی» فقط برای گذار نرم بین LOD است، نه برای حذف کامل.
+            val winFade = if (detail <= 1 && winKey != null) {
+                val f = windowDetail(worldDist)
+                if (f < 0.05f) 0.05f else f
+            } else 0f
             if (winFade > 0.001f) {
                 val inset = 0.06f     // بیرون‌زدگی پنجره از دیوار (متر)
                 // پنجره‌ها با بایاس عمق مرتب می‌شوند، پس لازم نیست چندان
@@ -487,11 +480,12 @@ class WorldRenderer(private val gfxContext: Context) {
                 val seed = (x * 31f + z * 17f).toInt()
                 val phase = ((seed % 7) + 7) % 7
                 // رنگ پنجره با شدت winFade از رنگ نوار به رنگ کامل می‌رود
-                fun blended(target: Int): Int = if (winFade >= 1f) target else Theme.mix(glass, target, winFade)
-                val litWin = blended(look.windowLit)
+                // محو کردن رنگ دیگر معنا ندارد؛ نوار پشتی نیست که پنجره در
+                // آن حل شود. پنجره همیشه رنگ کامل خودش را دارد.
+                val litWin = look.windowLit
                 // قاب: روشن‌تر از دیوار تا مرز پنجره‌ها دیده شود
                 val frameBase = Theme.shade(color, 1.9f)
-                val frameCol = if (winFade >= 1f) frameBase else Theme.mix(glass, frameBase, winFade)
+                val frameCol = frameBase
                 // فقط حدود ۱ از ۵ پنجره روشن — بیشتر از این، شبکه شطرنجی به‌نظر می‌رسد
                 fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % (look.litChance * 2)) == 0
                 // تعداد پنجره از عرض واقعی دیوار حساب می‌شود (نه سقف ثابت ۴).
