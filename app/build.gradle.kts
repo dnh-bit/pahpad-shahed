@@ -14,8 +14,8 @@ android {
         applicationId = if (moddedBuild) "ir.shahed.pahpad.mod" else "ir.shahed.pahpad"
         minSdk = 24
         targetSdk = 34
-        versionCode = 19
-        versionName = "0.1.9"
+        versionCode = 20
+        versionName = "0.2.0"
         resourceConfigurations += listOf("fa")
 
         // حالت تست: همهٔ مراحل و پهبادها باز. فقط با

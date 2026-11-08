@@ -474,20 +474,34 @@ class WorldRenderer(private val gfxContext: Context) {
                 // به‌جای کم‌کردن یک‌طرفه (که برج را با ۳ ردیف پنجره رها می‌کرد)،
                 // هر دو بُعد را با یک ضریب متناسب کوچک می‌کنیم تا نسبت شبکه
                 // حفظ شود و برج همان‌قدر پنجره بگیرد که ساختمان کوتاه.
-                val maxWindows = 60
-                val baysZraw = ((w - 1.2f) / (winW + gapX)).toInt().coerceIn(1, 14)
-                val floorsRaw = floors
+                // تعداد پنجره در عرض: هم از عرض واقعی دیوار، هم با بودجهٔ
+                // کلی وجه. مهم: بعد از کم‌کردن تعداد، عرض پنجره و گام هم
+                // باید بازمحاسبه شوند تا شبکه **تمام عرض** را بپوشاند؛
+                // وگرنه چند پنجره ریز در گوشه می‌ماند و بقیهٔ دیوار خالی.
+                val maxWindows = 56
+                val slotWish = winW + gapX          // ۲.۹ متر
+                var baysZraw = ((w - 1.2f) / slotWish).toInt().coerceIn(1, 16)
+                var floorsRaw = floors
                 val total = baysZraw * floorsRaw
-                val k = if (total > maxWindows) Math.sqrt(maxWindows.toDouble() / total).toFloat() else 1f
-                val baysZ = (baysZraw * k).toInt().coerceIn(1, 14)
-                val floorsEff = (floorsRaw * k).toInt().coerceIn(1, 12)
+                if (total > maxWindows) {
+                    val k = Math.sqrt(maxWindows.toDouble() / total).toFloat()
+                    baysZraw = (baysZraw * k).toInt().coerceIn(2, 16)
+                    floorsRaw = (floorsRaw * k).toInt().coerceIn(2, 12)
+                }
+                val baysZ = baysZraw
+                val floorsEff = floorsRaw
+                // گام و عرض پنجره را از عرض دیوار بازمحاسبه کن تا شبکه
+                // دقیقاً از لبه تا لبه پخش شود.
+                val usableW = (w * 0.90f).coerceAtLeast(2f)
+                val slotW = (usableW / baysZ).coerceAtLeast(0.9f)
+                val pwW = (slotW * 0.66f).coerceAtLeast(0.5f)
                 run {
-                    val total = baysZ * winW + (baysZ - 1) * gapX
-                    val startX = -total * 0.5f
+                    val total = baysZ * slotW
+                    val startX = -total * 0.5f + (slotW - pwW) * 0.5f
                     for (side in -1..1 step 2) {
                         val zz = side.toFloat() * (d * 0.5f + inset)
                         for (b in 0 until baysZ) {
-                            val x0 = startX + b * (winW + gapX); val x1 = x0 + winW
+                            val x0 = startX + b * slotW; val x1 = x0 + pwW
                             for (f in 0 until floorsEff) {
                                 val y0 = sill0 + f * floorH2; val y1 = y0 + winH
                                 if (y1 > usableH - 0.45f) continue
