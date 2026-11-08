@@ -180,7 +180,9 @@ class ShopScreen(
     private fun textAreaW() = (viewport.width() - btnAreaW() - dp(16f)).coerceAtLeast(dp(120f))
 
     override fun layoutUi(w: Float, h: Float) {
-        viewport.set(dp(12f), dp(78f), w - dp(12f), h - dp(52f))
+        // پایین ویوپورت باید بالای نوار دکمه‌ها بایستد، وگرنه محتوا زیر
+        // دکمهٔ «بازگشت» می‌رود (تست همپوشانی همین را پیدا کرد).
+        viewport.set(dp(12f), dp(78f), w - dp(12f), h - dp(88f))
 
         contentH = computeContent()
         maxScroll = (contentH - viewport.height()).coerceAtLeast(0f)
