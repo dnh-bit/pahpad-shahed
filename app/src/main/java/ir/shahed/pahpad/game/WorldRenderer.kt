@@ -416,7 +416,9 @@ class WorldRenderer(private val gfxContext: Context) {
             val glass = look.windowGlass
             val floorH = 3.55f
             val sill0 = 1.45f
-            val floors = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 5)
+            // طبقات از ارتفاع واقعی ساختمان — سقف ۵ باعث می‌شد برج ۴۹ متری
+            // فقط ۵ ردیف پنجره داشته باشد در حالی که جا برای ۱۲ ردیف هست.
+            val floors = ((usableH - sill0 - 0.7f) / floorH).toInt().coerceIn(1, 12)
             // ۱) نوار شیشه همیشه (پشت پنجره‌های مجزا می‌نشیند)
             run {
                 for (side in -1..1 step 2) {
@@ -463,7 +465,22 @@ class WorldRenderer(private val gfxContext: Context) {
                 val frameBase = Theme.shade(color, 0.62f)
                 val frameCol = if (winFade >= 1f) frameBase else Theme.mix(glass, frameBase, winFade)
                 fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % look.litChance) == 0
-                val baysZ = ((w - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 4)
+                // تعداد پنجره از عرض واقعی دیوار حساب می‌شود (نه سقف ثابت ۴).
+                // با سقف ۴، ساختمان ۵۱ متری فقط ۴ پنجره می‌گرفت و دیوار خالی می‌ماند.
+                // سقف بالا فقط برای جلوگیری از انفجار تعداد وجه در ساختمان‌های غول‌پیکر است.
+                // سقف کل پنجره‌های هر ساختمان: هر پنجره ۶ وجه (شیشه + ۲ قاب،
+                // روی ۲ رخ) است. با ۱۴×۱۲ = ۱۶۸ پنجره، یک ساختمان تنها هزار
+                // وجه می‌ساخت و روی Canvas موبایل فریم می‌افتاد.
+                // به‌جای کم‌کردن یک‌طرفه (که برج را با ۳ ردیف پنجره رها می‌کرد)،
+                // هر دو بُعد را با یک ضریب متناسب کوچک می‌کنیم تا نسبت شبکه
+                // حفظ شود و برج همان‌قدر پنجره بگیرد که ساختمان کوتاه.
+                val maxWindows = 60
+                val baysZraw = ((w - 1.2f) / (winW + gapX)).toInt().coerceIn(1, 14)
+                val floorsRaw = floors
+                val total = baysZraw * floorsRaw
+                val k = if (total > maxWindows) Math.sqrt(maxWindows.toDouble() / total).toFloat() else 1f
+                val baysZ = (baysZraw * k).toInt().coerceIn(1, 14)
+                val floorsEff = (floorsRaw * k).toInt().coerceIn(1, 12)
                 run {
                     val total = baysZ * winW + (baysZ - 1) * gapX
                     val startX = -total * 0.5f
@@ -471,7 +488,7 @@ class WorldRenderer(private val gfxContext: Context) {
                         val zz = side.toFloat() * (d * 0.5f + inset)
                         for (b in 0 until baysZ) {
                             val x0 = startX + b * (winW + gapX); val x1 = x0 + winW
-                            for (f in 0 until floors) {
+                            for (f in 0 until floorsEff) {
                                 val y0 = sill0 + f * floorH2; val y1 = y0 + winH
                                 if (y1 > usableH - 0.45f) continue
                                 val bi = b + if (side > 0) 10 else 0
@@ -494,10 +511,11 @@ class WorldRenderer(private val gfxContext: Context) {
                     }
                 }
                 if (d >= 6f) {
-                    val baysX = ((d - 2.0f) / (winW + gapX)).toInt().coerceIn(1, 3)
+                    val baysX = (((d - 1.2f) / (winW + gapX)).toInt().coerceIn(1, 10) * k)
+                        .toInt().coerceIn(1, 10)
                     val totalZ = baysX * winW + (baysX - 1) * gapX
                     val startZ = -totalZ * 0.5f
-                    val floorsX = minOf(floors, 4)
+                    val floorsX = floorsEff
                     for (side in -1..1 step 2) {
                         val xx = side.toFloat() * (w * 0.5f + inset)
                         val fx0 = xx + side.toFloat() * 0.004f
