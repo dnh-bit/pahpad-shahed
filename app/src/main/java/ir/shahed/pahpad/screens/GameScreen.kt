@@ -964,14 +964,36 @@ class GameScreen(
         ui.fill.shader = null
         c.drawRect(0f, 0f, vw, vh, ui.fill)
         val cx = vw / 2f
-        ui.text(c, "آماده پرتاب", cx, vh * 0.36f, dp(26f), Theme.MINT, bold = true)
-        ui.text(c, "هدف: " + (mission.world.activeTarget()?.label ?: level.targetName),
-            cx, vh * 0.44f, dp(14f), Theme.TEXT)
+
+        // چیدمان عمودی از یک نقطه شروع می‌شود و هر خط به اندازهٔ واقعی
+        // ارتفاع خودش پایین می‌رود — نه با گام ثابت vh*0.xx که روی
+        // صفحه‌های کم‌ارتفاع خط‌ها را روی هم می‌انداخت.
+        var y = vh * 0.30f
+        val titleSize = dp(26f)
+        ui.text(c, "آماده پرتاب", cx, y, titleSize, Theme.MINT, bold = true)
+        y += titleSize * 1.6f
+
+        val targetSize = dp(14f)
+        var target = "هدف: " + (mission.world.activeTarget()?.label ?: level.targetName)
+        val maxLineW = vw * 0.62f
+        while (ui.measure(target, targetSize) > maxLineW && target.length > 12) {
+            target = target.dropLast(2)
+        }
+        if (target != "هدف: " + (mission.world.activeTarget()?.label ?: level.targetName)) target += "…"
+        ui.text(c, target, cx, y, targetSize, Theme.TEXT)
+        y += targetSize * 1.9f
+
+        val hintSize = dp(12.5f)
         val hint = if (useTilt) "با تیلت گوشی هدایت کنید" else "با جوی‌استیک سمت چپ هدایت کنید"
-        ui.text(c, hint, cx, vh * 0.51f, dp(12.5f), Theme.TEXT_DIM)
+        ui.text(c, hint, cx, y, hintSize, Theme.TEXT_DIM)
+        y += hintSize * 2.2f
+
+        val tapSize = dp(17f)
         val a = 0.4f + 0.6f * ((Math.sin((time * 3.4f).toDouble()).toFloat() + 1f) / 2f)
-        ui.text(c, "برای پرتاب ضربه بزنید", cx, vh * 0.62f, dp(17f), Theme.AMBER, bold = true, alpha = a)
-        ui.text(c, "پهپادهای باقی‌مانده: " + Fa.num(mission.dronesLeft), cx, vh * 0.70f, dp(12f), Theme.TEXT_DIM)
+        ui.text(c, "برای پرتاب ضربه بزنید", cx, y, tapSize, Theme.AMBER, bold = true, alpha = a)
+        y += tapSize * 1.9f
+
+        ui.text(c, "پهپادهای باقی‌مانده: " + Fa.num(mission.dronesLeft), cx, y, dp(12f), Theme.TEXT_DIM)
     }
 
     private fun drawPauseOverlay(c: Canvas) {

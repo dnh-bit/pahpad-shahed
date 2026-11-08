@@ -55,8 +55,8 @@ class StarRulesTest {
         )
         assertEquals(3, rules.size)
         val rule2 = rules[1]
-        assertEquals("جمع بونوس‌ها", rule2.title)
-        assertTrue(rule2.requirement.contains("بونوس"))
+        assertEquals("جمع پاداش‌ها", rule2.title)
+        assertTrue(rule2.requirement.contains("پاداش"))
         assertFalse("یک بونوس جا‌مانده نباید پاس شود", rule2.passed)
         // متن اندازه‌گیری‌شده باید شمارش واقعی بازیکن باشد (۲ از ۳)
         assertTrue(rule2.measured.contains("۲"))
@@ -68,9 +68,9 @@ class StarRulesTest {
         val preview = StarRules.preview(targetsTotal = 1, parTime = 200f, bonusesTotal = 5)
         assertEquals(3, preview.size)
         val rule2 = preview[1]
-        assertEquals("جمع بونوس‌ها", rule2.title)
-        assertTrue("متن پیش‌نمایش باید شرط جمع بونوس‌ها باشد: ${rule2.requirement}",
-            rule2.requirement.contains("بونوس"))
+        assertEquals("جمع پاداش‌ها", rule2.title)
+        assertTrue("متن پیش‌نمایش باید شرط جمع پاداش‌ها باشد: ${rule2.requirement}",
+            rule2.requirement.contains("پاداش"))
         assertTrue("پیش‌نمایش باید تعداد بونوس‌ها را نشان دهد: ${rule2.measured}",
             rule2.measured.contains("۵"))
         // شرط قدیمی دیگر نباید وجود داشته باشد
