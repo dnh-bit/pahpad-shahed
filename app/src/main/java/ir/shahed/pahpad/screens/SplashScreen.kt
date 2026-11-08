@@ -63,8 +63,8 @@ class SplashScreen(game: MainActivity) : BaseScreen(game) {
         }
 
         val fade = ((time - 0.3f) / 0.8f).coerceIn(0f, 1f)
-        ui.text(c, "پهباد شاهد", cx, cy + dp(10f), dp(40f), Theme.TEXT, bold = true, alpha = fade)
-        ui.text(c, "شبیه‌ساز اپراتور پهباد", cx, cy + dp(48f), dp(14f), Theme.TEXT_DIM, alpha = fade)
+        ui.text(c, "پهپاد شاهد", cx, cy + dp(10f), dp(40f), Theme.TEXT, bold = true, alpha = fade)
+        ui.text(c, "شبیه‌ساز اپراتور پهپاد", cx, cy + dp(48f), dp(14f), Theme.TEXT_DIM, alpha = fade)
         ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.4f * fade)
         ui.stroke.strokeWidth = dp(1.2f)
         val lw = vw * 0.16f * fade

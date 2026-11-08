@@ -520,7 +520,7 @@ class GameScreen(
         }
         ui.text(c, "EO/IR  " + Fa.clock(mission.elapsed), vw - m - dp(12f), m + dp(16f), dp(10f),
             Theme.withAlpha(Theme.MINT, .8f), align = Paint.Align.RIGHT)
-        ui.text(c, "دوربین نوک پهباد", cx, vh - dp(112f), dp(10.5f), Theme.withAlpha(Theme.MINT, 0.7f))
+        ui.text(c, "دوربین نوک پهپاد", cx, vh - dp(112f), dp(10.5f), Theme.withAlpha(Theme.MINT, 0.7f))
     }
 
     // ---- نردبان زاویه در نمای اول‌شخص (داخل بوم چرخیده تا با افق هم‌راستا بماند)
@@ -753,7 +753,7 @@ class GameScreen(
         // ===== وضعیت ماموریت
         val infoY = vh - dp(78f)
         ui.chip(c, topCx - dp(78f), infoY, "اهداف " + mission.targetsInfo, Theme.TEXT_DIM, dp(10.5f))
-        ui.chip(c, topCx + dp(78f), infoY, "بونوس " + mission.bonusInfo, Theme.AMBER, dp(10.5f))
+        ui.chip(c, topCx + dp(78f), infoY, "پاداش " + mission.bonusInfo, Theme.AMBER, dp(10.5f))
         if (mode == MissionMode.ENDLESS) {
             ui.text(c, "موج " + Fa.num(mission.wave), topCx, infoY - dp(22f), dp(12f), Theme.ORANGE, bold = true)
         }
@@ -910,7 +910,7 @@ class GameScreen(
 
         // دکمه دوربین
         ui.panel(c, camRect, Theme.withAlpha(Theme.BG_DEEP, 0.55f), Theme.withAlpha(Theme.MINT, 0.5f), dp(12f))
-        ui.text(c, if (mission.fpv) "نمای سوم شخص" else "دوربین پهباد",
+        ui.text(c, if (mission.fpv) "نمای سوم شخص" else "دوربین پهپاد",
             camRect.centerX(), camRect.centerY(), dp(11f), Theme.MINT, bold = true)
 
         // دکمه بوست (دایره‌ای با هاله)
@@ -927,7 +927,7 @@ class GameScreen(
         ui.stroke.color = Theme.withAlpha(Theme.ORANGE, .8f)
         ui.stroke.strokeWidth = dp(1.6f)
         c.drawCircle(bcx, bcy, br, ui.stroke)
-        ui.text(c, "بوست", bcx, bcy - dp(5f), dp(13f), if (boostOn) Theme.BG_DEEP else Theme.ORANGE, bold = true)
+        ui.text(c, "شتاب", bcx, bcy - dp(5f), dp(13f), if (boostOn) Theme.BG_DEEP else Theme.ORANGE, bold = true)
         ui.text(c, "نگه دارید", bcx, bcy + dp(12f), dp(9f), if (boostOn) Theme.BG_DEEP else Theme.TEXT_DIM)
 
         // اسلایدر گاز
@@ -971,7 +971,7 @@ class GameScreen(
         ui.text(c, hint, cx, vh * 0.51f, dp(12.5f), Theme.TEXT_DIM)
         val a = 0.4f + 0.6f * ((Math.sin((time * 3.4f).toDouble()).toFloat() + 1f) / 2f)
         ui.text(c, "برای پرتاب ضربه بزنید", cx, vh * 0.62f, dp(17f), Theme.AMBER, bold = true, alpha = a)
-        ui.text(c, "پهبادهای باقی‌مانده: " + Fa.num(mission.dronesLeft), cx, vh * 0.70f, dp(12f), Theme.TEXT_DIM)
+        ui.text(c, "پهپادهای باقی‌مانده: " + Fa.num(mission.dronesLeft), cx, vh * 0.70f, dp(12f), Theme.TEXT_DIM)
     }
 
     private fun drawPauseOverlay(c: Canvas) {

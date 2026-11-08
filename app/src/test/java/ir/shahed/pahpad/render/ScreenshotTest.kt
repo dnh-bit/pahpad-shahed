@@ -85,6 +85,9 @@ class ScreenshotTest {
             shoot("shop", ShopScreen(activity), w, h, tag)
             shoot("settings", SettingsScreen(activity), w, h, tag)
             shoot("leaderboard", LeaderboardScreen(activity), w, h, tag)
+            shoot("game", ir.shahed.pahpad.screens.GameScreen(activity,
+                ir.shahed.pahpad.data.Levels.all.first { it.chapter == 1 },
+                ir.shahed.pahpad.game.MissionMode.STORY, 7L), w, h, tag)
         }
         println("تعداد تصاویر: ${outDir.listFiles()?.size}")
     }

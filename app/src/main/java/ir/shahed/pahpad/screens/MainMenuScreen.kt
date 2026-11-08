@@ -105,8 +105,8 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
             drawCornerBrackets(c, heroX, heroY, heroW, heroH)
         }
 
-        ui.text(c, "پهباد شاهد", lx, titleY, dp(34f), Theme.TEXT, bold = true)
-        ui.text(c, "اپراتور پهباد  •  ماموریت‌های دقیق", lx, subY, dp(12.5f), Theme.TEXT_DIM)
+        ui.text(c, "پهپاد شاهد", lx, titleY, dp(34f), Theme.TEXT, bold = true)
+        ui.text(c, "اپراتور پهپاد  •  ماموریت‌های دقیق", lx, subY, dp(12.5f), Theme.TEXT_DIM)
         // خط تاکتیکی زیر عنوان
         ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.35f)
         ui.stroke.strokeWidth = dp(1.2f)

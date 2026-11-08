@@ -99,7 +99,7 @@ class ShopScreen(
     private fun buy(kind: UpgradeKind) {
         if (moved) { moved = false; return }
         if (!save.isDroneUnlocked(selected.id)) {
-            say("این پهباد قفل است — " + Fa.num(selected.requiredStars) + " ستاره لازم است")
+            say("این پهپاد قفل است — " + Fa.num(selected.requiredStars) + " ستاره لازم است")
             audio.beep(320f, 110, 0.3f)
             return
         }

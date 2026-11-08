@@ -290,7 +290,7 @@ class Mission(
         fuelLeft -= used
         if (fuelLeft <= 0f) {
             fuelLeft = 0f
-            explodeDrone("سوخت پهباد تمام شد")
+            explodeDrone("سوخت پهپاد تمام شد")
             return
         }
 
@@ -299,7 +299,7 @@ class Mission(
 
         // ---- برخورد با زمین و ساختمان
         if (y <= 1.5f) {
-            if (!checkTargetImpact(true)) explodeDrone("پهباد به زمین برخورد کرد")
+            if (!checkTargetImpact(true)) explodeDrone("پهپاد به زمین برخورد کرد")
             return
         }
         if (world.hitsPropSwept(prevX, prevY, prevZ, x, y, z)) {
@@ -318,7 +318,7 @@ class Mission(
                 b.collected = true
                 bonusesCollected++
                 onCollect?.invoke()
-                toast("بونوس مخفی پیدا شد", 1.4f, ir.shahed.pahpad.core.Theme.AMBER)
+                toast("پاداش مخفی پیدا شد", 1.4f, ir.shahed.pahpad.core.Theme.AMBER)
             }
         }
 
@@ -413,7 +413,7 @@ class Mission(
         shake = 1f
         onHit?.invoke()
         if (damage >= armor) {
-            explodeDrone("پهباد توسط پدافند دشمن ساقط شد")
+            explodeDrone("پهپاد توسط پدافند دشمن ساقط شد")
         } else {
             toast("آسیب پدافندی: ${ir.shahed.pahpad.core.Fa.num(damage)} از ${ir.shahed.pahpad.core.Fa.num(armor)}",
                 1.8f, ir.shahed.pahpad.core.Theme.RED)
@@ -473,9 +473,9 @@ class Mission(
         } else {
             dronesLeft--
             if (dronesLeft <= 0) {
-                finish(false, "پهبادی برای اهداف باقی‌مانده نماند")
+                finish(false, "پهپادی برای اهداف باقی‌مانده نماند")
             } else {
-                toast("پهباد بعدی آماده پرتاب است", 2.4f, ir.shahed.pahpad.core.Theme.AMBER)
+                toast("پهپاد بعدی آماده پرتاب است", 2.4f, ir.shahed.pahpad.core.Theme.AMBER)
                 resetDrone()
             }
         }

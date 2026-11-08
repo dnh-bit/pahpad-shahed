@@ -30,7 +30,7 @@ class BriefingScreen(
     private val start = UiButton("شروع ماموریت", Theme.MINT, filled = true) {
         game.show(GameScreen(game, level, mode, seed))
     }
-    private val hangar = UiButton("انتخاب پهباد", Theme.AMBER) {
+    private val hangar = UiButton("انتخاب پهپاد", Theme.AMBER) {
         game.show(ShopScreen(game) { BriefingScreen(game, level, mode) })
     }
     private val back = UiButton("بازگشت", Theme.TEXT_DIM) { goBack() }
@@ -180,7 +180,7 @@ class BriefingScreen(
         ui.text(c, "فاصله تا هدف: " + Fa.meters(level.distance), map.centerX(), map.top + dp(14f),
             dp(11.5f), Theme.TEXT_DIM)
         val legendY = map.bottom - dp(14f)
-        ui.text(c, "قرمز: پدافند · آبی: رادار · بنفش: اخلال · زرد: بونوس", map.centerX(), legendY,
+        ui.text(c, "قرمز: پدافند · آبی: رادار · بنفش: اخلال · زرد: پاداش", map.centerX(), legendY,
             dp(10.5f), Theme.TEXT_FAINT)
     }
 
@@ -273,7 +273,7 @@ class BriefingScreen(
                 else -> "drone_131_side"
             }
             ui.imageFit(ui.context, c, sideName, x + dp(8f), y + dp(6f), dp(96f), dp(70f))
-            ui.text(c, "پهباد انتخابی: " + model.name, right - dp(14f), y + dp(16f), dp(13f), model.color,
+            ui.text(c, "پهپاد انتخابی: " + model.name, right - dp(14f), y + dp(16f), dp(13f), model.color,
                 bold = true, align = Paint.Align.RIGHT)
             val stats = listOf(
                 Pair("برد", UpgradeKind.RANGE),

@@ -9,9 +9,9 @@ enum class UpgradeKind(
     val description: String,
     val baseCost: Int
 ) {
-    RANGE("range", "برد پرواز", "مسافتی که پهباد پیش از اتمام سوخت می‌پیماید", 120),
-    SPEED("speed", "سرعت", "حداکثر سرعت پرواز پهباد", 140),
-    GUIDANCE("guidance", "دقت هدایت", "چابکی و نرمی فرمان‌پذیری پهباد", 160),
+    RANGE("range", "برد پرواز", "مسافتی که پهپاد پیش از اتمام سوخت می‌پیماید", 120),
+    SPEED("speed", "سرعت", "حداکثر سرعت پرواز پهپاد", 140),
+    GUIDANCE("guidance", "دقت هدایت", "چابکی و نرمی فرمان‌پذیری پهپاد", 160),
     ARMOR("armor", "مقاومت", "تعداد ضربه‌های پدافندی قابل تحمل", 200);
 
     fun costFor(nextLevel: Int): Int {
@@ -73,7 +73,7 @@ object DroneModels {
             id = "shahed131",
             name = "شاهد-۱۳۱",
             requiredStars = 0,
-            tagline = "پهباد پایه؛ سبک، چابک و مناسب آموزش",
+            tagline = "پهپاد پایه؛ سبک، چابک و مناسب آموزش",
             color = Theme.MINT,
             rangeMul = 1.0f, speedMul = 1.0f, guidanceMul = 1.0f, blastMul = 1.0f,
             armorBonus = 0, hasEcm = false,

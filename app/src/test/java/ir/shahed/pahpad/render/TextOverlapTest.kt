@@ -11,7 +11,10 @@ import ir.shahed.pahpad.screens.LeaderboardScreen
 import ir.shahed.pahpad.screens.LevelSelectScreen
 import ir.shahed.pahpad.screens.MainMenuScreen
 import ir.shahed.pahpad.screens.SettingsScreen
+import ir.shahed.pahpad.screens.GameScreen
 import ir.shahed.pahpad.screens.ShopScreen
+import ir.shahed.pahpad.data.Levels
+import ir.shahed.pahpad.game.MissionMode
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -86,6 +89,9 @@ class TextOverlapTest {
                 "shop" to ShopScreen(activity),
                 "settings" to SettingsScreen(activity),
                 "leaderboard" to LeaderboardScreen(activity),
+                // HUD گیم‌پلی — پرتراکم‌ترین صفحه، قبلاً پوشش نداشت
+                "game" to GameScreen(activity, Levels.all.first { it.chapter == 1 },
+                    MissionMode.STORY, 7L),
             )
             for ((name, screen) in screens) {
                 val boxes = renderAndCollect(activity, screen, w, h)

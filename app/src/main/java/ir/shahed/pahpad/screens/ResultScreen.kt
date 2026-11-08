@@ -66,7 +66,7 @@ class ResultScreen(
         Triple("زمان ماموریت", res.timeScore, 500),
         Triple("اجتناب از پدافند", res.defense, 300),
         Triple("مدیریت سوخت", res.fuelScore, 200),
-        Triple("بونوس‌های مخفی", res.bonusScore, 500)
+        Triple("پاداش‌های مخفی", res.bonusScore, 500)
     )
 
     private val steps = rules.size + rows.size
@@ -208,7 +208,7 @@ class ResultScreen(
             y += dp(40f)
         }
         y += dp(4f)
-        ui.text(c, "امتیاز بونوس‌ها جداگانه است؛ جمع همهٔ آن‌ها ستارهٔ دوم را می‌دهد.",
+        ui.text(c, "امتیاز پاداش‌ها جداگانه است؛ جمع همهٔ آن‌ها ستارهٔ دوم را می‌دهد.",
             rx + rw - dp(6f), y, dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
         y += dp(18f)
         if (mode == MissionMode.STORY) {

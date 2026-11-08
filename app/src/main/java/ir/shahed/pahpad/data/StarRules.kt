@@ -94,9 +94,9 @@ object StarRules {
                 success
             ),
             Rule(
-                2, "جمع بونوس‌ها",
-                "همهٔ بونوس‌های مخفی جمع شوند",
-                Fa.num(bonusesCollected) + " از " + Fa.num(bonusesTotal) + " بونوس",
+                2, "جمع پاداش‌ها",
+                "همهٔ پاداش‌های مخفی جمع شوند",
+                Fa.num(bonusesCollected) + " از " + Fa.num(bonusesTotal) + " پاداش",
                 success && allBonuses(bonusesCollected, bonusesTotal)
             ),
             Rule(
@@ -112,8 +112,8 @@ object StarRules {
     fun preview(targetsTotal: Int, parTime: Float, bonusesTotal: Int): List<Rule> = listOf(
         Rule(1, "انهدام هدف", "همهٔ اهداف اصلی منهدم شوند",
             Fa.num(targetsTotal.coerceAtLeast(1)) + " هدف", false),
-        Rule(2, "جمع بونوس‌ها", "همهٔ بونوس‌های مخفی جمع شوند",
-            Fa.num(bonusesTotal) + " بونوس", false),
+        Rule(2, "جمع پاداش‌ها", "همهٔ پاداش‌های مخفی جمع شوند",
+            Fa.num(bonusesTotal) + " پاداش", false),
         Rule(3, "اجرای تمیز", "بدون آسیب پدافندی، یا رسیدن زیر زمان مرجع",
             Fa.clock(parTime), false)
     )
