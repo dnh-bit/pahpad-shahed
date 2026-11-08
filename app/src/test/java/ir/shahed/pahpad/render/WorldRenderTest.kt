@@ -100,9 +100,10 @@ class WorldRenderTest {
                 val cam = renderer.scene.cam
                 cam.fov = 55f
                 // ۲۸ متر جلوی دیوار، هم‌ارتفاع وسط ساختمان
+                // دقیقاً رو‌به رخ -Z (نه گوشه) تا یک وجه کامل دیده شود
                 cam.x = b.x
                 cam.y = b.h * 0.45f
-                cam.z = b.z - (b.d * 0.5f + 28f)
+                cam.z = b.z - (b.d * 0.5f + b.w * 0.75f)
                 cam.yaw = 0f
                 cam.pitch = 0f
                 cam.roll = 0f
