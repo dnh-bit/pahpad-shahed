@@ -226,17 +226,23 @@ class Scene3D {
         if(1.0+g<=0.0 || 1.0+h<=0.0 || 1.0+g+h<=0.0)return false
 
         // ---- تکرار بافت در فضای جهانی (متر)
-        // طول واقعی دو لبهٔ وجه در فضای دوربین (که همان متر جهان است، چون
-        // تبدیل دوربین فقط چرخش و جابه‌جایی است).
+        //
+        // طول واقعی دو لبهٔ وجه در فضای دوربین — که همان متر جهان است، چون
+        // تبدیل دوربین فقط چرخش و جابه‌جایی است.
+        //
+        // نکتهٔ مهم: باید از **لبهٔ اولِ** چهارضلعی استفاده شود، نه از محور
+        // غالب. در `rig.tube` و بعضی وجه‌ها، p→q و s→p طول یکسانی ندارند و
+        // اگر محور را عوض کنیم، عرض و ارتفاع بافت جابه‌جا می‌شوند و کاشی
+        // مستطیل می‌شود. اینجا هر دو لبهٔ مجاور p اندازه گرفته می‌شوند.
         val ux=q[0]-p[0]; val uy=q[1]-p[1]; val uz=q[2]-p[2]
         val vx=s[0]-p[0]; val vy=s[1]-p[1]; val vz=s[2]-p[2]
         val edgeU=sqrt(ux*ux+uy*uy+uz*uz)
         val edgeV=sqrt(vx*vx+vy*vy+vz*vz)
-        // تقسیم دقیق (نه گرد) تا در همهٔ ساختمان‌ها اندازهٔ کاشی در دنیای
-        // واقعی یکسان بماند. reps بر اساس هندسهٔ ثابت ساختمان است، نه دوربین،
-        // پس با حرکت پهباد تغییر نمی‌کند.
-        val repsU=if(textureMeters>0.001f) (edgeU/textureMeters).coerceIn(0.25f,64f) else 1f
-        val repsV=if(textureMeters>0.001f) (edgeV/textureMeters).coerceIn(0.25f,64f) else 1f
+        // تکرار کامل (نه رُند‌شده): اندازهٔ کاشی در دنیای واقعی روی همهٔ
+        // ساختمان‌ها یکسان می‌ماند. سقف ۲۰۰ فقط برای جلوگیری از اعداد
+        // بی‌معنا روی وجه‌های بسیار بزرگ است و در عمل هرگز فعال نمی‌شود.
+        val repsU=if(textureMeters>0.001f) (edgeU/textureMeters).coerceIn(0.05f,200f) else 1f
+        val repsV=if(textureMeters>0.001f) (edgeV/textureMeters).coerceIn(0.05f,200f) else 1f
         val bw=bitmap.width*repsU.toDouble()
         val bh=bitmap.height*repsV.toDouble()
 
