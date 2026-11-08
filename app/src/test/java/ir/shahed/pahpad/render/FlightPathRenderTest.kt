@@ -81,7 +81,7 @@ class FlightPathRenderTest {
             // رو‌به مرکز ساختمان نگاه کن
             val tx = if (tall.isNotEmpty()) tall[0].x else 0f
             val tz = if (tall.isNotEmpty()) tall[0].z else 200f
-            cam.yaw = Math.atan2(tx - cx, tz - cz)
+            cam.yaw = Math.atan2((tx - cx).toDouble(), (tz - cz).toDouble()).toFloat()
             cam.pitch = 0.05f
             cam.roll = 0f
             cam.viewport(w.toFloat(), h.toFloat())
