@@ -403,7 +403,8 @@ class WorldRenderer(private val gfxContext: Context) {
                     val y0 = 1.2f + f * floorH; val y1 = y0 + winH
                     if (y1 > usableH - 0.5f) continue
                     val x0 = sx + b * (winW + gapX); val x1 = x0 + winW
-                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, dark, cullBack = true)
+                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, dark,
+                        cullBack = true, depthBias = 0.2f)
                 }
             }
             return
@@ -427,7 +428,12 @@ class WorldRenderer(private val gfxContext: Context) {
                 val winH = 2.45f
                 val floorH2 = 3.55f
 
-                val maxWindows = 56
+                // بودجه بر اساس **وجه** نه پنجره: هر پنجره ۱ شیشه + ۲ قاب
+                // روی ۲ رخ، و رخ‌های کناری هم سهم دارند. با ۵۶ پنجره یک
+                // ساختمان نزدیک ~۴۵۰ وجه می‌ساخت که روی Canvas موبایل زیاد
+                // است. ۳۲ پنجره ≈ ۲۶۰ وجه، که با چند ساختمان در کادر
+                // هنوز زیر بودجهٔ فریم می‌ماند.
+                val maxWindows = 32
                 val slotWish = winW + gapX          // ۲.۹ متر
                 var baysZraw = ((w - 1.2f) / slotWish).toInt().coerceIn(1, 16)
                 var floorsRaw = floors
@@ -468,10 +474,13 @@ class WorldRenderer(private val gfxContext: Context) {
             //    رنگ در هم می‌آمیزد.
             // از وقتی نوار پشتی حذف شد، پنجره‌ها باید همیشه رسم شوند؛
             // «محو تدریجی» فقط برای گذار نرم بین LOD است، نه برای حذف کامل.
-            val winFade = if (detail <= 1 && winKey != null) {
+            val winFade = if (winKey != null) {
                 val f = windowDetail(worldDist)
                 if (f < 0.05f) 0.05f else f
             } else 0f
+            // LOD دور (detail > 1): پنجره‌ها بمانند ولی قاب‌ها حذف شوند تا
+            // وجه‌ها نصف شوند و فریم نیفتد.
+            val drawFrames = detail <= 1
             if (winFade > 0.001f) {
                 val inset = 0.06f     // بیرون‌زدگی پنجره از دیوار (متر)
                 // پنجره‌ها با بایاس عمق مرتب می‌شوند، پس لازم نیست چندان
@@ -516,14 +525,17 @@ class WorldRenderer(private val gfxContext: Context) {
                                     rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, litWin,
                                         emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
                                 } else {
-                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, paneGlass, depthBias = winBias)
+                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, paneGlass,
+                                        cullBack = true, depthBias = winBias)
                                 }
                                 // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
-                                val fz = zz + side.toFloat() * 0.004f
-                                val frame = frameCol
-                                val fh = 0.09f
-                                rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
-                                rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
+                                if (drawFrames) {
+                                    val fz = zz + side.toFloat() * 0.004f
+                                    val frame = frameCol
+                                    val fh = 0.09f
+                                    rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
+                                    rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
+                                }
                             }
                         }
                     }
@@ -548,12 +560,14 @@ class WorldRenderer(private val gfxContext: Context) {
                                     rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, litWin,
                                         emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
                                 } else {
-                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, paneGlass, depthBias = winBias)
+                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, paneGlass,
+                                        cullBack = true, depthBias = winBias)
                                 }
-                                val frame = frameCol
-                                val fh = 0.09f
-                                rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frame, cullBack = true, depthBias = winBias + 0.1f)
-                                rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frame, cullBack = true, depthBias = winBias + 0.1f)
+                                if (drawFrames) {
+                                    val fh = 0.09f
+                                    rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frameCol, cullBack = true, depthBias = winBias + 0.1f)
+                                    rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frameCol, cullBack = true, depthBias = winBias + 0.1f)
+                                }
                             }
                         }
                     }
