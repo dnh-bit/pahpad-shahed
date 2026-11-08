@@ -525,16 +525,18 @@ class WorldRenderer(private val gfxContext: Context) {
                     }
                 }
                 if (d >= 6f) {
-                    val baysX = (((d - 1.2f) / (winW + gapX)).toInt().coerceIn(1, 10) * k)
-                        .toInt().coerceIn(1, 10)
-                    val totalZ = baysX * winW + (baysX - 1) * gapX
-                    val startZ = -totalZ * 0.5f
+                    val baysX = ((baysZ.toFloat() * d / w).toInt()).coerceIn(2, 10)
+                    val usableD = (d * 0.90f).coerceAtLeast(2f)
+                    val slotD = (usableD / baysX).coerceAtLeast(0.9f)
+                    val pwD = (slotD * 0.66f).coerceAtLeast(0.5f)
+                    val totalZ = baysX * slotD
+                    val startZ = -totalZ * 0.5f + (slotD - pwD) * 0.5f
                     val floorsX = floorsEff
                     for (side in -1..1 step 2) {
                         val xx = side.toFloat() * (w * 0.5f + inset)
                         val fx0 = xx + side.toFloat() * 0.004f
                         for (b in 0 until baysX) {
-                            val z0 = startZ + b * (winW + gapX); val z1 = z0 + winW
+                            val z0 = startZ + b * slotD; val z1 = z0 + pwD
                             for (f in 0 until floorsX) {
                                 val y0 = sill0 + f * floorH2; val y1 = y0 + winH
                                 if (y1 > usableH - 0.45f) continue
