@@ -84,6 +84,26 @@ class WorldRenderTest {
             println("نوشتم ${f.absolutePath}")
         }
 
+        // ---- نمای نزدیک پهپاد: مدل نباید داغان باشد
+        run {
+            val m2 = Mission(level, save, MissionMode.STORY, 42L)
+            m2.x = 0f; m2.y = 40f; m2.z = 0f
+            m2.yaw = 0.6f; m2.pitch = 0.05f; m2.roll = 0.18f
+            val cam = renderer.scene.cam
+            cam.fov = 50f
+            cam.x = -22f; cam.y = 46f; cam.z = -22f
+            cam.yaw = Math.toRadians(45.0).toFloat()
+            cam.pitch = -0.12f; cam.roll = 0f
+            cam.viewport(w.toFloat(), h.toFloat())
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val c = Canvas(bmp)
+            renderer.update(1f / 60f, m2)
+            renderer.draw(c, m2, w.toFloat(), h.toFloat())
+            val f = File(outDir, "drone_closeup.png")
+            f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            println("نوشتم ${f.absolutePath}")
+        }
+
         // ---- اثبات پایداری پنجره‌ها
         // یک ساختمان ثابت را از دو فاصلهٔ خیلی نزدیک به هم رندر می‌کنیم. اگر
         // تصمیم «پنجرهٔ مجزا» به دوربین وابسته باشد، شدت پنجره بین این دو
