@@ -413,7 +413,10 @@ class WorldRenderer(private val gfxContext: Context) {
         // و پنجرهٔ مجزا فقط وقتی روی صفحهٔ نمایش به اندازه کافی بزرگ است.
         // گذر از هر مرزی = پنجره روی نوار می‌نشیند یا بیرون می‌رود — نه پنجره صفر/صد.
         if (!destroyed && usableH >= 3.0f && w >= 4f && d >= 4f) {
-            val glass = look.windowGlass
+            // نوار پشت (زمینهٔ طبقه) — تیره‌تر از پنجره‌های مجزا
+            val glass = Theme.shade(look.windowGlass, 0.55f)
+            // شیشهٔ پنجرهٔ مجزا — روشن‌تر، تا شبکه دیده شود
+            val paneGlass = look.windowGlass
             val floorH = 3.55f
             val sill0 = 1.45f
             // طبقات از ارتفاع واقعی ساختمان — سقف ۵ باعث می‌شد برج ۴۹ متری
@@ -460,7 +463,8 @@ class WorldRenderer(private val gfxContext: Context) {
                 // رنگ پنجره با شدت winFade از رنگ نوار به رنگ کامل می‌رود
                 fun blended(target: Int): Int = if (winFade >= 1f) target else Theme.mix(glass, target, winFade)
                 val litWin = blended(look.windowLit)
-                val frameBase = Theme.shade(color, 0.62f)
+                // قاب: روشن‌تر از دیوار تا مرز پنجره‌ها دیده شود
+                val frameBase = Theme.shade(color, 1.9f)
                 val frameCol = if (winFade >= 1f) frameBase else Theme.mix(glass, frameBase, winFade)
                 // فقط حدود ۱ از ۵ پنجره روشن — بیشتر از این، شبکه شطرنجی به‌نظر می‌رسد
                 fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % (look.litChance * 2)) == 0
@@ -510,7 +514,7 @@ class WorldRenderer(private val gfxContext: Context) {
                                     rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, litWin,
                                         emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
                                 } else {
-                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, glass, depthBias = winBias)
+                                    rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, paneGlass, depthBias = winBias)
                                 }
                                 // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
                                 val fz = zz + side.toFloat() * 0.004f
@@ -543,7 +547,7 @@ class WorldRenderer(private val gfxContext: Context) {
                                     rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, litWin,
                                         emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
                                 } else {
-                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, glass, depthBias = winBias)
+                                    rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, paneGlass, depthBias = winBias)
                                 }
                                 val frame = frameCol
                                 val fh = 0.09f
