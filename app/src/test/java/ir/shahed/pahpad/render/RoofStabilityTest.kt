@@ -43,6 +43,22 @@ class RoofStabilityTest {
         mission.x = shift
         mission.y = 130f
         mission.z = 260f
+        mission.yaw = 0f
+        mission.pitch = -0.12f
+        // دوربین باید مثل GameScreen ست شود؛ وگرنه draw از دوربین قبلی
+        // استفاده می‌کند و دو رندر عیناً یکی می‌شوند (تفاضل صفر = تست بی‌اثر).
+        val cam = renderer.scene.cam
+        cam.fov = 74f
+        val back = 26f
+        val cp = Math.cos(mission.pitch.toDouble()).toFloat()
+        cam.x = mission.x - Math.sin(mission.yaw.toDouble()).toFloat() * back * cp
+        cam.z = mission.z - Math.cos(mission.yaw.toDouble()).toFloat() * back * cp
+        cam.y = (mission.y - Math.sin(mission.pitch.toDouble()).toFloat() * back + 6f).coerceAtLeast(3f)
+        cam.yaw = mission.yaw
+        cam.pitch = mission.pitch * 0.85f - 0.05f
+        cam.roll = 0f
+        cam.viewport(w.toFloat(), h.toFloat())
+
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         renderer.draw(c, mission, w.toFloat(), h.toFloat())
@@ -85,6 +101,12 @@ class RoofStabilityTest {
             }
         }
         val ratio = bigDiff.toFloat() / total
+        // کنترل سلامت تست: دو رندر نباید عیناً یکی باشند، وگرنه دوربین
+        // حرکت نکرده و تست چیزی را نمی‌سنجد.
+        var anyDiff = 0
+        for (i in a.indices) if (a[i] != b[i]) anyDiff++
+        println("پیکسل‌های متفاوت کل تصویر: $anyDiff از ${a.size}")
+        assertTrue("تست بی‌اثر است: دو رندر عیناً یکی هستند (دوربین حرکت نکرد)", anyDiff > 1000)
         println("ناحیهٔ بام: $bigDiff از $total پیکسل اختلاف بزرگ " +
                 "(${"%.3f".format(ratio * 100)}٪)")
 
