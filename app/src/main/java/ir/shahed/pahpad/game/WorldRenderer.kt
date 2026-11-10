@@ -343,14 +343,6 @@ class WorldRenderer(private val gfxContext: Context) {
      *  محیط را می‌گیرد، پنجره‌های روشن در غروب/شب خودتابان‌اند و نوار تیرهٔ پای دیوار
      *  (اکلوژن تماسی) ساختمان را روی زمین می‌نشاند. منطق ویرانی نزدیک هم اصلاح شد
      *  (شاخهٔ قبلی هرگز اجرا نمی‌شد). */
-    /**
-     * فقط برای تست: وقتی true باشد، وجه بالای بدنه هم رسم می‌شود و همان
-     * باگ هم‌سطحی سقف عمداً بازسازی می‌شود. تست ثابت می‌کند با این پرچم
-     * سقف سوسو می‌زند و بدون آن نه — یعنی تست واقعاً باگ را می‌گیرد.
-     * در مسیر تولید همیشه false است.
-     */
-    var debugDoubleRoof = false
-
     private fun building(
         x: Float, z: Float, w: Float, h: Float, d: Float, yaw: Float,
         baseColor: Int, destroyed: Boolean, detail: Int,
@@ -371,7 +363,7 @@ class WorldRenderer(private val gfxContext: Context) {
         // رسم می‌شدند و مرتب‌ساز نقاش هر فریم یکی را جلو می‌آورد → سقف
         // سوسو می‌زد و لکه‌لکه دیده می‌شد.
         rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false,
-            tiledFaces = true, topFace = debugDoubleRoof)
+            tiledFaces = true, topFace = false)
         // لبهٔ پشت‌بام: تنها وجه بالایی بام، با همان تکرار متری بافت
         rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false,
             tiledFaces = true)
