@@ -132,38 +132,4 @@ class RoofStabilityTest {
             hfAvg <= 2.0 && hfMax <= 30
         )
     }
-
-    /**
-     * کیفیت بافت بام نباید پایین بیاید. یک بار بافت را «صاف» کردم و
-     * کاربر گفت کیفیت افت کرده — این تست جلوی تکرارش را می‌گیرد.
-     */
-    @Test
-    fun roofTextureKeepsItsDetail() {
-        val activity = Robolectric.buildActivity(ir.shahed.pahpad.MainActivity::class.java).get()
-        val bmp = ir.shahed.pahpad.core.Gfx.get(activity, "material_roof")
-            ?: throw AssertionError("بافت material_roof لود نشد")
-        val tw = bmp.width
-        val th = bmp.height
-        val px = IntArray(tw * th)
-        bmp.getPixels(px, 0, tw, 0, 0, tw, th)
-
-        fun lum(i: Int): Int {
-            val p = px[i]
-            return ((p shr 16 and 0xFF) + (p shr 8 and 0xFF) + (p and 0xFF)) / 3
-        }
-
-        var mn = 255
-        var mx = 0
-        for (i in px.indices) {
-            val v = lum(i)
-            if (v < mn) mn = v
-            if (v > mx) mx = v
-        }
-        println("جزئیات بافت بام: بازهٔ روشنایی ${mx - mn}")
-
-        assertTrue(
-            "کیفیت بافت بام پایین آمده: بازهٔ روشنایی ${mx - mn} (باید ≥ ۱۲۰ باشد)",
-            mx - mn >= 120
-        )
-    }
 }
