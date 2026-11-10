@@ -383,10 +383,13 @@ class WorldRenderer(private val gfxContext: Context) {
             rig.box(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof, bottom = false)
             rig.box(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
             rig.box(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
+            // توجه: همهٔ جعبه‌های پشت‌بام `bottom = false` هستند. وجه زیرینشان
+            // دقیقاً روی سطح بام می‌نشیند و در مرتب‌ساز نقاش با آن هم‌سطح
+            // می‌شود → لکهٔ تیره‌ای که هر فریم ظاهر/غیب می‌شد.
             // واحدهای پشت‌بام فقط نزدیک — حذف‌شدنشان در فاصله طبیعی است
             // چون کوچک‌اند و چشم متوجه نمی‌شود. لبهٔ پشت‌بام (بالا) همیشه
             // می‌مانَد.
-            if (detail == 0) {
+            if (detail <= 1) {
                 val seed = (x * 31f + z * 17f).toInt()
                 val unitW = (w * .22f).coerceIn(1.6f, 5f)
                 val unitD = (d * .26f).coerceIn(1.6f, 5f)
