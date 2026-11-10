@@ -367,7 +367,15 @@ class WorldRenderer(private val gfxContext: Context) {
         // لبهٔ پشت‌بام: تنها وجه بالایی بام، با همان تکرار متری بافت
         rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false,
             tiledFaces = true)
-        val parapet = if (detail == 0 && !destroyed) min(1.1f, max(.35f, h * .018f)) else 0f
+        // پشت‌بام و واحدهایش **نباید با فاصله ظاهر/غیب شوند**.
+        //
+        // قبلاً `detail == 0` بود، یعنی فقط تا ۱۷۵ متر رسم می‌شد. وقتی
+        // دوربین جلو/عقب می‌رفت، کل پشت‌بام یک‌جا می‌پرید — همان «چیزی
+        // روی سقف ظاهر و غیب می‌شود».
+        //
+        // حالا تا ۴۲۰ متر (MID_LOD) می‌مانَد و آن‌طرف‌تر فقط واحدهای
+        // تزئینی (جعبه و آنتن) حذف می‌شوند، نه خودِ لبه.
+        val parapet = if (!destroyed) min(1.1f, max(.35f, h * .018f)) else 0f
         if (parapet > 0f) {
             val pr = Theme.shade(color, 1.16f)
             val t = min(.7f, w * .05f)
@@ -375,15 +383,20 @@ class WorldRenderer(private val gfxContext: Context) {
             rig.box(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof, bottom = false)
             rig.box(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
             rig.box(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
-            val seed = (x * 31f + z * 17f).toInt()
-            val unitW = (w * .22f).coerceIn(1.6f, 5f)
-            val unitD = (d * .26f).coerceIn(1.6f, 5f)
-            val ux = (((seed % 5) + 5) % 5 - 2) * w * .11f
-            val uz = ((((seed / 5) % 5) + 5) % 5 - 2) * d * .11f
-            val unitH = parapet * 2.4f
-            rig.box(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof, bottom = false)
-            rig.tube(ux + unitW * .5f, h + unitH, uz, ux + unitW * .5f, h + unitH + 1.6f, uz,
-                .16f, 6, Theme.shade(color, 0.8f), caps = true)
+            // واحدهای پشت‌بام فقط نزدیک — حذف‌شدنشان در فاصله طبیعی است
+            // چون کوچک‌اند و چشم متوجه نمی‌شود. لبهٔ پشت‌بام (بالا) همیشه
+            // می‌مانَد.
+            if (detail == 0) {
+                val seed = (x * 31f + z * 17f).toInt()
+                val unitW = (w * .22f).coerceIn(1.6f, 5f)
+                val unitD = (d * .26f).coerceIn(1.6f, 5f)
+                val ux = (((seed % 5) + 5) % 5 - 2) * w * .11f
+                val uz = ((((seed / 5) % 5) + 5) % 5 - 2) * d * .11f
+                val unitH = parapet * 2.4f
+                rig.box(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof, bottom = false)
+                rig.tube(ux + unitW * .5f, h + unitH, uz, ux + unitW * .5f, h + unitH + 1.6f, uz,
+                    .16f, 6, Theme.shade(color, 0.8f), caps = true)
+            }
         }
         val usableH = h - cap
         if (detail <= 1 && !destroyed) {
