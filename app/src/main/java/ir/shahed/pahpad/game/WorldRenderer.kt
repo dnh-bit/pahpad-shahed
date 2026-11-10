@@ -357,9 +357,16 @@ class WorldRenderer(private val gfxContext: Context) {
         val cap = max(.5f, h * .04f).coerceAtMost(h * .2f)
         // اینجا (و فقط اینجا) بافت دیوار با مقیاس متری تکرار می‌شود.
         // بدنهٔ پهپاد/تانک/کشتی از این مسیر نمی‌گذرند یا tiledFaces ندارند.
-        rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false, tiledFaces = true)
-        // لبهٔ پشت‌بام (parapet)
-        rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false)
+        //
+        // وجه بالای بدنه رسم نمی‌شود: حجمِ «لبهٔ پشت‌بام» که دقیقاً رویش
+        // می‌نشیند همان سطح را می‌پوشاند. قبلاً هر دو وجه هم‌سطح و هم‌اندازه
+        // رسم می‌شدند و مرتب‌ساز نقاش هر فریم یکی را جلو می‌آورد → سقف
+        // سوسو می‌زد و لکه‌لکه دیده می‌شد.
+        rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false,
+            tiledFaces = true, topFace = false)
+        // لبهٔ پشت‌بام: تنها وجه بالایی بام، با همان تکرار متری بافت
+        rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false,
+            tiledFaces = true)
         val parapet = if (detail == 0 && !destroyed) min(1.1f, max(.35f, h * .018f)) else 0f
         if (parapet > 0f) {
             val pr = Theme.shade(color, 1.16f)

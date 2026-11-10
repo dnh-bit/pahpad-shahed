@@ -213,21 +213,25 @@ class Rig(private val scene: Scene3D) {
      * می‌شود.
      */
     private fun hexa(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean = true,
-                     tiledFaces: Boolean = false) {
+                     tiledFaces: Boolean = false, topFace: Boolean = true) {
         cull = true
-        try { hexaFaces(p, color, side, top, bottom, tiledFaces) } finally { cull = false }
+        try { hexaFaces(p, color, side, top, bottom, tiledFaces, topFace) } finally { cull = false }
     }
 
     private fun hexaFaces(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean,
-                          tiledFaces: Boolean = false) {
+                          tiledFaces: Boolean = false, topFace: Boolean = true) {
         fun v(i: Int, k: Int) = p[i * 3 + k]
         if (bottom) {
             face(v(3, 0), v(3, 1), v(3, 2), v(2, 0), v(2, 1), v(2, 2),
                 v(1, 0), v(1, 1), v(1, 2), v(0, 0), v(0, 1), v(0, 2),
                 Theme.shade(color, 0.72f), null)
         }
-        face(v(4, 0), v(4, 1), v(4, 2), v(5, 0), v(5, 1), v(5, 2),
-            v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top, tiled = tiledFaces)
+        // وجه بالا: اگر حجمِ رویش دقیقاً همان اندازه را بپوشاند، این وجه
+        // دیده نمی‌شود و فقط یک وجه هم‌سطح اضافی برای مرتب‌ساز است.
+        if (topFace) {
+            face(v(4, 0), v(4, 1), v(4, 2), v(5, 0), v(5, 1), v(5, 2),
+                v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top, tiled = tiledFaces)
+        }
         for (i in 0..3) {
             val j = (i + 1) % 4
             face(v(i, 0), v(i, 1), v(i, 2), v(j, 0), v(j, 1), v(j, 2),
@@ -247,7 +251,7 @@ class Rig(private val scene: Scene3D) {
         cx: Float, baseY: Float, cz: Float,
         sx: Float, sy2: Float, sz: Float,
         color: Int, side: Bitmap? = null, top: Bitmap? = side, bottom: Boolean = true,
-        tiledFaces: Boolean = false
+        tiledFaces: Boolean = false, topFace: Boolean = true
     ) {
         val hx = sx * 0.5f
         val hz = sz * 0.5f
@@ -261,7 +265,7 @@ class Rig(private val scene: Scene3D) {
         setCorner(5, cx + hx, ty, cz - hz)
         setCorner(6, cx + hx, ty, cz + hz)
         setCorner(7, cx - hx, ty, cz + hz)
-        hexa(corner, color, side, top, bottom, tiledFaces)
+        hexa(corner, color, side, top, bottom, tiledFaces, topFace)
     }
 
     /** هرم ناقص: نیم‌عرض پایین و بالا جدا؛ برای بدنه‌ی شیب‌دار، برجک و دودکش. */
