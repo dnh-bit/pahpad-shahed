@@ -93,16 +93,11 @@ class RoofStabilityTest {
         val x0 = (w * 0.20f).toInt()
         val x1 = (w * 0.80f).toInt()
 
-        var flicker = 0
-        var total = 0
-        var maxDelta = 0
-        var worstX = -1
-        var worstY = -1
-        for (y in y0 until y1) {
-            for (x in x0 until x1) {
+        // تغییر هر پیکسل در طول چهار فریم
+        val delta = IntArray(w * h)
+        for (y in 0 until h) {
+            for (x in 0 until w) {
                 val i = y * w + x
-                // فقط پیکسل‌هایی که در فریم اول «سطح» هستند (نه آسمان):
-                // آسمان گرادیان یکنواخت دارد و بالای تصویر است.
                 var mn = 255
                 var mx = 0
                 for (k in px.indices) {
@@ -111,22 +106,55 @@ class RoofStabilityTest {
                     if (v < mn) mn = v
                     if (v > mx) mx = v
                 }
-                val d = mx - mn
-                if (d > maxDelta) {
-                    maxDelta = d; worstX = x; worstY = y
+                delta[i] = mx - mn
+            }
+        }
+
+        // تفکیک «جابه‌جایی» از «تلنگر»:
+        //
+        // با حرکت دوربین، کل صحنه کمی جابه‌جا می‌شود — پس هم پیکسل و هم
+        // همسایه‌هایش با هم تغییر می‌کنند. اما وقتی یک لایه روی لایهٔ دیگر
+        // می‌پرد، **یک نقطهٔ موضعی** عوض می‌شود و همسایه‌هایش سر جایشان
+        // می‌مانند. پس معیار درست، تغییر پیکسل نسبت به میانگین تغییر
+        // همسایه‌های ۵×۵ است.
+        var flicker = 0
+        var total = 0
+        var maxLocal = 0
+        var worstX = -1
+        var worstY = -1
+        for (y in y0 until y1) {
+            for (x in x0 until x1) {
+                val i = y * w + x
+                var sum = 0
+                var n = 0
+                for (dy in -2..2) {
+                    for (dx in -2..2) {
+                        if (dx == 0 && dy == 0) continue
+                        val yy = y + dy
+                        val xx = x + dx
+                        if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue
+                        sum += delta[yy * w + xx]
+                        n++
+                    }
+                }
+                val neighbor = if (n > 0) sum / n else 0
+                val local = delta[i] - neighbor
+                if (local > maxLocal) {
+                    maxLocal = local; worstX = x; worstY = y
                 }
                 total++
-                if (d > 55) flicker++
+                // تلنگر موضعی: این پیکسل خیلی بیشتر از همسایه‌ها عوض شد
+                if (delta[i] > 55 && local > 45) flicker++
             }
         }
         val ratio = flicker.toFloat() / total
-        println("سطح بام بین ۴ فریم: $flicker از $total پیکسل تلنگر " +
-                "(${"%.2f".format(ratio * 100)}٪) — بیشترین تغییر $maxDelta در ($worstX,$worstY)")
+        println("تلنگر موضعی بام: $flicker از $total پیکسل " +
+                "(${"%.2f".format(ratio * 100)}٪) — بیشترین اثر موضعی $maxLocal در ($worstX,$worstY)")
 
         assertTrue(
-            "روی بام چیزی ظاهر/غیب می‌شود: ${"%.2f".format(ratio * 100)}٪ سطح بام " +
-                    "بین چهار فریم عوض شد (بیشترین تغییر $maxDelta)",
-            ratio < 0.03f
+            "روی بام لایه‌ها می‌پرند (تلنگر موضعی): ${"%.2f".format(ratio * 100)}٪ " +
+                    "سطح بام، بیشترین اثر $maxLocal در ($worstX,$worstY)",
+            ratio < 0.005f
         )
     }
 
