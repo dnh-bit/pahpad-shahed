@@ -151,6 +151,46 @@ class RoofStabilityTest {
         println("تلنگر موضعی بام: $flicker از $total پیکسل " +
                 "(${"%.2f".format(ratio * 100)}٪) — بیشترین اثر موضعی $maxLocal در ($worstX,$worstY)")
 
+        // تشخیص: رنگ هر پیکسل بدقلق در چهار فریم را چاپ کن تا بفهمیم چه
+        // چیزی روی چه چیزی می‌پرد (بام روی بام؟ بام روی آسمان؟ سایه؟).
+        data class Hit(val i: Int, val local: Int)
+
+        val hits = ArrayList<Hit>()
+        for (y in y0 until y1) {
+            for (x in x0 until x1) {
+                val i = y * w + x
+                if (delta[i] <= 55) continue
+                var sum = 0
+                var n = 0
+                for (dy in -2..2) for (dx in -2..2) {
+                    if (dx == 0 && dy == 0) continue
+                    val yy = y + dy
+                    val xx = x + dx
+                    if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue
+                    sum += delta[yy * w + xx]; n++
+                }
+                val local = delta[i] - (if (n > 0) sum / n else 0)
+                if (local > 45) hits.add(Hit(i, local))
+            }
+        }
+        hits.sortByDescending { it.local }
+        println("— تشخیص ۱۰ پیکسل بدقلق —")
+        for (hit in hits.take(10)) {
+            val x = hit.i % w
+            val y = hit.i / w
+            val rgb = px.joinToString(" ") { arr ->
+                val p = arr[hit.i]
+                "(${p shr 16 and 0xFF},${p shr 8 and 0xFF},${p and 0xFF})"
+            }
+            println("  ($x,$y) اثر=${hit.local}  فریم‌ها: $rgb")
+        }
+        // هیستوگرام: چه تعداد از پیکسل‌های بدقلق در فریم اول «بام»اند
+        println("— رنگ غالب بام در فریم اول: نمونه ‎(${w / 2},${(y0 + y1) / 2})‎ = " +
+                run {
+                    val p = px[0][(y0 + y1) / 2 * w + w / 2]
+                    "(${p shr 16 and 0xFF},${p shr 8 and 0xFF},${p and 0xFF})"
+                })
+
         assertTrue(
             "روی بام لایه‌ها می‌پرند (تلنگر موضعی): ${"%.2f".format(ratio * 100)}٪ " +
                     "سطح بام، بیشترین اثر $maxLocal در ($worstX,$worstY)",
