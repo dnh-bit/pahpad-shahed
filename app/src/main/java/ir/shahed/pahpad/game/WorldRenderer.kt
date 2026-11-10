@@ -384,10 +384,10 @@ class WorldRenderer(private val gfxContext: Context) {
             val ao = Theme.shade(color, .52f)
             val band = 1.2f
             val ez = d * .5f + .012f; val ex = w * .5f + .012f
-            rig.face(-w * .5f, 0f, -ez, w * .5f, 0f, -ez, w * .5f, band, -ez, -w * .5f, band, -ez, ao, cullBack = true)
-            rig.face(-w * .5f, 0f, ez, w * .5f, 0f, ez, w * .5f, band, ez, -w * .5f, band, ez, ao, cullBack = true)
-            rig.face(-ex, 0f, -d * .5f, -ex, 0f, d * .5f, -ex, band, d * .5f, -ex, band, -d * .5f, ao, cullBack = true)
-            rig.face(ex, 0f, -d * .5f, ex, 0f, d * .5f, ex, band, d * .5f, ex, band, -d * .5f, ao, cullBack = true)
+            rig.face(-w * .5f, 0f, -ez, w * .5f, 0f, -ez, w * .5f, band, -ez, -w * .5f, band, -ez, ao, cullBack = true, surfaceBias = 0.15f)
+            rig.face(-w * .5f, 0f, ez, w * .5f, 0f, ez, w * .5f, band, ez, -w * .5f, band, ez, ao, cullBack = true, surfaceBias = 0.15f)
+            rig.face(-ex, 0f, -d * .5f, -ex, 0f, d * .5f, -ex, band, d * .5f, -ex, band, -d * .5f, ao, cullBack = true, surfaceBias = 0.15f)
+            rig.face(ex, 0f, -d * .5f, ex, 0f, d * .5f, ex, band, d * .5f, ex, band, -d * .5f, ao, cullBack = true, surfaceBias = 0.15f)
         }
         if (destroyed) {
             // ویرانی: فقط در نزدیک‌ترین LOD چند پنجرهٔ سوختهٔ تیره
@@ -404,7 +404,7 @@ class WorldRenderer(private val gfxContext: Context) {
                     if (y1 > usableH - 0.5f) continue
                     val x0 = sx + b * (winW + gapX); val x1 = x0 + winW
                     rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, dark,
-                        cullBack = true, depthBias = 0.2f)
+                        cullBack = true, surfaceBias = 0.2f)
                 }
             }
             return
@@ -485,7 +485,7 @@ class WorldRenderer(private val gfxContext: Context) {
                 val inset = 0.06f     // بیرون‌زدگی پنجره از دیوار (متر)
                 // پنجره‌ها با بایاس عمق مرتب می‌شوند، پس لازم نیست چندان
                 // بیرون بزنند؛ ۶ سانتی‌متر برای جلوگیری از z-fight کافی است.
-                val winBias = 0.35f   // متر — پنجره همیشه جلوتر از دیوار
+                val winBias = 0.35f   // آفست سطحی؛ در Rig.face با زاویهٔ دید مقیاس می‌شود
                 val seed = (x * 31f + z * 17f).toInt()
                 val phase = ((seed % 7) + 7) % 7
                 // رنگ پنجره با شدت winFade از رنگ نوار به رنگ کامل می‌رود
@@ -510,11 +510,15 @@ class WorldRenderer(private val gfxContext: Context) {
                 // کلی وجه. مهم: بعد از کم‌کردن تعداد، عرض پنجره و گام هم
                 // باید بازمحاسبه شوند تا شبکه **تمام عرض** را بپوشاند؛
                 // وگرنه چند پنجره ریز در گوشه می‌ماند و بقیهٔ دیوار خالی.
+                // نقطهٔ مرجع هر دیوار در دستگاه محلی: مرکز همان دیوار.
+                // دیوارهای Z (جلو/عقب) در zz، دیوارهای X در xx.
                 run {
                     val total = baysZ * slotW
                     val startX = -total * 0.5f + (slotW - pwW) * 0.5f
                     for (side in -1..1 step 2) {
                         val zz = side.toFloat() * (d * 0.5f + inset)
+                        // مرکز همان دیوار: عمق zz، ارتفاع وسط ناحیهٔ پنجره
+                        val wallRefZ = floatArrayOf(0f, (sill0 + bandTop) * 0.5f, zz)
                         for (b in 0 until baysZ) {
                             val x0 = startX + b * slotW; val x1 = x0 + pwW
                             for (f in 0 until floorsEff) {
@@ -523,18 +527,18 @@ class WorldRenderer(private val gfxContext: Context) {
                                 if (litWindow(bi, f)) {
                                     // در شدت کم، پنجرهٔ روشن هم نباید چشمک بزند
                                     rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, litWin,
-                                        emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
+                                        emissive = winFade > 0.85f, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefZ)
                                 } else {
                                     rig.face(x0, y0, zz, x1, y0, zz, x1, y1, zz, x0, y1, zz, paneGlass,
-                                        cullBack = true, depthBias = winBias)
+                                        cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefZ)
                                 }
                                 // قاب؛ آفست هم‌جهت با بیرونِ همان رخ
                                 if (drawFrames) {
                                     val fz = zz + side.toFloat() * 0.004f
                                     val frame = frameCol
                                     val fh = 0.09f
-                                    rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
-                                    rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true, depthBias = winBias + 0.1f)
+                                    rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefZ)
+                                    rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefZ)
                                 }
                             }
                         }
@@ -550,6 +554,7 @@ class WorldRenderer(private val gfxContext: Context) {
                     val floorsX = floorsEff
                     for (side in -1..1 step 2) {
                         val xx = side.toFloat() * (w * 0.5f + inset)
+                        val wallRefX = floatArrayOf(xx, (sill0 + bandTop) * 0.5f, 0f)
                         val fx0 = xx + side.toFloat() * 0.004f
                         for (b in 0 until baysX) {
                             val z0 = startZ + b * slotD; val z1 = z0 + pwD
@@ -558,15 +563,15 @@ class WorldRenderer(private val gfxContext: Context) {
                                 val bi = b + if (side > 0) 30 else 20
                                 if (litWindow(bi, f)) {
                                     rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, litWin,
-                                        emissive = winFade > 0.85f, cullBack = true, depthBias = winBias)
+                                        emissive = winFade > 0.85f, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefX)
                                 } else {
                                     rig.face(xx, y0, z0, xx, y0, z1, xx, y1, z1, xx, y1, z0, paneGlass,
-                                        cullBack = true, depthBias = winBias)
+                                        cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefX)
                                 }
                                 if (drawFrames) {
                                     val fh = 0.09f
-                                    rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frameCol, cullBack = true, depthBias = winBias + 0.1f)
-                                    rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frameCol, cullBack = true, depthBias = winBias + 0.1f)
+                                    rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frameCol, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefX)
+                                    rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frameCol, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefX)
                                 }
                             }
                         }

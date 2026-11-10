@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import ir.shahed.pahpad.core.Theme
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.abs
 import kotlin.math.sqrt
 
 /**
@@ -60,6 +61,22 @@ class Rig(private val scene: Scene3D) {
         refZ = z
     }
 
+    private val depthTmp = FloatArray(3)
+
+    /**
+     * عمق دید یک نقطهٔ **محلی** — دقیقاً همان عددی که `Scene3D.submit`
+     * به‌عنوان `depth` ذخیره می‌کند (camera-space z پس از چرخش و پیچ).
+     */
+    private fun camDepth(lx: Float, ly: Float, lz: Float): Float {
+        world(lx, ly, lz, depthTmp)
+        val cam = scene.cam
+        val dx = depthTmp[0] - cam.x
+        val dy = depthTmp[1] - cam.y
+        val dz = depthTmp[2] - cam.z
+        val forward = dx * sin(cam.yaw) + dz * cos(cam.yaw)
+        return dy * sin(cam.pitch) + forward * cos(cam.pitch)
+    }
+
     private fun world(lx0: Float, ly0: Float, lz0: Float, out: FloatArray) {
         val lx = lx0 * scale
         val ly = ly0 * scale
@@ -79,7 +96,19 @@ class Rig(private val scene: Scene3D) {
         color: Int, texture: Bitmap? = null, emissive: Boolean = false, cullBack: Boolean = false,
         tiled: Boolean = false,
         /** بایاس عمق: پنجره‌های روی دیوار باید همیشه جلوتر از دیوار مرتب شوند */
-        depthBias: Float = 0f
+        depthBias: Float = 0f,
+        /**
+         * بایاس «روی-دیوار»: اگر بزرگ‌تر از صفر باشد، بایاس دقیق محاسبه می‌شود:
+         * اختلاف عمق دیدِ مرکز این وجه با نقطهٔ مرجعِ دیوار ([biasRefLocal])
+         * به‌علاوهٔ همین مقدار به‌عنوان حاشیه.
+         *
+         * چرا لازم است: مرتب‌سازی نقاش عمق **میانگین** را مقایسه می‌کند.
+         * روی دیوار مایل، عمق میانگین دیوار با عمق پنجرهٔ لبهٔ دور ده‌ها متر
+         * فرق دارد؛ هر بایاس ثابتی کافی نیست و پنجره پشت دیوار می‌رود.
+         */
+        surfaceBias: Float = 0f,
+        /** نقطهٔ مرجع دیوار در دستگاه محلی (مرکز همان دیوار) */
+        biasRefLocal: FloatArray? = null
     ) {
         world(ax, ay, az, pa)
         world(bx, by, bz, pb)
@@ -108,6 +137,25 @@ class Rig(private val scene: Scene3D) {
             val fz = (pa[2] + pb[2] + pc[2] + pd[2]) * 0.25f - cam.z
             if (nx * fx + ny * fy + nz * fz >= 0f) return
         }
+        // بایاس سطح — محاسبهٔ **دقیق**، نه تقریبی.
+        //
+        // مرتب‌سازی نقاش در Scene3D عدد `depth` (عمق میانگین در فضای دوربین)
+        // را منهای بایاس مقایسه می‌کند. برای اینکه پنجره همیشه درست روی
+        // دیوارِ خودش بیفتد، باید بایاس برابر باشد با:
+        //     depth(پنجره) − depth(دیوار) + حاشیه
+        // چون عمق دیوار میانگینِ کل دیوار است و عمق پنجره محلی است، این
+        // اختلاف روی دیوار مایل به ده‌ها متر می‌رسد. هیچ عدد ثابتی جواب
+        // نمی‌دهد — باید برای هر پنجره جدا حساب شود.
+        val biasOut = if (surfaceBias > 0f && biasRefLocal != null) {
+            val cxL = (ax + bx + cx + dx) * 0.25f
+            val cyL = (ay + by + cy2 + dy) * 0.25f
+            val czL = (az + bz + cz + dz) * 0.25f
+            val winD = camDepth(cxL, cyL, czL)
+            val wallD = camDepth(biasRefLocal[0], biasRefLocal[1], biasRefLocal[2])
+            // اگر پنجره از مرکز دیوار دورتر است، بایاس مثبت می‌شود و آن را
+            // جلو می‌آورد؛ حاشیه تضمین می‌کند حتی با خطای رُند هم ببرد.
+            (winD - wallD) + surfaceBias
+        } else depthBias
         val shaded = if (emissive) color else scene.lit(color, nx, ny, nz)
         if (tiled && texture != null) {
             scene.quadTiled(
@@ -115,11 +163,11 @@ class Rig(private val scene: Scene3D) {
                 pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
                 shaded, texture
             )
-        } else if (depthBias != 0f) {
+        } else if (biasOut != 0f) {
             scene.quadBiased(
                 pa[0], pa[1], pa[2], pb[0], pb[1], pb[2],
                 pc[0], pc[1], pc[2], pd[0], pd[1], pd[2],
-                shaded, texture, depthBias
+                shaded, texture, biasOut
             )
         } else {
             scene.quad(
