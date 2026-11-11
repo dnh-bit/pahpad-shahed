@@ -224,7 +224,9 @@ class WorldRenderer(private val gfxContext: Context) {
             if (d2 > maxD2) continue
             val detail = lod(p, d2, p.kind == PropKind.BUILDING)
             val shadowRange = if (p.kind == PropKind.BUILDING) 380f else 520f
-            if (d2 < shadowRange * shadowRange) shadowFor(c, p)
+            // فید نرم به‌جای آستانهٔ سخت — وگرنه سایه یک‌جا می‌پرد.
+            val shadowFade = fadeByDistance(d2, shadowRange)
+            if (shadowFade > 0f) shadowFor(c, p, shadowFade)
             when (p.kind) {
                 PropKind.TREE, PropKind.PALM, PropKind.BUSH, PropKind.ROCK -> billboard(p)
                 // ناوهای پس‌زمینه یک پله ساده‌تر از هدف اصلی رندر می‌شوند
@@ -246,8 +248,9 @@ class WorldRenderer(private val gfxContext: Context) {
         // ----------------------------------------------- مناطق رادار و اخلال
         for (r in world.radars) {
             zone(c, r.x, r.z, r.radius, Theme.BLUE)
-            if ((r.x - camX) * (r.x - camX) + (r.z - camZ) * (r.z - camZ) < 500f * 500f)
-                art.castShadow(c, scene, r.x, r.z, 9f, 9f, 6f, 0f, .42f)
+            val rd2 = (r.x - camX) * (r.x - camX) + (r.z - camZ) * (r.z - camZ)
+            val rFade = fadeByDistance(rd2, 500f)
+            if (rFade > 0f) art.castShadow(c, scene, r.x, r.z, 9f, 9f, 6f, 0f, .42f, rFade)
             val dx = r.x - camX
             val dz = r.z - camZ
             val d2 = dx * dx + dz * dz
@@ -265,7 +268,8 @@ class WorldRenderer(private val gfxContext: Context) {
             if (d2 > maxD2) continue
             zone(c, a.x, a.z, a.range, Theme.RED)
             val detail = lod(a, d2)
-            if (a.y <= 0f && d2 < 550f * 550f) art.castShadow(c, scene, a.x, a.z, 6f, 8f, 3.2f, a.bodyYaw, .5f)
+            val aFade = fadeByDistance(d2, 550f)
+            if (a.y <= 0f && aFade > 0f) art.castShadow(c, scene, a.x, a.z, 6f, 8f, 3.2f, a.bodyYaw, .5f, aFade)
             if (a.kind == AASite.KIND_GUN) {
                 hardware.aaGun(rig, a.x, a.z, a.bodyYaw, a.barrelYaw, a.barrelPitch, 1.2f, true, a.flash, detail, a.y)
             } else {
@@ -279,8 +283,9 @@ class WorldRenderer(private val gfxContext: Context) {
             val dz = t.z - camZ
             val d2 = dx * dx + dz * dz
             if (d2 > maxD2) continue
-            if (!t.destroyed && d2 < 700f * 700f && t.shape != TargetShape.SHIP && t.shape != TargetShape.CARRIER)
-                art.castShadow(c, scene, t.x, t.z, t.w, t.d, t.h * .8f, t.heading, .5f)
+            val tFade = fadeByDistance(d2, 700f)
+            if (!t.destroyed && tFade > 0f && t.shape != TargetShape.SHIP && t.shape != TargetShape.CARRIER)
+                art.castShadow(c, scene, t.x, t.z, t.w, t.d, t.h * .8f, t.heading, .5f, tFade)
             target(t, lod(t, d2))
         }
         // Pulsing ground ring on the active target: readable from any distance.
@@ -308,9 +313,11 @@ class WorldRenderer(private val gfxContext: Context) {
         if (!mission.fpv && mission.phase != Mission.Phase.ENDED) {
             val alt = mission.y.coerceAtLeast(0f)
             if (alt < 220f) {
+                // سایهٔ پهباد با ارتفاع نرم محو می‌شود، نه با آستانهٔ ۲۲۰ متر.
+                val altFade = 1f - ((alt - 160f) / 60f).coerceIn(0f, 1f)
                 art.shadow(
                     c, scene, mission.x - alt * scene.sunX / scene.sunY, mission.z - alt * scene.sunZ / scene.sunY,
-                    7f + alt * .035f, 7f + alt * .035f, (.40f - alt * .0015f).coerceAtLeast(.06f)
+                    7f + alt * .035f, 7f + alt * .035f, (.40f - alt * .0015f).coerceAtLeast(.06f), altFade
                 )
             }
             drone.draw(scene, mission, fx)
@@ -322,17 +329,35 @@ class WorldRenderer(private val gfxContext: Context) {
 
     private var look: EnvLook = EnvLook.DESERT
 
-    private fun shadowFor(c: Canvas, p: Prop) {
+
+    /**
+     * فید نرم لبهٔ فاصله: ۱ در فاصلهٔ نزدیک تا ۰ در آستانه.
+     *
+     * چرا: هر عنصری که با `d2 < range²` روشن/خاموش شود، در لحظهٔ عبور از
+     * آستانه یک‌جا می‌پرد. سایه‌ها دقیقاً همین را داشتند و کاربر گفت
+     * «سایه‌ها ناپایدار هستند». با این ضریب، عنصر در ۲۰٪ آخر بازه نرم
+     * محو می‌شود.
+     */
+    private fun fadeByDistance(d2: Float, range: Float): Float {
+        val r2 = range * range
+        if (d2 <= r2 * 0.64f) return 1f       // تا ۸۰٪ بازه: کامل
+        if (d2 >= r2) return 0f
+        val t = (d2 - r2 * 0.64f) / (r2 * 0.36f)
+        val u = 1f - t
+        return u * u * (3f - 2f * u)
+    }
+
+    private fun shadowFor(c: Canvas, p: Prop, fade: Float) {
         when (p.kind) {
             PropKind.SHIP, PropKind.FREIGHTER -> return
             PropKind.BUILDING -> {
                 // contact occlusion + directional cast shadow
-                art.castShadow(c, scene, p.x, p.z, p.w * 1.06f, p.d * 1.06f, 0f, p.rot, .30f)
-                art.castShadow(c, scene, p.x, p.z, p.w, p.d, p.h, p.rot, .50f)
+                art.castShadow(c, scene, p.x, p.z, p.w * 1.06f, p.d * 1.06f, 0f, p.rot, .30f, fade)
+                art.castShadow(c, scene, p.x, p.z, p.w, p.d, p.h, p.rot, .50f, fade)
             }
-            PropKind.ROCK -> art.castShadow(c, scene, p.x, p.z, p.w * .8f, p.d * .7f, p.h * .6f, p.rot, .45f)
-            PropKind.TOWER_MAST -> art.castShadow(c, scene, p.x, p.z, p.w * .28f, p.d * .28f, p.h, p.rot, .45f)
-            else -> art.castShadow(c, scene, p.x, p.z, p.w * .55f, p.w * .55f, p.h * .75f, 0f, .40f)
+            PropKind.ROCK -> art.castShadow(c, scene, p.x, p.z, p.w * .8f, p.d * .7f, p.h * .6f, p.rot, .45f, fade)
+            PropKind.TOWER_MAST -> art.castShadow(c, scene, p.x, p.z, p.w * .28f, p.d * .28f, p.h, p.rot, .45f, fade)
+            else -> art.castShadow(c, scene, p.x, p.z, p.w * .55f, p.w * .55f, p.h * .75f, 0f, .40f, fade)
         }
     }
 

@@ -305,22 +305,38 @@ class SceneryArt(private val context: Context) {
     }
 
     /** Round soft blob (drone, AA sites). */
-    fun shadow(c: Canvas, scene: Scene3D, x: Float, z: Float, w: Float, d: Float, alpha: Float = .22f) {
+    fun shadow(
+        c: Canvas, scene: Scene3D, x: Float, z: Float, w: Float, d: Float,
+        alpha: Float = .22f, fade: Float = 1f
+    ) {
         val bmp = Gfx.get(context, "shadow_soft") ?: return
+        val a = alpha * fade.coerceIn(0f, 1f)
+        if (a <= 0.004f) return
         for (i in 0..3) {
             val px = x + if (i == 0 || i == 3) -w else w
             val pz = z + if (i < 2) -d else d
             if (!scene.cam.project(px, .12f, pz, ground)) return
             dst[i * 2] = ground[0]; dst[i * 2 + 1] = ground[1]
         }
-        mapBitmap(c, bmp, alpha)
+        mapBitmap(c, bmp, a)
     }
 
     /**
      * Directional shadow of a (rotated) box of height `h`: a soft parallelogram
      * from the footprint towards the anti-sun, instead of an axis-aligned blob.
      */
-    fun castShadow(c: Canvas, scene: Scene3D, x: Float, z: Float, w: Float, d: Float, h: Float, rot: Float, alpha: Float) {
+    fun castShadow(
+        c: Canvas, scene: Scene3D, x: Float, z: Float, w: Float, d: Float, h: Float, rot: Float,
+        alpha: Float, fade: Float = 1f
+    ) {
+        // سایه‌ها با فاصلهٔ دوربین **یک‌جا نمی‌پرند**.
+        //
+        // قبلاً هر سایه یک آستانهٔ سخت داشت (`d2 < shadowRange²`) و به‌محض
+        // عبور از آن، کل سایه در یک فریم ظاهر/غیب می‌شد. کاربر گفت «سایه‌ها
+        // ناپایدار هستند». حالا وقتی نزدیک آستانه می‌شویم سایه نرم محو
+        // می‌شود و همان اثر دیده نمی‌شود.
+        val a = alpha * fade.coerceIn(0f, 1f)
+        if (a <= 0.004f) return
         val bmp = Gfx.get(context, "shadow_box") ?: return
         val dx = -scene.shadowX * h; val dz = -scene.shadowZ * h
         val len = sqrt(dx * dx + dz * dz)
@@ -344,7 +360,7 @@ class SceneryArt(private val context: Context) {
         dst[4] = ground[0]; dst[5] = ground[1]
         if (!cam.project(fx + px * hp, .1f, fz + pz * hp, ground)) return
         dst[6] = ground[0]; dst[7] = ground[1]
-        mapBitmap(c, bmp, alpha)
+        mapBitmap(c, bmp, a)
     }
 
     private fun mapBitmap(c: Canvas, bmp: Bitmap, alpha: Float) {

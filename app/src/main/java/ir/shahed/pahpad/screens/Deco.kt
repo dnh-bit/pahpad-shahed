@@ -6,6 +6,7 @@ import android.graphics.Path
 import ir.shahed.pahpad.BuildConfig
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.Fa
+import ir.shahed.pahpad.core.Gfx
 import ir.shahed.pahpad.core.Theme
 
 /** اجزای تکرارشونده‌ی رابط کاربری صفحه‌ها */
@@ -50,6 +51,72 @@ object Deco {
         val p = rank.progress(s.save.xp)
         ui.bar(c, ui.dp(20f), y + ui.dp(14f), ui.dp(120f), ui.dp(5f), p, Theme.MINT)
     }
+
+    /**
+     * آیکون پهباد روی نقشه — **تصویر واقعی همان پهباد انتخاب‌شده**.
+     *
+     * شکایت کاربر: «علامت پهباد روی نقشه یک چیز سبز با نوک قرمز است، در
+     * صورتی که باید شکل همان پهباد شاهد انتخاب شده باشد».
+     *
+     * اسپرایت نمای بالا (`drone_131/136/238/x`) از قبل در پروژه هست
+     * (همان تصویری که بدنهٔ پهباد در صحنه از آن ساخته می‌شود)، پس نقشه
+     * دقیقاً همان پهپادی را نشان می‌دهد که بازیکن سوارش است — با همان
+     * رنگ و همان بال‌ها. اگر تصویر لود نشد، به آیکون ساده برمی‌گردیم.
+     */
+    fun droneMapIcon(
+        s: BaseScreen, c: Canvas, cx: Float, cy: Float, size: Float,
+        color: Int, modelId: String, rotation: Float = 0f
+    ) {
+        val ui = s.ui
+        val key = when (modelId) {
+            "shahed131" -> "131"
+            "shahed136" -> "136"
+            "shahed238" -> "238"
+            else -> "x"
+        }
+        val sprite = Gfx.get(s.game, "drone_" + key)
+        if (sprite != null) {
+            // هالهٔ روشن پشت پهباد تا روی نقشهٔ تیره دیده شود
+            c.save()
+            c.rotate(rotation, cx, cy)
+            ui.fill.shader = null
+            ui.fill.color = Theme.withAlpha(color, 0.22f)
+            c.drawCircle(cx, cy, size * 1.45f, ui.fill)
+            val half = size * 1.15f
+            spritePaint.alpha = 255
+            spritePaint.isFilterBitmap = true
+            c.drawBitmap(
+                sprite,
+                android.graphics.Rect(0, 0, sprite.width, sprite.height),
+                android.graphics.RectF(cx - half, cy - half, cx + half, cy + half),
+                spritePaint
+            )
+            c.restore()
+            return
+        }
+        // جایگزین: اگر تصویر نبود، شکل ساده با رنگ مدل
+        c.save()
+        c.rotate(rotation, cx, cy)
+        ui.fill.shader = null
+        ui.fill.color = color
+        path.reset()
+        path.moveTo(cx, cy - size)
+        path.lineTo(cx + size * 0.16f, cy + size * 0.55f)
+        path.lineTo(cx - size * 0.16f, cy + size * 0.55f)
+        path.close()
+        c.drawPath(path, ui.fill)
+        path.reset()
+        path.moveTo(cx - size * 0.95f, cy + size * 0.42f)
+        path.lineTo(cx + size * 0.95f, cy + size * 0.42f)
+        path.lineTo(cx, cy - size * 0.1f)
+        path.close()
+        ui.fill.color = Theme.withAlpha(color, 0.85f)
+        c.drawPath(path, ui.fill)
+        c.restore()
+    }
+
+    /** Paint مشترک نقشه — ساختن Paint در هر فریم GC را فشار می‌دهد */
+    private val spritePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
     /** شبح پهباد برای صفحه‌ها و لوگو */
     fun droneIcon(s: BaseScreen, c: Canvas, cx: Float, cy: Float, size: Float, color: Int, rotation: Float = 0f) {

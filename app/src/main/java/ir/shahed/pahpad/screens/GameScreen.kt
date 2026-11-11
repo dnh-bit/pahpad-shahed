@@ -32,11 +32,19 @@ class GameScreen(
     game: MainActivity,
     private val level: LevelDef,
     private val mode: MissionMode,
-    private val seed: Long
+    private val seed: Long,
+    /**
+     * ماموریت و رندرری که صفحهٔ آماده‌سازی (LoadingScreen) از قبل ساخته و
+     * گرم کرده است. اگر داده شود، دوباره ساخته نمی‌شوند — دقیقاً همان
+     * چیزی که لگ فریم اول را حذف می‌کند. اگر `null` باشد (مثلاً «تلاش
+     * مجدد») خودش می‌سازد.
+     */
+    prebuiltMission: Mission? = null,
+    prebuiltRenderer: WorldRenderer? = null
 ) : BaseScreen(game), SensorEventListener {
 
-    private val mission = Mission(level, save, mode, seed)
-    private val renderer = WorldRenderer(game).also {
+    private val mission = prebuiltMission ?: Mission(level, save, mode, seed)
+    private val renderer = prebuiltRenderer ?: WorldRenderer(game).also {
         it.applyQuality(save.graphicsQuality)
         it.effectsEnabled = save.effectsOn
     }
@@ -89,11 +97,59 @@ class GameScreen(
         exitToMenu()
     }
 
+    /**
+     * تنظیمات وسط بازی — کاربر خواست بدون خروج از ماموریت بتواند کیفیت
+     * گرافیک/صدا/کنترل را عوض کند. این پنل همان تنظیماتی را دارد که بر
+     * بازی اثر می‌گذارد و تغییرش **همان لحظه** روی رندر اعمال می‌شود.
+     */
+    private var settingsOpen = false
+    private val gfxQuality = UiButton("کیفیت گرافیک", Theme.VIOLET) {
+        save.graphicsQuality = (save.graphicsQuality + 1) % 3
+        renderer.applyQuality(save.graphicsQuality)
+        refreshSettingsLabels()
+        audio.click()
+    }
+    private val gfxEffects = UiButton("افکت‌ها", Theme.VIOLET) {
+        save.effectsOn = !save.effectsOn
+        renderer.effectsEnabled = save.effectsOn
+        refreshSettingsLabels()
+        audio.click()
+    }
+    private val gfxSound = UiButton("صدا", Theme.MINT) {
+        save.soundOn = !save.soundOn
+        refreshSettingsLabels()
+        audio.click()
+    }
+    private val gfxControl = UiButton("شیوه کنترل", Theme.BLUE) {
+        save.tiltControl = !save.tiltControl
+        calibrated = false
+        refreshSettingsLabels()
+        audio.click()
+    }
+    private val gfxBack = UiButton("بازگشت به توقف", Theme.TEXT_DIM) {
+        settingsOpen = false
+        refreshPauseVisibility()
+        audio.click()
+    }
+    private val settings = UiButton("تنظیمات", Theme.BLUE) {
+        settingsOpen = true
+        refreshPauseVisibility()
+        audio.click()
+    }
+
     init {
         resume.visible = false
         retry.visible = false
         quit.visible = false
-        buttons.addAll(listOf(resume, retry, quit))
+        settings.visible = false
+        gfxQuality.visible = false
+        gfxEffects.visible = false
+        gfxSound.visible = false
+        gfxControl.visible = false
+        gfxBack.visible = false
+        buttons.addAll(listOf(resume, retry, settings, quit))
+        buttons.addAll(listOf(gfxQuality, gfxEffects, gfxSound, gfxControl, gfxBack))
+        refreshSettingsLabels()
 
         mission.onExplosion = { x, y, z, p ->
             renderer.fx.explosion(x, y, z, p)
@@ -177,14 +233,41 @@ class GameScreen(
     private fun setPaused(value: Boolean) {
         paused = value
         calibrated = false
-        resume.visible = value
-        retry.visible = value
-        quit.visible = value
+        if (!value) settingsOpen = false
+        refreshPauseVisibility()
         if (value) {
             cancelTouches()
             audio.stopEngine()
         }
         else if (mission.phase == Mission.Phase.FLYING) audio.startEngine()
+    }
+
+    /** دکمه‌های منوی توقف و پنل تنظیمات را هماهنگ می‌کند. */
+    private fun refreshPauseVisibility() {
+        val main = paused && !settingsOpen
+        resume.visible = main
+        retry.visible = main
+        settings.visible = main
+        quit.visible = main
+        val sub = paused && settingsOpen
+        gfxQuality.visible = sub
+        gfxEffects.visible = sub
+        gfxSound.visible = sub
+        gfxControl.visible = sub
+        gfxBack.visible = sub
+    }
+
+    private fun refreshSettingsLabels() {
+        val qualityName = when (save.graphicsQuality) {
+            0 -> "بی‌کیفیت"
+            2 -> "با کیفیت"
+            else -> "متعادل"
+        }
+        gfxQuality.subLabel = qualityName
+        gfxEffects.subLabel = if (save.effectsOn) "روشن" else "خاموش"
+        gfxSound.subLabel = if (save.soundOn) "روشن" else "خاموش"
+        gfxControl.subLabel = if (save.tiltControl) "تیلت گوشی" else "جوی‌استیک"
+        refreshGraphicsCache()
     }
 
     private fun exitToMenu() {
@@ -237,9 +320,17 @@ class GameScreen(
         val bw = dp(190f)
         val bh = dp(46f)
         val cx = w / 2f - bw / 2f
-        resume.set(cx, h * 0.42f, bw, bh)
-        retry.set(cx, h * 0.42f + bh + dp(10f), bw, bh)
-        quit.set(cx, h * 0.42f + (bh + dp(10f)) * 2f, bw, bh)
+        resume.set(cx, h * 0.34f, bw, bh)
+        retry.set(cx, h * 0.34f + bh + dp(10f), bw, bh)
+        settings.set(cx, h * 0.34f + (bh + dp(10f)) * 2f, bw, bh)
+        quit.set(cx, h * 0.34f + (bh + dp(10f)) * 3f, bw, bh)
+        // پنل تنظیمات: چهار ردیف + بازگشت
+        val sy = h * 0.30f
+        gfxQuality.set(cx, sy, bw, bh)
+        gfxEffects.set(cx, sy + (bh + dp(10f)), bw, bh)
+        gfxSound.set(cx, sy + (bh + dp(10f)) * 2f, bw, bh)
+        gfxControl.set(cx, sy + (bh + dp(10f)) * 3f, bw, bh)
+        gfxBack.set(cx, sy + (bh + dp(10f)) * 4f, bw, bh)
     }
 
     override fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean {
@@ -862,8 +953,13 @@ class GameScreen(
         ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.55f)
         ui.stroke.strokeWidth = dp(1.3f)
         c.drawCircle(cx, cy, r, ui.stroke)
-        // پهباد در مرکز
-        Deco.droneIcon(this, c, cx, cy, dp(7f), Theme.MINT, 0f)
+        // پهباد در مرکز — شکل همان پهپادی که بازیکن انتخاب کرده
+        val model = mission.model
+        Deco.droneMapIcon(
+            this, c, cx, cy, dp(9f),
+            if (model.color == 0) Theme.MINT else model.color,
+            model.id, 0f
+        )
     }
 
     // ---- کنترل‌ها

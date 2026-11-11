@@ -28,7 +28,9 @@ class BriefingScreen(
     private val map = RectF()
 
     private val start = UiButton("شروع ماموریت", Theme.MINT, filled = true) {
-        game.show(GameScreen(game, level, mode, seed))
+        // ابتدا صفحهٔ آماده‌سازی: دنیا و بافت‌ها آنجا ساخته و گرم می‌شوند،
+        // پس فریم اول بازی لگ نمی‌زند.
+        game.show(LoadingScreen(game, level, mode, seed))
     }
     private val hangar = UiButton("انتخاب پهپاد", Theme.AMBER) {
         game.show(ShopScreen(game) { BriefingScreen(game, level, mode) })
