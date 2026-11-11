@@ -225,9 +225,9 @@ class Rig(private val scene: Scene3D) {
         // نکتهٔ کلیدی: مرجع = مرکز سطحِ میزبان (بام/عرشه)، نه مرکز خودِ حجم.
         // اگر مرکز خود حجم باشد، پاراپتِ لبهٔ دور کلیدش کوچک‌تر از بام در
         // می‌آید و زیر بام می‌رود (توضیح کامل در boxSeated).
-        val seatX = if (seatBias > 0f) (p[0] + p[3] + p[6] + p[9]) * 0.25f else 0f
-        val seatY = if (seatBias > 0f) (p[1] + p[4] + p[7] + p[10]) * 0.25f else 0f
-        val seatZ = if (seatBias > 0f) (p[2] + p[5] + p[8] + p[11]) * 0.25f else 0f
+        val seatX = surfaceX
+        val seatY = surfaceY
+        val seatZ = surfaceZ
         val keepX = refX; val keepY = refY; val keepZ = refZ
         if (seatBias > 0f) ref(seatX, seatY, seatZ)
         cull = true
