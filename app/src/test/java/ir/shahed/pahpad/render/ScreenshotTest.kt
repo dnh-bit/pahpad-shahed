@@ -42,7 +42,10 @@ class ScreenshotTest {
         "tablet" to (2560 to 1440),
     )
 
-    private fun shoot(name: String, screen: BaseScreen, w: Int, h: Int, tag: String) {
+    private fun shoot(
+        name: String, screen: BaseScreen, w: Int, h: Int, tag: String,
+        prep: ((BaseScreen, Canvas) -> Unit)? = null
+    ) {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val c = Canvas(bmp)
         screen.layout(0, 0, w, h)
@@ -51,6 +54,7 @@ class ScreenshotTest {
             android.view.View.MeasureSpec.makeMeasureSpec(h, android.view.View.MeasureSpec.EXACTLY),
         )
         screen.layout(0, 0, w, h)
+        prep?.invoke(screen, c)
         // یک فریم رسم
         val draw = BaseScreen::class.java.getDeclaredMethod("onDraw", Canvas::class.java)
         draw.isAccessible = true
@@ -88,6 +92,15 @@ class ScreenshotTest {
             shoot("game", ir.shahed.pahpad.screens.GameScreen(activity,
                 ir.shahed.pahpad.data.Levels.all.first { it.chapter == 1 },
                 ir.shahed.pahpad.game.MissionMode.STORY, 7L), w, h, tag)
+            // منوی توقف + پنل تنظیمات داخل بازی — باید چک شود که دکمه‌ها
+            // روی هم نمی‌افتند و «تنظیمات» دیده می‌شود.
+            val paused = ir.shahed.pahpad.screens.GameScreen(activity,
+                ir.shahed.pahpad.data.Levels.all.first { it.chapter == 1 },
+                ir.shahed.pahpad.game.MissionMode.STORY, 7L)
+            shoot("game_paused", paused, w, h, tag) { view, _ ->
+                // توقف را با همان مسیر کاربر فعال کن (دکمهٔ بازگشت گوشی)
+                view.onBack()
+            }
         }
         println("تعداد تصاویر: ${outDir.listFiles()?.size}")
     }
