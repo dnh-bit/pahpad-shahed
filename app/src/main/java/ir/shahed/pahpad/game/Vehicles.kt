@@ -631,9 +631,12 @@ class Vehicles(private val context: Context) {
         rig.taper(0f, deckY + height * 1.1f, -half * 0.72f, b * 0.3f, length * 0.025f, b * 0.24f, length * 0.02f,
             height * 0.5f, 0xFF4E4A44.toInt(), metal, metal)
         // کانتینرها روی عرشه
+        // همان باگ پاراپت: عرشه چهارضلعی بزرگ با عمق میانگین در مرکزش، کانتینر
+        // کوچک با عمق نزدیک لبه. با نزدیک شدن دوربین ترتیب برعکس می‌شد و
+        // کانتینرها ظاهر/غیب می‌شدند. boxSeated بایاس دقیق می‌دهد.
         for (k in 0..3) {
             for (row in -1..1) {
-                rig.box(row * b * 0.55f, deckY + 0.2f, -half * 0.2f + k * length * 0.16f,
+                rig.boxSeated(row * b * 0.55f, deckY + 0.2f, -half * 0.2f + k * length * 0.16f,
                     b * 0.5f, height * 0.34f, length * 0.14f,
                     intArrayOf(0xFF8E4A3C.toInt(), 0xFF3E6A78.toInt(), 0xFF6E7A46.toInt(), 0xFF8A8A82.toInt())[(k + row + 4) % 4],
                     metal, metal)

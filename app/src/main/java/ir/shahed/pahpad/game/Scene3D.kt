@@ -134,6 +134,20 @@ class Scene3D {
     var wallTexture:Bitmap?=null; var roofTexture:Bitmap?=null
     private val pool=ArrayList<Face>(1800); private var used=0
     private val order=ArrayList<Face>(1800)
+    /**
+     * رزرو ظرفیت استخر وجه‌ها.
+     *
+     * چرا لازم است: `pool` به‌صورت پویا رشد می‌کند و هر رشد یک ArrayList
+     * جدید می‌سازد و کپی می‌کند. اگر صحنهٔ اول سبک باشد (مثلاً صفحهٔ
+     * آماده‌سازی با وضوح کم) استخر کوچک می‌مانَد؛ بعد در بازی که وضوح کامل
+     * است، چند فریم اول صرف ده‌ها رشد/کپی و کالکشن زباله می‌شود → همان
+     * «افت فریم در چند ثانیهٔ اول». رزرو یک‌باره این را حذف می‌کند.
+     */
+    fun reserveFaces(n:Int) {
+        while(pool.size<n) pool.add(Face())
+        order.ensureCapacity(n)
+        used=0
+    }
     private val path=Path(); private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val stroke=Paint(Paint.ANTI_ALIAS_FLAG).apply { style=Paint.Style.STROKE }
     private val input=Array(8){FloatArray(3)}; private val clipped=Array(8){FloatArray(3)}
@@ -170,6 +184,11 @@ class Scene3D {
     /** Faces submitted this frame; exposed for perf overlays/tests. */
     val queued:Int get()=order.size
     fun begin(){ used=0; order.clear(); cam.refresh() }
+    /**
+     * دسترسی فقط-خواندنی به وجه‌های همین فریم، برای تست‌های تشخیصی.
+     * ترتیب و عمق همان مقادیری است که مرتب‌ساز نقاش می‌بیند.
+     */
+    fun debugFaces():List<Face> = order
     fun clear(){order.clear();pool.clear();shaders.clear();lightFilters.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())

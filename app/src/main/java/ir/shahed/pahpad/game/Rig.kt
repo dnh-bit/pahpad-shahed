@@ -62,6 +62,8 @@ class Rig(private val scene: Scene3D) {
     }
 
     private val depthTmp = FloatArray(3)
+    /** مرجع مشترک برای وجه‌های حجمِ نشسته (بازاستفاده، بدون تخصیص هر فریم). */
+    private val seatRef = FloatArray(3)
 
     /**
      * عمق دید یک نقطهٔ **محلی** — دقیقاً همان عددی که `Scene3D.submit`
@@ -213,30 +215,53 @@ class Rig(private val scene: Scene3D) {
      * می‌شود.
      */
     private fun hexa(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean = true,
-                     tiledFaces: Boolean = false, topFace: Boolean = true) {
+                     tiledFaces: Boolean = false, topFace: Boolean = true, seatBias: Float = 0f) {
+        // برای حجمِ نشسته، هر وجه باید بداند نسبت به **مرکز خودِ حجم** کجاست.
+        // `face` با surfaceBias همین را حساب می‌کند؛ فقط باید مرجع را عوض کنیم
+        // و بعد برگردانیم — وگرنه وجوه بعدیِ همین حجم (مثل دیوارها) بایاس غلط
+        // می‌گیرند.
+        val seatX = if (seatBias > 0f) (p[0] + p[3] + p[6] + p[9]) * 0.25f else 0f
+        val seatY = if (seatBias > 0f) (p[1] + p[4] + p[7] + p[10]) * 0.25f else 0f
+        val seatZ = if (seatBias > 0f) (p[2] + p[5] + p[8] + p[11]) * 0.25f else 0f
+        val keepX = refX; val keepY = refY; val keepZ = refZ
+        if (seatBias > 0f) ref(seatX, seatY, seatZ)
         cull = true
-        try { hexaFaces(p, color, side, top, bottom, tiledFaces, topFace) } finally { cull = false }
+        try {
+            hexaFaces(p, color, side, top, bottom, tiledFaces, topFace, seatBias, seatX, seatY, seatZ)
+        } finally {
+            cull = false
+            if (seatBias > 0f) ref(keepX, keepY, keepZ)
+        }
     }
 
-    private fun hexaFaces(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean,
-                          tiledFaces: Boolean = false, topFace: Boolean = true) {
+    private fun hexaFaces(
+        p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean,
+        tiledFaces: Boolean = false, topFace: Boolean = true,
+        seatBias: Float = 0f, seatX: Float = 0f, seatY: Float = 0f, seatZ: Float = 0f
+    ) {
         fun v(i: Int, k: Int) = p[i * 3 + k]
+        // بایاس/مرجع فقط وقتی معنا دارد که حجم روی چیز دیگری نشسته باشد.
+        val surfaceBias = seatBias
+        val biasRef = if (seatBias > 0f) seatRef else null
+        if (seatBias > 0f) { seatRef[0] = seatX; seatRef[1] = seatY; seatRef[2] = seatZ }
         if (bottom) {
             face(v(3, 0), v(3, 1), v(3, 2), v(2, 0), v(2, 1), v(2, 2),
                 v(1, 0), v(1, 1), v(1, 2), v(0, 0), v(0, 1), v(0, 2),
-                Theme.shade(color, 0.72f), null)
+                Theme.shade(color, 0.72f), null,
+                surfaceBias = surfaceBias, biasRefLocal = biasRef)
         }
         // وجه بالا: اگر حجمِ رویش دقیقاً همان اندازه را بپوشاند، این وجه
         // دیده نمی‌شود و فقط یک وجه هم‌سطح اضافی برای مرتب‌ساز است.
         if (topFace) {
             face(v(4, 0), v(4, 1), v(4, 2), v(5, 0), v(5, 1), v(5, 2),
-                v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top, tiled = tiledFaces)
+                v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top,
+                tiled = tiledFaces, surfaceBias = surfaceBias, biasRefLocal = biasRef)
         }
         for (i in 0..3) {
             val j = (i + 1) % 4
             face(v(i, 0), v(i, 1), v(i, 2), v(j, 0), v(j, 1), v(j, 2),
                 v(j + 4, 0), v(j + 4, 1), v(j + 4, 2), v(i + 4, 0), v(i + 4, 1), v(i + 4, 2),
-                color, side, tiled = tiledFaces)
+                color, side, tiled = tiledFaces, surfaceBias = surfaceBias, biasRefLocal = biasRef)
         }
     }
 
@@ -251,7 +276,7 @@ class Rig(private val scene: Scene3D) {
         cx: Float, baseY: Float, cz: Float,
         sx: Float, sy2: Float, sz: Float,
         color: Int, side: Bitmap? = null, top: Bitmap? = side, bottom: Boolean = true,
-        tiledFaces: Boolean = false, topFace: Boolean = true
+        tiledFaces: Boolean = false, topFace: Boolean = true, seatBias: Float = 0f
     ) {
         val hx = sx * 0.5f
         val hz = sz * 0.5f
@@ -265,7 +290,32 @@ class Rig(private val scene: Scene3D) {
         setCorner(5, cx + hx, ty, cz - hz)
         setCorner(6, cx + hx, ty, cz + hz)
         setCorner(7, cx - hx, ty, cz + hz)
-        hexa(corner, color, side, top, bottom, tiledFaces, topFace)
+        // seatBias > 0 یعنی این حجم روی سطحی نشسته: مرجع بایاس را مرکز
+        // خودِ حجم می‌گذاریم تا face بتواند بایاس دقیق را حساب کند.
+        hexa(corner, color, side, top, bottom, tiledFaces, topFace, seatBias)
+    }
+
+    /**
+     * حجمی که **روی** حجم دیگر می‌نشیند (پاراپت روی بام، کانتینر روی عرشه).
+     *
+     * علت باگ: وجه رویی حجم زیرین یک چهارضلعی بزرگ است و عمقش در مرتب‌ساز
+     * نقاش **میانگین کل وجه** — یعنی در مرکز بام. پاراپت باریک روی لبه، عمقش
+     * نزدیک لبه است. با نزدیک شدن دوربین این دو عدد به هم می‌رسند و با خطای
+     * گِرد هر فریم ترتیبشان برعکس می‌شود → «تکهٔ بالای ساختمان ظاهر و غیب
+     * می‌شود». همان چیز برای کانتینر روی عرشه.
+     *
+     * راه‌حل: همان بایاس دقیقی که پنجره‌های روی دیوار را پایدار کرد. مرجع
+     * بایاس، مرکز خودِ این حجم است؛ پس هر وجه این حجم، مستقل از جهت دوربین،
+     * جای درستی در ترتیب می‌گیرد و نویز اعشاری نمی‌تواند ترتیبش را برگرداند.
+     */
+    fun boxSeated(
+        cx: Float, baseY: Float, cz: Float,
+        sx: Float, sy2: Float, sz: Float,
+        color: Int, side: Bitmap? = null, top: Bitmap? = side,
+        tiledFaces: Boolean = false, seatBias: Float = 0.9f
+    ) {
+        box(cx, baseY, cz, sx, sy2, sz, color, side, top,
+            bottom = false, tiledFaces = tiledFaces, topFace = true, seatBias = seatBias)
     }
 
     /** هرم ناقص: نیم‌عرض پایین و بالا جدا؛ برای بدنه‌ی شیب‌دار، برجک و دودکش. */

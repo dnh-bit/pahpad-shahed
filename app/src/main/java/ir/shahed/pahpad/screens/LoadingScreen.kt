@@ -49,7 +49,7 @@ class LoadingScreen(
         "چیدمان پدافند و اهداف" to 2,
         "بارگذاری بافت‌ها" to 4,
         "آماده‌سازی موتور گرافیک" to 5,
-        "گرم‌کردن رندر" to 5
+        "گرم‌کردن رندر" to 8
     )
     private val totalWeight = steps.sumOf { it.second }
 
@@ -70,9 +70,8 @@ class LoadingScreen(
     private val barFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private var glow: Shader? = null
 
-    /** چند فریم گرم‌کردن لازم است تا استخرها پر شوند */
+    /** چند موقعیت پرواز برای گرم‌کردن رندر (پوشش استخر وجه‌ها در وضوح واقعی) */
     private var warmFrames = 0
-    private val warmTarget = 3
 
     private var appear = 0f
 
@@ -137,38 +136,67 @@ class LoadingScreen(
                 finishStep()
             }
             4 -> {
-                // گرم‌کردن: چند فریم کامل روی بیت‌مپ دور ریختنی تا استخر
-                // وجه‌ها، مسیرهای بافت و لیست مرتب‌سازی پر شوند.
+                // گرم‌کردن: کامل، با وضوح واقعی صفحه و از چند موقعیت پرواز.
+                //
+                // چرا وضوح واقعی: نسخهٔ قبلی روی ۴۸۰×۲۷۰ گرم می‌کرد، ولی بازی
+                // در وضوح کامل رندر می‌شود. در وضوح بالاتر تعداد وجه‌ها و
+                // برش‌های بیشتری در کادر می‌مانند، پس استخر وجه‌ها دوباره رشد
+                // می‌کرد و چند فریم اول بازی صرف رشد/کپی و GC می‌شد — همان
+                // «افت فریم در چند ثانیهٔ اول، مخصوصاً مراحل شهری».
+                //
+                // چرا چند موقعیت: اگر فقط از نقطهٔ شروع گرم شود، استخر فقط
+                // برای همان نمای باریک پر می‌شود. با چند موقعیت (شامل وسط
+                // شهر و ارتفاع بالا) بزرگ‌ترین نیاز واقعی پوشش داده می‌شود.
                 val m = mission ?: return
                 val r = renderer ?: return
+                val w = if (vw > 0f) vw else 1920f
+                val h = if (vh > 0f) vh else 1080f
                 val bmp = warm ?: android.graphics.Bitmap.createBitmap(
-                    warmW(), warmH(), android.graphics.Bitmap.Config.ARGB_8888
+                    w.toInt().coerceIn(320, 2600),
+                    h.toInt().coerceIn(240, 1600),
+                    android.graphics.Bitmap.Config.ARGB_8888
                 ).also {
                     warm = it
                     warmCanvas = Canvas(it)
                 }
-                // دوربین را همان‌جای شروع بازی می‌گذاریم تا همان هندسه‌ای
-                // که در فریم اول دیده می‌شود گرم شود.
+                val cw = bmp.width.toFloat()
+                val ch = bmp.height.toFloat()
                 val cam = r.scene.cam
                 val cp = cos(m.pitch.toDouble()).toFloat()
-                cam.x = m.x
-                cam.z = m.z - cp * 26f
-                cam.y = m.y + 3f
-                cam.yaw = m.yaw
-                cam.pitch = m.pitch
-                cam.roll = 0f
-                cam.fov = 74f
-                cam.viewport(warmW().toFloat(), warmH().toFloat())
-                r.draw(warmCanvas!!, m, warmW().toFloat(), warmH().toFloat())
-                warmFrames++
-                progress = (doneWeight.toFloat() / totalWeight).coerceIn(0f, 1f)
-                if (warmFrames >= warmTarget) finishStep()
+                val warmSpots = 6
+                if (warmFrames < warmSpots) {
+                    // موقعیت‌های گرم‌کردن: شروع، وسط مسیر، ارتفاع بالا،
+                    // نزدیک شهر، و دو نمای چرخیده.
+                    val t = warmFrames / (warmSpots - 1f)
+                    val distAlong = m.world.distance * t
+                    cam.x = m.x + (sin(m.yaw) * distAlong)
+                    cam.z = m.z - cp * 26f + (cos(m.yaw) * distAlong)
+                    cam.y = m.y + 3f + t * 60f
+                    cam.yaw = m.yaw + t * 0.55f
+                    cam.pitch = m.pitch - t * 0.06f
+                    cam.roll = t * 0.05f
+                    cam.fov = 74f
+                    cam.viewport(cw, ch)
+                    // یک‌بار ظرفیت استخر را برای این وضوح رزرو کن
+                    r.scene.reserveFaces(2600)
+                    r.draw(warmCanvas!!, m, cw, ch)
+                    warmFrames++
+                    progress = ((doneWeight + steps[stepIndex].second * warmFrames / warmSpots.toFloat())
+                        / totalWeight).coerceIn(0f, 1f)
+                } else {
+                    // دوربین را به حالت واقعی شروع برگردان؛ بازی از همین‌جا شروع می‌شود.
+                    cam.x = m.x
+                    cam.z = m.z - cp * 26f
+                    cam.y = m.y + 3f
+                    cam.yaw = m.yaw
+                    cam.pitch = m.pitch
+                    cam.roll = 0f
+                    cam.viewport(cw, ch)
+                    finishStep()
+                }
             }
         }
     }
-
-    private fun warmW() = 480
-    private fun warmH() = 270
 
     private fun finishStep() {
         doneWeight += steps[stepIndex].second

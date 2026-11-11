@@ -34,7 +34,8 @@ class ResultScreen(
     private val rules = res.starRules()
 
     private val again = UiButton("تلاش مجدد", Theme.AMBER) {
-        game.show(GameScreen(game, level, mode, Seeds.forMission(level, mode, save)))
+        // از صفحهٔ آماده‌سازی برو تا لگ فریم اول برنگردد.
+        game.show(LoadingScreen(game, level, mode, Seeds.forMission(level, mode, save)))
     }
     private val next = UiButton("ماموریت بعدی", Theme.MINT, filled = true) {
         val n = nextLevel

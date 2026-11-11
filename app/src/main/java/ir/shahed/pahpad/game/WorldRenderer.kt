@@ -404,10 +404,16 @@ class WorldRenderer(private val gfxContext: Context) {
         if (parapet > 0f) {
             val pr = Theme.shade(color, 1.16f)
             val t = min(.7f, w * .05f)
-            rig.box(0f, h, -d * .5f + t * .5f, w, parapet, t, pr, wall, roof, bottom = false)
-            rig.box(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof, bottom = false)
-            rig.box(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
-            rig.box(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof, bottom = false)
+            // پاراپت روی بامِ بزرگ می‌نشیند. وجه رویی بام یک چهارضلعی بزرگ است
+            // و عمقش در مرتب‌ساز نقاش میانگین کل وجه (مرکز بام) است؛ پاراپت
+            // باریک عمقش نزدیک لبه است. این دو عدد با نزدیک شدن دوربین به هم
+            // می‌رسند و ترتیبشان هر فریم برعکس می‌شود → «تکهٔ بالای ساختمان
+            // ظاهر و غیب می‌شود». `boxSeated` همان بایاس دقیق پنجره‌ها را
+            // می‌دهد: depth(پاراپت) − depth(بام) + حاشیه.
+            rig.boxSeated(0f, h, -d * .5f + t * .5f, w, parapet, t, pr, wall, roof)
+            rig.boxSeated(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof)
+            rig.boxSeated(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
+            rig.boxSeated(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
             // توجه: همهٔ جعبه‌های پشت‌بام `bottom = false` هستند. وجه زیرینشان
             // دقیقاً روی سطح بام می‌نشیند و در مرتب‌ساز نقاش با آن هم‌سطح
             // می‌شود → لکهٔ تیره‌ای که هر فریم ظاهر/غیب می‌شد.
@@ -421,7 +427,7 @@ class WorldRenderer(private val gfxContext: Context) {
                 val ux = (((seed % 5) + 5) % 5 - 2) * w * .11f
                 val uz = ((((seed / 5) % 5) + 5) % 5 - 2) * d * .11f
                 val unitH = parapet * 2.4f
-                rig.box(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof, bottom = false)
+                rig.boxSeated(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof)
                 rig.tube(ux + unitW * .5f, h + unitH, uz, ux + unitW * .5f, h + unitH + 1.6f, uz,
                     .16f, 6, Theme.shade(color, 0.8f), caps = true)
             }

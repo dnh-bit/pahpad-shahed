@@ -90,7 +90,9 @@ class GameScreen(
     // ---- دکمه‌های منوی توقف
     private val resume = UiButton("ادامه", Theme.MINT, filled = true) { setPaused(false) }
     private val retry = UiButton("تلاش مجدد", Theme.AMBER) {
-        game.show(GameScreen(game, level, mode, seed))
+        // از صفحهٔ آماده‌سازی برو، نه مستقیم به بازی — وگرنه همان لگ فریم اول
+        // («تلاش مجدد») برمی‌گردد چون Mission و رندرر از نو ساخته می‌شوند.
+        game.show(LoadingScreen(game, level, mode, seed))
     }
     private val quit = UiButton("خروج از ماموریت", Theme.RED) {
         mission.abort()
