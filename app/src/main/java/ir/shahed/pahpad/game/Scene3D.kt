@@ -185,10 +185,22 @@ class Scene3D {
     val queued:Int get()=order.size
     fun begin(){ used=0; order.clear(); cam.refresh() }
     /**
-     * دسترسی فقط-خواندنی به وجه‌های همین فریم، برای تست‌های تشخیصی.
-     * ترتیب و عمق همان مقادیری است که مرتب‌ساز نقاش می‌بیند.
+     * عکس فوری از وجه‌های فریم جاری، برای تست‌های تشخیصی.
+     *
+     * چرا کپی و نه خود `order`: `flush` در انتهای هر فریم `order` را پاک
+     * می‌کند و `Face`ها بازاستفاده می‌شوند. اگر تست بعد از رندر بخواند،
+     * لیست خالی می‌بیند و «۰» را با «سالم» اشتباه می‌گیرد — همان اشتباهی
+     * که یک دور ما را گمراه کرد.
      */
-    fun debugFaces():List<Face> = order
+    class FaceSnapshot(val depth: Float, val depthBias: Float)
+    private val debugSnapshot = ArrayList<FaceSnapshot>()
+    fun debugFaces(): List<FaceSnapshot> = debugSnapshot
+    /**
+     * فعال‌سازی ثبت تشخیصی. فقط تست‌ها روشن می‌کنند — در بازی خاموش است تا
+     * هیچ تخصیص حافظه‌ای در مسیر رندر اضافه نشود.
+     */
+    fun enableDebugCapture(on: Boolean) { debugCapture = on; debugSnapshot.clear() }
+    private var debugCapture = false
     fun clear(){order.clear();pool.clear();shaders.clear();lightFilters.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())
@@ -367,6 +379,10 @@ class Scene3D {
     }
     fun flush(canvas:Canvas) {
         order.sortWith(depthOrder)
+        if (debugCapture) {
+            debugSnapshot.clear()
+            for (f in order) debugSnapshot.add(FaceSnapshot(f.depth, f.depthBias))
+        }
         for(f in order) {
             if(f.radius>0f) {
                 paint.shader=null
