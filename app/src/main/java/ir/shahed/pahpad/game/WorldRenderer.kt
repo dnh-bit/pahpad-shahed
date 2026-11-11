@@ -411,12 +411,21 @@ class WorldRenderer(private val gfxContext: Context) {
             // و عمقش در مرتب‌ساز نقاش میانگین کل وجه (مرکز بام) است؛ پاراپت
             // باریک عمقش نزدیک لبه است. این دو عدد با نزدیک شدن دوربین به هم
             // می‌رسند و ترتیبشان هر فریم برعکس می‌شود → «تکهٔ بالای ساختمان
-            // ظاهر و غیب می‌شود». `boxSeated` همان بایاس دقیق پنجره‌ها را
-            // می‌دهد: depth(پاراپت) − depth(بام) + حاشیه.
-            rig.boxSeated(0f, h, -d * .5f + t * .5f, w, parapet, t, pr, wall, roof)
-            rig.boxSeated(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof)
-            rig.boxSeated(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
-            rig.boxSeated(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof)
+            // ظاهر و غیب می‌شود».
+            //
+            // `boxSeated` بایاس را نسبت به **مرکز بام** حساب می‌کند (همان
+            // نقطه‌ای که عمق میانگین وجه رویی بام در آن است) — دقیقاً مثل
+            // پنجره‌ها که نسبت به مرکز دیوار بایاس می‌گیرند. اگر مرجع مرکز
+            // خودِ پاراپت باشد، پاراپتِ لبهٔ دور کلید کوچک‌تری از بام می‌گیرد
+            // و زیر آن می‌رود؛ این همان اشتباهی بود که باگ را باقی گذاشت.
+            rig.boxSeated(0f, h, -d * .5f + t * .5f, w, parapet, t, pr, wall, roof,
+                surfaceX = 0f, surfaceY = h, surfaceZ = 0f)
+            rig.boxSeated(0f, h, d * .5f - t * .5f, w, parapet, t, pr, wall, roof,
+                surfaceX = 0f, surfaceY = h, surfaceZ = 0f)
+            rig.boxSeated(-w * .5f + t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof,
+                surfaceX = 0f, surfaceY = h, surfaceZ = 0f)
+            rig.boxSeated(w * .5f - t * .5f, h, 0f, t, parapet, d - t * 2f, pr, wall, roof,
+                surfaceX = 0f, surfaceY = h, surfaceZ = 0f)
             // توجه: همهٔ جعبه‌های پشت‌بام `bottom = false` هستند. وجه زیرینشان
             // دقیقاً روی سطح بام می‌نشیند و در مرتب‌ساز نقاش با آن هم‌سطح
             // می‌شود → لکهٔ تیره‌ای که هر فریم ظاهر/غیب می‌شد.
@@ -430,7 +439,8 @@ class WorldRenderer(private val gfxContext: Context) {
                 val ux = (((seed % 5) + 5) % 5 - 2) * w * .11f
                 val uz = ((((seed / 5) % 5) + 5) % 5 - 2) * d * .11f
                 val unitH = parapet * 2.4f
-                rig.boxSeated(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof)
+                rig.boxSeated(ux, h, uz, unitW, unitH, unitD, Theme.shade(color, 0.92f), wall, roof,
+                    surfaceX = 0f, surfaceY = h, surfaceZ = 0f)
                 rig.tube(ux + unitW * .5f, h + unitH, uz, ux + unitW * .5f, h + unitH + 1.6f, uz,
                     .16f, 6, Theme.shade(color, 0.8f), caps = true)
             }

@@ -73,6 +73,23 @@ class LoadingScreen(
     /** چند موقعیت پرواز برای گرم‌کردن رندر (پوشش استخر وجه‌ها در وضوح واقعی) */
     private var warmFrames = 0
 
+    /**
+     * فریم‌های گرم‌کردن روی **بوم سخت‌افزاری خود ویو**.
+     *
+     * چرا جدا از گرم‌کردن نرم‌افزاری: تا این نسخه، گرم‌کردن روی یک Bitmap
+     * (Canvas نرم‌افزاری) انجام می‌شد. بازی ولی با `hardwareAccelerated="true"`
+     * روی Canvas سخت‌افزاری رندر می‌شود. این دو مسیر متفاوت‌اند: آپلود
+     * بافت‌ها به حافظهٔ GPU، کامپایل شیدرها و ساختن لایه‌ها فقط در مسیر
+     * سخت‌افزاری رخ می‌دهد. پس هر چه نرم‌افزاری «گرم» می‌کردیم در بازی
+     * دوباره از صفر انجام می‌شد و چند ثانیهٔ اول همان افت فریم را داشت.
+     *
+     * حالا در دو فریم آخر، رندر روی Canvas واقعی صفحه انجام می‌شود. خروجی
+     * دور ریخته می‌شود (روی آن رابط کاربری کشیده می‌شود)، ولی GPU همان کار
+     * واقعی را انجام داده است.
+     */
+    private var hwWarm = 0
+    private val hwWarmTarget = 2
+
     private var appear = 0f
 
     override fun onEnter() {
@@ -183,15 +200,20 @@ class LoadingScreen(
                     warmFrames++
                     progress = ((doneWeight + steps[stepIndex].second * warmFrames / warmSpots.toFloat())
                         / totalWeight).coerceIn(0f, 1f)
+                } else if (hwWarm < hwWarmTarget) {
+                    // هنوز تمام نشده — فریم سخت‌افزاری در render() زده می‌شود.
+                    hwWarm++
+                    if (hwWarm >= hwWarmTarget) {
+                        cam.x = m.x
+                        cam.z = m.z - cp * 26f
+                        cam.y = m.y + 3f
+                        cam.yaw = m.yaw
+                        cam.pitch = m.pitch
+                        cam.roll = 0f
+                        cam.viewport(vw, vh)
+                        finishStep()
+                    }
                 } else {
-                    // دوربین را به حالت واقعی شروع برگردان؛ بازی از همین‌جا شروع می‌شود.
-                    cam.x = m.x
-                    cam.z = m.z - cp * 26f
-                    cam.y = m.y + 3f
-                    cam.yaw = m.yaw
-                    cam.pitch = m.pitch
-                    cam.roll = 0f
-                    cam.viewport(cw, ch)
                     finishStep()
                 }
             }
@@ -213,6 +235,16 @@ class LoadingScreen(
     private var holdFrames = 0
 
     override fun render(c: Canvas) {
+        // گرم‌کردن روی بوم سخت‌افزاری خود ویو — پیش از کشیدن رابط کاربری،
+        // چون UI باید روی آن بیاید. خروجی دور ریخته می‌شود ولی GPU همان
+        // آپلود بافت و کامپایل شیدر مسیر واقعی بازی را انجام داده است.
+        if (!ready && stepIndex == 4 && warmFrames >= 6 && hwWarm > 0) {
+            val m = mission
+            val r = renderer
+            if (m != null && r != null && vw > 0f && vh > 0f) {
+                r.draw(c, m, vw, vh)
+            }
+        }
         ui.fill.shader = glow
         ui.fill.alpha = 255
         c.drawRect(0f, 0f, vw, vh, ui.fill)

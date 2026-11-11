@@ -215,14 +215,19 @@ class Rig(private val scene: Scene3D) {
      * می‌شود.
      */
     private fun hexa(p: FloatArray, color: Int, side: Bitmap?, top: Bitmap?, bottom: Boolean = true,
-                     tiledFaces: Boolean = false, topFace: Boolean = true, seatBias: Float = 0f) {
-        // برای حجمِ نشسته، هر وجه باید بداند نسبت به **مرکز خودِ حجم** کجاست.
+                     tiledFaces: Boolean = false, topFace: Boolean = true, seatBias: Float = 0f,
+                     surfaceX: Float = 0f, surfaceY: Float = 0f, surfaceZ: Float = 0f) {
+        // برای حجمِ نشسته، هر وجه باید بداند نسبت به **سطح زیرین خود** کجاست.
         // `face` با surfaceBias همین را حساب می‌کند؛ فقط باید مرجع را عوض کنیم
         // و بعد برگردانیم — وگرنه وجوه بعدیِ همین حجم (مثل دیوارها) بایاس غلط
         // می‌گیرند.
-        val seatX = if (seatBias > 0f) (p[0] + p[3] + p[6] + p[9]) * 0.25f else 0f
-        val seatY = if (seatBias > 0f) (p[1] + p[4] + p[7] + p[10]) * 0.25f else 0f
-        val seatZ = if (seatBias > 0f) (p[2] + p[5] + p[8] + p[11]) * 0.25f else 0f
+        //
+        // نکتهٔ کلیدی: مرجع = مرکز سطحِ میزبان (بام/عرشه)، نه مرکز خودِ حجم.
+        // اگر مرکز خود حجم باشد، پاراپتِ لبهٔ دور کلیدش کوچک‌تر از بام در
+        // می‌آید و زیر بام می‌رود (توضیح کامل در boxSeated).
+        val seatX = surfaceX
+        val seatY = surfaceY
+        val seatZ = surfaceZ
         val keepX = refX; val keepY = refY; val keepZ = refZ
         if (seatBias > 0f) ref(seatX, seatY, seatZ)
         cull = true
@@ -276,7 +281,8 @@ class Rig(private val scene: Scene3D) {
         cx: Float, baseY: Float, cz: Float,
         sx: Float, sy2: Float, sz: Float,
         color: Int, side: Bitmap? = null, top: Bitmap? = side, bottom: Boolean = true,
-        tiledFaces: Boolean = false, topFace: Boolean = true, seatBias: Float = 0f
+        tiledFaces: Boolean = false, topFace: Boolean = true, seatBias: Float = 0f,
+        surfaceX: Float = 0f, surfaceY: Float = 0f, surfaceZ: Float = 0f
     ) {
         val hx = sx * 0.5f
         val hz = sz * 0.5f
@@ -290,9 +296,10 @@ class Rig(private val scene: Scene3D) {
         setCorner(5, cx + hx, ty, cz - hz)
         setCorner(6, cx + hx, ty, cz + hz)
         setCorner(7, cx - hx, ty, cz + hz)
-        // seatBias > 0 یعنی این حجم روی سطحی نشسته: مرجع بایاس را مرکز
-        // خودِ حجم می‌گذاریم تا face بتواند بایاس دقیق را حساب کند.
-        hexa(corner, color, side, top, bottom, tiledFaces, topFace, seatBias)
+        // seatBias > 0 یعنی این حجم روی سطحی نشسته: مرجع بایاس = مرکز سطحِ
+        // میزبان (بام/عرشه) که از بیرون پاس داده می‌شود.
+        hexa(corner, color, side, top, bottom, tiledFaces, topFace, seatBias,
+            surfaceX, surfaceY, surfaceZ)
     }
 
     /**
@@ -312,13 +319,26 @@ class Rig(private val scene: Scene3D) {
         cx: Float, baseY: Float, cz: Float,
         sx: Float, sy2: Float, sz: Float,
         color: Int, side: Bitmap? = null, top: Bitmap? = side,
-        tiledFaces: Boolean = false, seatBias: Float = 0.9f
+        tiledFaces: Boolean = false, seatBias: Float = 0.9f,
+        /**
+         * مرکز سطحی که این حجم رویش نشسته (در دستگاه محلی حجمِ میزبان).
+         *
+         * چرا **این** نقطه و نه مرکز خودِ حجم: مرتب‌ساز نقاش عمق میانگین
+         * وجه را مقایسه می‌کند. وجه رویی بام یک چهارضلعی بزرگ است و عمق
+         * میانگینش در **مرکز بام** است؛ پاراپت باریک روی لبه عمقش نزدیک
+         * لبه است. اگر بایاس نسبت به مرکز خودِ پاراپت حساب شود، کلیدش
+         * depth(پاراپت) − ۰.۹ می‌شود که برای پاراپتِ لبهٔ دور **کوچک‌تر** از
+         * کلید بام (مرکز نزدیک‌تر) است → پاراپت اول کشیده می‌شود و بام
+         * رویش را می‌پوشاند. دقیقاً همان «تکهٔ بالای ساختمان غیب می‌شود».
+         *
+         * باید مثل پنجره‌ها باشد: depth(پاراپت) − depth(مرکز بام) + حاشیه.
+         */
+        surfaceX: Float = 0f, surfaceY: Float = 0f, surfaceZ: Float = 0f
     ) {
-        // شمارندهٔ تشخیصی: تست‌ها با این می‌فهمند پاراپت/کانتینر واقعاً ساخته
-        // شده یا نه. بدونش تست «۰ جفت» می‌داد و ما فکر می‌کردیم یعنی سالم است.
         seatedBuilt++
         box(cx, baseY, cz, sx, sy2, sz, color, side, top,
-            bottom = false, tiledFaces = tiledFaces, topFace = true, seatBias = seatBias)
+            bottom = false, tiledFaces = tiledFaces, topFace = true,
+            seatBias = seatBias, surfaceX = surfaceX, surfaceY = surfaceY, surfaceZ = surfaceZ)
     }
 
     /** چند حجمِ نشسته در این فریم ساخته شد (تشخیصی). */

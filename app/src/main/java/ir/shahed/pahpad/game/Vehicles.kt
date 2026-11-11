@@ -639,7 +639,10 @@ class Vehicles(private val context: Context) {
                 rig.boxSeated(row * b * 0.55f, deckY + 0.2f, -half * 0.2f + k * length * 0.16f,
                     b * 0.5f, height * 0.34f, length * 0.14f,
                     intArrayOf(0xFF8E4A3C.toInt(), 0xFF3E6A78.toInt(), 0xFF6E7A46.toInt(), 0xFF8A8A82.toInt())[(k + row + 4) % 4],
-                    metal, metal)
+                    metal, metal,
+                    // مرجع = مرکز خودِ عرشه، همان نقطه‌ای که عمق میانگین وجه
+                    // رویی عرشه در آن است (نه مرکز کانتینر).
+                    surfaceX = 0f, surfaceY = deckY + 0.2f, surfaceZ = half * 0.02f)
             }
         }
     }
