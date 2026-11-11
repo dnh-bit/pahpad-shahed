@@ -90,10 +90,10 @@ class CoplanarFaceOrderTest {
                 if (seats.isEmpty() || roofs.isEmpty()) continue
 
                 for (s in seats) {
-                    // بامی که این پاراپت رویش نشسته: نزدیک‌ترین وجه سطح که
-                    // کادر تصویری‌اش با کادر پاراپت همپوشانی دارد.
-                    val roof = roofs.minByOrNull { overlapArea(s, it) * -1f } ?: continue
-                    if (overlapArea(s, roof) <= 0f) continue
+                    // بامِ خودِ این ساختمان — با شناسهٔ گروه، نه با حدس از
+                    // همپوشانی تصویری (که بام ساختمان همسایه را انتخاب می‌کرد
+                    // و «نقض» کاذب می‌ساخت).
+                    val roof = roofs.firstOrNull { it.group == s.group } ?: continue
                     compared++
                     val seatKey = s.depth - s.depthBias
                     val roofKey = roof.depth - roof.depthBias
@@ -132,13 +132,6 @@ class CoplanarFaceOrderTest {
 
     private fun sinf(v: Float): Float = kotlin.math.sin(v.toDouble()).toFloat()
     private fun cosf(v: Float): Float = kotlin.math.cos(v.toDouble()).toFloat()
-
-    private fun overlapArea(a: ir.shahed.pahpad.game.Scene3D.FaceSnapshot,
-                            b: ir.shahed.pahpad.game.Scene3D.FaceSnapshot): Float {
-        val w = minOf(a.maxX, b.maxX) - maxOf(a.minX, b.minX)
-        val h = minOf(a.maxY, b.maxY) - maxOf(a.minY, b.minY)
-        return if (w <= 0f || h <= 0f) 0f else w * h
-    }
 
     @Test
     fun renderRoofAndDeckForInspection() {

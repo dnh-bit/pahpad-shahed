@@ -259,11 +259,13 @@ class Rig(private val scene: Scene3D) {
         // دیده نمی‌شود و فقط یک وجه هم‌سطح اضافی برای مرتب‌ساز است.
         if (topFace) {
             val prevTag = scene.debugTag
-            if (topOnlyTag != 0) scene.debugTag = topOnlyTag
+            val prevGroup = scene.debugGroup
+            if (topOnlyTag != 0) { scene.debugTag = topOnlyTag; scene.debugGroup = diagGroup }
             face(v(4, 0), v(4, 1), v(4, 2), v(5, 0), v(5, 1), v(5, 2),
                 v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top,
                 tiled = tiledFaces, surfaceBias = surfaceBias, biasRefLocal = biasRef)
             scene.debugTag = prevTag
+            scene.debugGroup = prevGroup
         }
         for (i in 0..3) {
             val j = (i + 1) % 4
@@ -348,13 +350,16 @@ class Rig(private val scene: Scene3D) {
         seatedBuilt++
         // برچسب تشخیصی: تست باید بتواند این حجم را روی سطح میزبانش پیدا کند.
         val prevTag = scene.debugTag
+        val prevGroup = scene.debugGroup
         scene.debugTag = TAG_SEAT
+        scene.debugGroup = diagGroup
         try {
             box(cx, baseY, cz, sx, sy2, sz, color, side, top,
                 bottom = false, tiledFaces = tiledFaces, topFace = true,
                 seatBias = seatBias, surfaceX = surfaceX, surfaceY = surfaceY, surfaceZ = surfaceZ)
         } finally {
             scene.debugTag = prevTag
+            scene.debugGroup = prevGroup
         }
     }
 
@@ -379,6 +384,11 @@ class Rig(private val scene: Scene3D) {
     private var topOnlyTag = 0
     fun markNextTop(tag: Int) { topOnlyTag = tag }
     fun clearTopMark() { topOnlyTag = 0 }
+
+    /** شناسهٔ گروه تشخیصی — پاراپت و بامِ خودش را به هم وصل می‌کند. */
+    private var diagGroup = 0
+    fun beginGroup(g: Int) { diagGroup = g }
+    fun endGroup() { diagGroup = 0 }
 
     /** چند حجمِ نشسته در این فریم ساخته شد (تشخیصی). */
     var seatedBuilt = 0

@@ -331,6 +331,8 @@ class WorldRenderer(private val gfxContext: Context) {
     }
 
     private var look: EnvLook = EnvLook.DESERT
+    /** شمارندهٔ شناسهٔ گروه تشخیصی (فقط برای تست). */
+    private var diagGroupSeq = 0
 
 
     /**
@@ -392,9 +394,12 @@ class WorldRenderer(private val gfxContext: Context) {
         // سوسو می‌زد و لکه‌لکه دیده می‌شد.
         rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false,
             tiledFaces = true, topFace = false)
-        // لبهٔ پشت‌بام: تنها وجه بالایی بام، با همان تکرار متری بافت
-        // برچسب تشخیصی: تست باید بتواند همین وجه را به‌عنوان «سطح میزبان»
-        // پیدا کند و کلید مرتب‌سازی‌اش را با پاراپت مقایسه کند.
+        // لبهٔ پشت‌بام: تنها وجه بالایی بام، با همان تکرار متری بافت.
+        // شناسهٔ گروه تشخیصی: پاراپت‌های همین ساختمان با همین شناسه برچسب
+        // می‌خورند تا تست هر پاراپت را با بامِ خودش مقایسه کند، نه همسایه.
+        // شمارندهٔ یکتا — نه هش مختصات، چون دو ساختمان می‌توانند هش یکسان
+        // بدهند و تست دوباره جفت اشتباه بسازد.
+        rig.beginGroup(++diagGroupSeq)
         rig.markNextTop(Rig.TAG_SURFACE)
         rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false,
             tiledFaces = true)
@@ -449,6 +454,7 @@ class WorldRenderer(private val gfxContext: Context) {
                     .16f, 6, Theme.shade(color, 0.8f), caps = true)
             }
         }
+        rig.endGroup()
         val usableH = h - cap
         if (detail <= 1 && !destroyed) {
             // اکلوژن تماسی: نوار تیرهٔ ۱٫۲ متری پای هر چهار دیوار

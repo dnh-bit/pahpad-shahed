@@ -76,6 +76,12 @@ class Face {
      * در بازی همیشه ۰ است و هیچ هزینه‌ای ندارد.
      */
     var debugTag=0
+    /**
+     * شناسهٔ گروه تشخیصی — برای اینکه تست بداند این پاراپت متعلق به کدام
+     * بام است. بدون آن، تست مجبور است جفت را از همپوشانی تصویری حدس بزند و
+     * بام ساختمانِ همسایه را انتخاب می‌کند (خطای تشخیصی، نه باگ واقعی).
+     */
+    var debugGroup=0
 }
 
 /** Pooled painter renderer with near-plane clipping and depth-sorted image planes.
@@ -205,7 +211,7 @@ class Scene3D {
         val depth: Float,
         val depthBias: Float,
         val tag: Int,
-        val minX: Float, val minY: Float, val maxX: Float, val maxY: Float
+        val group: Int
     )
     private val debugSnapshot = ArrayList<FaceSnapshot>()
     fun debugFaces(): List<FaceSnapshot> = debugSnapshot
@@ -221,10 +227,12 @@ class Scene3D {
      * نشسته و وجه رویی بام ست می‌کند. فقط برای تست؛ روی مرتب‌سازی اثری ندارد.
      */
     var debugTag = 0
+    /** شناسهٔ گروه تشخیصی که وجه‌های بعدی می‌گیرند (پاراپت + بام خودش). */
+    var debugGroup = 0
     fun clear(){order.clear();pool.clear();shaders.clear();lightFilters.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())
-        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f; it.sprite=null; it.additive=false; it.filter=null; it.debugTag=0 }
+        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f; it.sprite=null; it.additive=false; it.filter=null; it.debugTag=0; it.debugGroup=0 }
     }
     /** Smooth aerial perspective; also sampled by SceneryArt for the ground haze. */
     fun fogFactor(depth:Float):Float {
@@ -251,7 +259,7 @@ class Scene3D {
         depth/=count.toFloat()
         if(depth>fogEnd*1.4f)return
         val f=next(); f.count=count; f.depth=depth; f.fog=fogFactor(depth); f.depthBias=bias
-        f.debugTag=debugTag
+        f.debugTag=debugTag; f.debugGroup=debugGroup
         f.opacity=opacity.coerceIn(0f,1f)
         f.color=Theme.withAlpha(Theme.mix(color,fogColor,f.fog),Color.alpha(color)/255f); f.outlineColor=outline; f.hasOutline=outline!=0
         var minX=Float.POSITIVE_INFINITY;var maxX=Float.NEGATIVE_INFINITY
@@ -403,18 +411,7 @@ class Scene3D {
         if (debugCapture) {
             debugSnapshot.clear()
             for (f in order) {
-                var mnx = Float.MAX_VALUE; var mny = Float.MAX_VALUE
-                var mxx = -Float.MAX_VALUE; var mxy = -Float.MAX_VALUE
-                if (f.radius > 0f) {
-                    mnx = f.xs[0] - f.radius; mxx = f.xs[0] + f.radius
-                    mny = f.ys[0] - f.radius; mxy = f.ys[0] + f.radius
-                } else for (i in 0 until f.count) {
-                    if (f.xs[i] < mnx) mnx = f.xs[i]
-                    if (f.xs[i] > mxx) mxx = f.xs[i]
-                    if (f.ys[i] < mny) mny = f.ys[i]
-                    if (f.ys[i] > mxy) mxy = f.ys[i]
-                }
-                debugSnapshot.add(FaceSnapshot(f.depth, f.depthBias, f.debugTag, mnx, mny, mxx, mxy))
+                debugSnapshot.add(FaceSnapshot(f.depth, f.depthBias, f.debugTag, f.debugGroup))
             }
         }
         for(f in order) {
