@@ -67,6 +67,15 @@ class Face {
      * می‌افتد. با بایاس، پنجره همیشه جلوتر مرتب می‌شود.
      */
     var depthBias=0f
+    /**
+     * برچسب تشخیصی — **هرگز** در مرتب‌سازی استفاده نمی‌شود.
+     *
+     * چرا: تست‌های این باگ باید بدانند کدام وجه «پاراپت/کانتینر» است و کدام
+     * «بام/عرشه»، وگرنه فقط می‌توانند بگویند «لیست مرتب است» که همیشه
+     * درست است. با برچسب، تست می‌تواند ترتیب واقعی آن دو را با هم بسنجد.
+     * در بازی همیشه ۰ است و هیچ هزینه‌ای ندارد.
+     */
+    var debugTag=0
 }
 
 /** Pooled painter renderer with near-plane clipping and depth-sorted image planes.
@@ -192,7 +201,12 @@ class Scene3D {
      * لیست خالی می‌بیند و «۰» را با «سالم» اشتباه می‌گیرد — همان اشتباهی
      * که یک دور ما را گمراه کرد.
      */
-    class FaceSnapshot(val depth: Float, val depthBias: Float)
+    class FaceSnapshot(
+        val depth: Float,
+        val depthBias: Float,
+        val tag: Int,
+        val minX: Float, val minY: Float, val maxX: Float, val maxY: Float
+    )
     private val debugSnapshot = ArrayList<FaceSnapshot>()
     fun debugFaces(): List<FaceSnapshot> = debugSnapshot
     /**
@@ -201,10 +215,16 @@ class Scene3D {
      */
     fun enableDebugCapture(on: Boolean) { debugCapture = on; debugSnapshot.clear() }
     private var debugCapture = false
+
+    /**
+     * برچسب تشخیصی که وجه‌های بعدی می‌گیرند. Rig آن را دور ساختِ حجم‌های
+     * نشسته و وجه رویی بام ست می‌کند. فقط برای تست؛ روی مرتب‌سازی اثری ندارد.
+     */
+    var debugTag = 0
     fun clear(){order.clear();pool.clear();shaders.clear();lightFilters.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())
-        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f; it.sprite=null; it.additive=false; it.filter=null }
+        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f; it.sprite=null; it.additive=false; it.filter=null; it.debugTag=0 }
     }
     /** Smooth aerial perspective; also sampled by SceneryArt for the ground haze. */
     fun fogFactor(depth:Float):Float {
@@ -231,6 +251,7 @@ class Scene3D {
         depth/=count.toFloat()
         if(depth>fogEnd*1.4f)return
         val f=next(); f.count=count; f.depth=depth; f.fog=fogFactor(depth); f.depthBias=bias
+        f.debugTag=debugTag
         f.opacity=opacity.coerceIn(0f,1f)
         f.color=Theme.withAlpha(Theme.mix(color,fogColor,f.fog),Color.alpha(color)/255f); f.outlineColor=outline; f.hasOutline=outline!=0
         var minX=Float.POSITIVE_INFINITY;var maxX=Float.NEGATIVE_INFINITY
@@ -381,7 +402,20 @@ class Scene3D {
         order.sortWith(depthOrder)
         if (debugCapture) {
             debugSnapshot.clear()
-            for (f in order) debugSnapshot.add(FaceSnapshot(f.depth, f.depthBias))
+            for (f in order) {
+                var mnx = Float.MAX_VALUE; var mny = Float.MAX_VALUE
+                var mxx = -Float.MAX_VALUE; var mxy = -Float.MAX_VALUE
+                if (f.radius > 0f) {
+                    mnx = f.xs[0] - f.radius; mxx = f.xs[0] + f.radius
+                    mny = f.ys[0] - f.radius; mxy = f.ys[0] + f.radius
+                } else for (i in 0 until f.count) {
+                    if (f.xs[i] < mnx) mnx = f.xs[i]
+                    if (f.xs[i] > mxx) mxx = f.xs[i]
+                    if (f.ys[i] < mny) mny = f.ys[i]
+                    if (f.ys[i] > mxy) mxy = f.ys[i]
+                }
+                debugSnapshot.add(FaceSnapshot(f.depth, f.depthBias, f.debugTag, mnx, mny, mxx, mxy))
+            }
         }
         for(f in order) {
             if(f.radius>0f) {

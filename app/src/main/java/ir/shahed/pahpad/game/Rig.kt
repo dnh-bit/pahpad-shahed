@@ -66,6 +66,50 @@ class Rig(private val scene: Scene3D) {
     private val seatRef = FloatArray(3)
 
     /**
+     * تشخیصی: آخرین اندازه‌گیری بایاسِ نشستن.
+     *
+     * چرا لازم است: سال‌ها (ده‌ها دور) تست‌های این باگ سبز می‌شدند چون چیزی
+     * را می‌سنجیدند که همیشه درست است (مثلاً «لیستِ مرتب، مرتب است»). اینجا
+     * عددی ثبت می‌شود که **در نسخهٔ باگ‌دار منفی می‌شود**: بایاسِ محاسبه‌شده
+     * برای پایین‌ترین وجه هر حجمِ نشسته. اگر منفی باشد، یعنی وجه نشسته از
+     * سطح میزبانش عقب‌تر کلید می‌گیرد و زیرش می‌رود — همان ظاهر/غیب شدن.
+     */
+    var lastSeatBias = 0f
+        private set
+    var minSeatBias = Float.MAX_VALUE
+        private set
+    var seatMeasurements = 0
+        private set
+    var lastFaceKey = 0f
+        private set
+    var lastSurfaceKey = 0f
+        private set
+    var faceMeasurements = 0
+        private set
+    var seatViolations = 0
+        private set
+    /**
+     * مرکز **واقعی** سطح میزبان برای تشخیص.
+     *
+     * تفاوتش با [seatRef] حیاتی است: `seatRef` همان چیزی است که کد
+     * **استفاده** می‌کند (و در نسخهٔ باگ‌دار اشتباه بود). این‌ها مستقل از
+     * کدِ محاسبه‌اند و از فراخوان می‌آیند، پس می‌توانند بگویند کد درست
+     * کار کرده یا نه. اگر یک عدد را با خودش مقایسه کنیم، تست همیشه سبز
+     * می‌شود — همان دامی که چند دور ما را گمراه کرد.
+     */
+    private val diagSurface = FloatArray(3)
+    var diagSurfaceValid = true
+    fun resetSeatDiagnostics() {
+        lastSeatBias = 0f
+        minSeatBias = Float.MAX_VALUE
+        seatMeasurements = 0
+        lastFaceKey = 0f
+        lastSurfaceKey = 0f
+        faceMeasurements = 0
+        seatViolations = 0
+    }
+
+    /**
      * عمق دید یک نقطهٔ **محلی** — دقیقاً همان عددی که `Scene3D.submit`
      * به‌عنوان `depth` ذخیره می‌کند (camera-space z پس از چرخش و پیچ).
      */
@@ -156,7 +200,19 @@ class Rig(private val scene: Scene3D) {
             val wallD = camDepth(biasRefLocal[0], biasRefLocal[1], biasRefLocal[2])
             // اگر پنجره از مرکز دیوار دورتر است، بایاس مثبت می‌شود و آن را
             // جلو می‌آورد؛ حاشیه تضمین می‌کند حتی با خطای رُند هم ببرد.
-            (winD - wallD) + surfaceBias
+            val out = (winD - wallD) + surfaceBias
+            // تشخیصی — با مرکز **واقعی** سطح، نه با همان مرجعی که کد استفاده
+            // کرد. اگر با مرجع خودِ کد مقایسه کنیم، جواب همیشه درست است و
+            // تست هیچ‌وقت باگ را نمی‌گیرد.
+            if (diagSurfaceValid) {
+                val trueSurfD = camDepth(diagSurface[0], diagSurface[1], diagSurface[2])
+                val key = winD - out
+                lastFaceKey = key
+                lastSurfaceKey = trueSurfD
+                faceMeasurements++
+                if (key > trueSurfD - 0.05f) seatViolations++
+            }
+            out
         } else depthBias
         val shaded = if (emissive) color else scene.lit(color, nx, ny, nz)
         if (tiled && texture != null) {
@@ -225,9 +281,9 @@ class Rig(private val scene: Scene3D) {
         // نکتهٔ کلیدی: مرجع = مرکز سطحِ میزبان (بام/عرشه)، نه مرکز خودِ حجم.
         // اگر مرکز خود حجم باشد، پاراپتِ لبهٔ دور کلیدش کوچک‌تر از بام در
         // می‌آید و زیر بام می‌رود (توضیح کامل در boxSeated).
-        val seatX = if (seatBias > 0f) (p[0] + p[3] + p[6] + p[9]) * 0.25f else 0f
-        val seatY = if (seatBias > 0f) (p[1] + p[4] + p[7] + p[10]) * 0.25f else 0f
-        val seatZ = if (seatBias > 0f) (p[2] + p[5] + p[8] + p[11]) * 0.25f else 0f
+        val seatX = surfaceX
+        val seatY = surfaceY
+        val seatZ = surfaceZ
         val keepX = refX; val keepY = refY; val keepZ = refZ
         if (seatBias > 0f) ref(seatX, seatY, seatZ)
         cull = true
@@ -249,6 +305,22 @@ class Rig(private val scene: Scene3D) {
         val surfaceBias = seatBias
         val biasRef = if (seatBias > 0f) seatRef else null
         if (seatBias > 0f) { seatRef[0] = seatX; seatRef[1] = seatY; seatRef[2] = seatZ }
+        if (seatBias > 0f) {
+            // مرکز **واقعی** سطح از فراخوان می‌آید؛ مستقل از مرجعی که بایاس
+            // با آن حساب می‌شود تا تست بتواند اشتباه بودن مرجع را ببیند.
+            diagSurface[0] = surfaceX; diagSurface[1] = surfaceY; diagSurface[2] = surfaceZ
+        }
+        // تشخیصی: بایاس واقعیِ پایین‌ترین نقطهٔ این حجم را نسبت به سطح میزبان
+        // ثبت کن. اگر منفی شود، حجم از سطح خودش عقب‌تر مرتب می‌شود.
+        if (seatBias > 0f) {
+            val bx0 = (v(3, 0) + v(2, 0) + v(1, 0) + v(0, 0)) * 0.25f
+            val by0 = (v(3, 1) + v(2, 1) + v(1, 1) + v(0, 1)) * 0.25f
+            val bz0 = (v(3, 2) + v(2, 2) + v(1, 2) + v(0, 2)) * 0.25f
+            val measured = (camDepth(bx0, by0, bz0) - camDepth(seatX, seatY, seatZ)) + seatBias
+            lastSeatBias = measured
+            if (measured < minSeatBias) minSeatBias = measured
+            seatMeasurements++
+        }
         if (bottom) {
             face(v(3, 0), v(3, 1), v(3, 2), v(2, 0), v(2, 1), v(2, 2),
                 v(1, 0), v(1, 1), v(1, 2), v(0, 0), v(0, 1), v(0, 2),
@@ -258,9 +330,12 @@ class Rig(private val scene: Scene3D) {
         // وجه بالا: اگر حجمِ رویش دقیقاً همان اندازه را بپوشاند، این وجه
         // دیده نمی‌شود و فقط یک وجه هم‌سطح اضافی برای مرتب‌ساز است.
         if (topFace) {
+            val prevTag = scene.debugTag
+            if (topOnlyTag != 0) scene.debugTag = topOnlyTag
             face(v(4, 0), v(4, 1), v(4, 2), v(5, 0), v(5, 1), v(5, 2),
                 v(6, 0), v(6, 1), v(6, 2), v(7, 0), v(7, 1), v(7, 2), color, top,
                 tiled = tiledFaces, surfaceBias = surfaceBias, biasRefLocal = biasRef)
+            scene.debugTag = prevTag
         }
         for (i in 0..3) {
             val j = (i + 1) % 4
@@ -311,9 +386,16 @@ class Rig(private val scene: Scene3D) {
      * گِرد هر فریم ترتیبشان برعکس می‌شود → «تکهٔ بالای ساختمان ظاهر و غیب
      * می‌شود». همان چیز برای کانتینر روی عرشه.
      *
-     * راه‌حل: همان بایاس دقیقی که پنجره‌های روی دیوار را پایدار کرد. مرجع
-     * بایاس، مرکز خودِ این حجم است؛ پس هر وجه این حجم، مستقل از جهت دوربین،
-     * جای درستی در ترتیب می‌گیرد و نویز اعشاری نمی‌تواند ترتیبش را برگرداند.
+     * راه‌حل: همان بایاس دقیقی که پنجره‌های روی دیوار را پایدار کرد، ولی
+     * مرجع بایاس **مرکز سطحی که حجم رویش نشسته** است (بام/عرشه) — همان
+     * نقطه‌ای که عمق میانگین وجه رویی سطح در آن قرار دارد. با این مرجع،
+     * کلید مرتب‌سازی هر وجه نشسته برابر می‌شود با
+     * `depth(سطح) − حاشیه` و دیگر به موقعیت لبه و جهت دوربین وابسته نیست.
+     *
+     * دام مهم (یک دور ما را گمراه کرد): اگر مرجع، مرکز **خودِ حجم** باشد،
+     * پاراپتِ لبهٔ دور کلید کوچک‌تری از بام می‌گیرد، اول کشیده می‌شود و بام
+     * رویش را می‌پوشاند — یعنی همان باگ، فقط با محاسبهٔ «دقیق». پس مرجع
+     * درست، سطح است نه حجم.
      */
     fun boxSeated(
         cx: Float, baseY: Float, cz: Float,
@@ -336,10 +418,39 @@ class Rig(private val scene: Scene3D) {
         surfaceX: Float = 0f, surfaceY: Float = 0f, surfaceZ: Float = 0f
     ) {
         seatedBuilt++
-        box(cx, baseY, cz, sx, sy2, sz, color, side, top,
-            bottom = false, tiledFaces = tiledFaces, topFace = true,
-            seatBias = seatBias, surfaceX = surfaceX, surfaceY = surfaceY, surfaceZ = surfaceZ)
+        // برچسب تشخیصی: تست باید بتواند این حجم را روی سطح میزبانش پیدا کند.
+        val prevTag = scene.debugTag
+        scene.debugTag = TAG_SEAT
+        try {
+            box(cx, baseY, cz, sx, sy2, sz, color, side, top,
+                bottom = false, tiledFaces = tiledFaces, topFace = true,
+                seatBias = seatBias, surfaceX = surfaceX, surfaceY = surfaceY, surfaceZ = surfaceZ)
+        } finally {
+            scene.debugTag = prevTag
+        }
     }
+
+    companion object {
+        /** برچسب تشخیصی: حجمی که روی سطحی نشسته (پاراپت/کانتینر). */
+        const val TAG_SEAT = 1
+        /** برچسب تشخیصی: وجه رویی سطحی که حجم رویش نشسته (بام/عرشه). */
+        const val TAG_SURFACE = 2
+    }
+
+    /** برچسب تشخیصی بعدی را ست می‌کند — فقط برای تست. */
+    fun markNext(tag: Int) { scene.debugTag = tag }
+    fun clearMark() { scene.debugTag = 0 }
+
+    /**
+     * برچسب فقط روی **وجه رویی** حجم بعدی (نه دیوارهایش).
+     *
+     * چرا: برای مقایسهٔ پاراپت با بام، باید دقیقاً همان چهارضلعی رویی پیدا
+     * شود. اگر کل جعبهٔ لبه برچسب بخورد، دیوارهای ۰٫۵ متری هم کاندید
+     * می‌شوند و تست ممکن است دیوار را با بام اشتباه بگیرد.
+     */
+    private var topOnlyTag = 0
+    fun markNextTop(tag: Int) { topOnlyTag = tag }
+    fun clearTopMark() { topOnlyTag = 0 }
 
     /** چند حجمِ نشسته در این فریم ساخته شد (تشخیصی). */
     var seatedBuilt = 0

@@ -6,6 +6,7 @@ import ir.shahed.pahpad.core.SaveManager
 import ir.shahed.pahpad.data.Levels
 import ir.shahed.pahpad.game.Mission
 import ir.shahed.pahpad.game.MissionMode
+import ir.shahed.pahpad.game.Rig
 import ir.shahed.pahpad.game.WorldRenderer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -20,29 +21,25 @@ import java.io.File
 /**
  * آزمون پایداری وجه‌های **هم‌سطح** — پاراپت روی بام، کانتینر روی عرشه.
  *
- * ─────────────────────────── تاریخچهٔ روش سنجش ───────────────────────────
- * سه روش اول معیوب بودند و اعداد دروغ می‌گفتند. ثبت شده تا دوباره تکرار نشوند:
+ * ─────────────────────── تاریخچهٔ روش سنجش (بخوانید) ───────────────────────
+ * چهار روش اول غلط بودند و سبز می‌شدند، در حالی که کاربر باگ را می‌دید.
+ * ثبت شده تا دوباره تکرار نشوند:
  *
- *  ۱) «آیا بالای ساختمان خالی است؟» — به آستانهٔ دلخواه وابسته بود و با هر
- *     زاویه نتیجه عوض می‌شد.
- *
+ *  ۱) «آیا بالای ساختمان خالی است؟» — وابسته به آستانهٔ دلخواه.
  *  ۲) تفاضل دو فریم مجاور — حرکت دوربین خودش تفاضل می‌سازد؛ تلنگر از حرکت
- *     جدا نمی‌شد. اعداد با و بدون تغییر یکسان بودند.
+ *     جدا نمی‌شد.
+ *  ۳) «عمق دقیقاً برابر» — دو وجه هم‌سطح هیچ‌وقت عمق بیت‌به‌بیت یکسان
+ *     ندارند. و بدتر: `flush` پایان فریم `order` را پاک می‌کرد، پس لیست
+ *     خالی بود و «۰» به‌اشتباه «سالم» تفسیر می‌شد.
+ *  ۴) «لیست مرتب است» — **تاتولوژی**. `debugFaces()` خودش خروجی `sortWith`
+ *     است؛ چک کردن اینکه مرتب است هیچ اطلاعاتی دربارهٔ درستی ندارد. این
+ *     روش با کد باگ‌دار هم سبز شد و یک دور کامل را هدر داد.
  *
- *  ۳) «عمق دقیقاً برابر» — دو خطا هم‌زمان:
- *     الف) دو وجه هم‌سطح هیچ‌وقت عمق بیت‌به‌بیت یکسان ندارند.
- *     ب) `flush` در پایان فریم `order` را پاک می‌کند، پس لیست همیشه خالی
- *        بود و «۰» به‌اشتباه «سالم» تفسیر می‌شد. (حالا `debugFaces()`
- *        یک عکس فوری است که حین `sortWith` گرفته می‌شود.)
- *
- *  ۴) مقایسهٔ ترتیب با **اندیس** در دو نما — غلط بود: اگر اندازهٔ صحنه
- *     عوض شود اندیس جابه‌جا می‌شود و «نوسان» کاذب گزارش می‌شود. یک دور
- *     عدد ۱۱ نوسان داد که هیچ‌کدام واقعی نبود.
- *
- *  ۵) روش این تست — **شرط هندسی مستقیم.** برای هر وجه پاراپت/کانتینر، باید
- *     کلید مرتب‌سازی‌اش (depth − bias) از کلید سطحی که رویش نشسته
- *     کوچک‌تر یا مساوی باشد. این همان چیزی است که مرتب‌ساز نقاش می‌بیند و
- *     مستقل از زاویه، اندیس و آستانه است.
+ *  روش ۵ (این تست) — **مقایسهٔ مستقیم کلید پاراپت با کلید بام زیرش.** تست
+ *  هر وجه را با برچسبش پیدا می‌کند (برچسب فقط تشخیصی است و در مرتب‌سازی
+ *  هیچ نقشی ندارد) و می‌سنجد که آیا کلید واقعی پاراپت از کلید واقعی بام
+ *  کوچک‌تر است یا نه. این معیار در نسخهٔ باگ‌دار **قرمز می‌شود**، چون دقیقاً
+ *  همان نابرابری‌ای است که نقض می‌شد.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -52,15 +49,15 @@ class CoplanarFaceOrderTest {
     private val outDir = File("build/screens").apply { mkdirs() }
 
     @Test
-    fun seatedFacesSortBeforeTheirSupportSurface() {
+    fun parapetSortsInFrontOfItsRoofFromEveryAngle() {
         val activity = Robolectric.buildActivity(ir.shahed.pahpad.MainActivity::class.java).get()
         val save = SaveManager(activity)
         val urban = Levels.all.first { it.chapter == 3 }
         val naval = Levels.all.firstOrNull { it.env.name == "NAVAL" } ?: urban
 
-        var views = 0
-        var seatedFaces = 0
-        val violations = ArrayList<String>()
+        var seatFaces = 0
+        var compared = 0
+        val behindRoof = ArrayList<String>()
 
         for (level in listOf(urban, naval)) {
             val mission = Mission(level, save, MissionMode.STORY, 1234L)
@@ -70,61 +67,79 @@ class CoplanarFaceOrderTest {
             val bmp = Bitmap.createBitmap(960, 540, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
 
-            for (step in 0..9) {
-                val t = step / 9f
+            // زاویه‌های متنوع: از هر طرف، از بالا، از پایین.
+            for (step in 0..15) {
+                val t = step / 15f
+                val ang = t * 6.2831853f
                 val cam = renderer.scene.cam
-                cam.x = mission.x + t * 45f
-                cam.y = mission.y + 3f + t * 30f
-                cam.z = mission.z + 130f - t * 110f
-                cam.yaw = mission.yaw + t * 0.45f
-                cam.pitch = mission.pitch - t * 0.05f
+                cam.x = mission.x + sinf(ang) * 90f
+                cam.z = mission.z + cosf(ang) * 90f
+                cam.y = mission.y + 8f + t * 70f
+                cam.yaw = ang
+                cam.pitch = -0.25f - t * 0.45f
                 cam.roll = 0f
                 cam.fov = 74f
                 cam.viewport(960f, 540f)
                 renderer.draw(canvas, mission, 960f, 540f)
-                views++
 
-                // مرتب‌ساز نزولی روی (depth − bias) است. عکس فوری همان ترتیب
-                // واقعی را دارد، پس فقط کافی است بررسی کنیم که کلیدها
-                // نزولی مانده‌اند و هیچ وجه نشسته‌ای جهش رو به بالا ندارد.
+                // عکس فوری: ترتیب واقعی رسم + برچسب + کلید مرتب‌سازی.
                 val snap = renderer.scene.debugFaces()
-                var prevKey = Float.MAX_VALUE
-                for (f in snap) {
-                    val key = f.depth - f.depthBias
-                    if (f.depthBias != 0f) {
-                        seatedFaces++
-                        if (key > prevKey + 1e-3f) {
-                            if (violations.size < 8) {
-                                violations.add(
-                                    "level=${level.title} view=$step " +
-                                        "key=${"%.3f".format(key)} prev=${"%.3f".format(prevKey)}"
-                                )
-                            }
+                val seats = snap.filter { it.tag == Rig.TAG_SEAT }
+                val roofs = snap.filter { it.tag == Rig.TAG_SURFACE }
+                seatFaces += seats.size
+                if (seats.isEmpty() || roofs.isEmpty()) continue
+
+                for (s in seats) {
+                    // بامی که این پاراپت رویش نشسته: نزدیک‌ترین وجه سطح که
+                    // کادر تصویری‌اش با کادر پاراپت همپوشانی دارد.
+                    val roof = roofs.minByOrNull { overlapArea(s, it) * -1f } ?: continue
+                    if (overlapArea(s, roof) <= 0f) continue
+                    compared++
+                    val seatKey = s.depth - s.depthBias
+                    val roofKey = roof.depth - roof.depthBias
+                    // مرتب‌ساز نزولی است: کلید بزرگ‌تر **اول** کشیده می‌شود.
+                    // پاراپت باید بعد از بام کشیده شود ⇒ کلیدش باید کوچک‌تر
+                    // یا مساوی باشد. اگر بزرگ‌تر باشد، بام رویش را می‌پوشاند
+                    // و پاراپت «غیب» می‌شود.
+                    if (seatKey > roofKey + 1e-2f) {
+                        if (behindRoof.size < 8) {
+                            behindRoof.add(
+                                "level=${level.title} step=$step " +
+                                    "parapet=${"%.3f".format(seatKey)} roof=${"%.3f".format(roofKey)} " +
+                                    "Δ=${"%.3f".format(seatKey - roofKey)}"
+                            )
                         }
                     }
-                    prevKey = key
                 }
             }
             renderer.scene.enableDebugCapture(false)
             renderer.scene.clear()
         }
 
-        println("نماها: $views")
-        println("وجه نشسته: $seatedFaces")
-        println("نقض ترتیب: ${violations.size}")
-        violations.forEach { println("  $it") }
+        println("وجه پاراپت/کانتینر دیده‌شده: $seatFaces")
+        println("جفت‌های پاراپت-بام مقایسه‌شده: $compared")
+        println("پاراپت‌هایی که پشت بام افتادند: ${behindRoof.size}")
+        behindRoof.forEach { println("  $it") }
 
-        assertTrue("هیچ وجه نشسته‌ای رندر نشد — تست بی‌معنا است", seatedFaces > 0)
+        assertTrue("هیچ وجه نشسته‌ای رندر نشد — دوربین یا مرحله اشتباه است", seatFaces > 0)
+        assertTrue("هیچ جفت پاراپت-بامی همپوشانی نداشت — تست بی‌معنا است", compared > 0)
         assertEquals(
-            "ترتیب وجه‌های نشسته در ${violations.size} مورد شکست — " +
-                "این‌ها همان پاراپت/کانتینر هستند که ظاهر و غیب می‌شوند",
-            0, violations.size
+            "${behindRoof.size} پاراپت/کانتینر پشت سطح خودشان افتادند — " +
+                "همان چیزی که کاربر به‌عنوان «ظاهر و غیب می‌شود» می‌بیند",
+            0, behindRoof.size
         )
     }
 
-    /**
-     * بازرسی چشمی: یک نمای ثابت از نزدیک بالای بام رندر و ذخیره می‌شود.
-     */
+    private fun sinf(v: Float): Float = kotlin.math.sin(v.toDouble()).toFloat()
+    private fun cosf(v: Float): Float = kotlin.math.cos(v.toDouble()).toFloat()
+
+    private fun overlapArea(a: ir.shahed.pahpad.game.Scene3D.FaceSnapshot,
+                            b: ir.shahed.pahpad.game.Scene3D.FaceSnapshot): Float {
+        val w = minOf(a.maxX, b.maxX) - maxOf(a.minX, b.minX)
+        val h = minOf(a.maxY, b.maxY) - maxOf(a.minY, b.minY)
+        return if (w <= 0f || h <= 0f) 0f else w * h
+    }
+
     @Test
     fun renderRoofAndDeckForInspection() {
         val activity = Robolectric.buildActivity(ir.shahed.pahpad.MainActivity::class.java).get()
@@ -152,8 +167,8 @@ class CoplanarFaceOrderTest {
         out.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         println("نوشته شد: ${out.absolutePath}")
 
-        val seated = renderer.scene.debugFaces().count { it.depthBias != 0f }
-        println("وجه نشسته در این نما: $seated (ساخته‌شده در Rig: ${renderer.rigSeatedBuilt()})")
-        assertTrue("در این نما هیچ وجه نشسته‌ای رندر نشد", seated > 0)
+        val byTag = renderer.scene.debugFaces().groupingBy { it.tag }.eachCount()
+        println("وجه‌ها بر اساس برچسب: $byTag")
+        assertTrue("هیچ پاراپتی رندر نشد", (byTag[Rig.TAG_SEAT] ?: 0) > 0)
     }
 }

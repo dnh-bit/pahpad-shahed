@@ -28,6 +28,10 @@ class WorldRenderer(private val gfxContext: Context) {
 
     /** تشخیصی: چند حجمِ نشسته در آخرین فریم ساخته شد. */
     fun rigSeatedBuilt(): Int = rig.seatedBuilt
+    /** تشخیصی: تعداد نقضِ ترتیبِ اندازه‌گیری‌شده در Rig (باید ۰ باشد). */
+    fun rigSeatViolations(): Int = rig.seatViolations
+    fun rigFaceMeasurements(): Int = rig.faceMeasurements
+    fun resetRigDiagnostics() = rig.resetSeatDiagnostics()
 
     private val proj = FloatArray(3)
     private var exhaustTimer = 0f
@@ -393,8 +397,12 @@ class WorldRenderer(private val gfxContext: Context) {
         rig.box(0f, 0f, 0f, w, h - cap, d, color, wall, roof, bottom = false,
             tiledFaces = true, topFace = false)
         // لبهٔ پشت‌بام: تنها وجه بالایی بام، با همان تکرار متری بافت
+        // برچسب تشخیصی: تست باید بتواند همین وجه را به‌عنوان «سطح میزبان»
+        // پیدا کند و کلید مرتب‌سازی‌اش را با پاراپت مقایسه کند.
+        rig.markNextTop(Rig.TAG_SURFACE)
         rig.box(0f, h - cap, 0f, w, cap, d, Theme.shade(color, 1.08f), wall, roof, bottom = false,
             tiledFaces = true)
+        rig.clearTopMark()
         // پشت‌بام و واحدهایش **نباید با فاصله ظاهر/غیب شوند**.
         //
         // قبلاً `detail == 0` بود، یعنی فقط تا ۱۷۵ متر رسم می‌شد. وقتی
