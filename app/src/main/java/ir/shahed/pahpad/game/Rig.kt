@@ -66,50 +66,6 @@ class Rig(private val scene: Scene3D) {
     private val seatRef = FloatArray(3)
 
     /**
-     * تشخیصی: آخرین اندازه‌گیری بایاسِ نشستن.
-     *
-     * چرا لازم است: سال‌ها (ده‌ها دور) تست‌های این باگ سبز می‌شدند چون چیزی
-     * را می‌سنجیدند که همیشه درست است (مثلاً «لیستِ مرتب، مرتب است»). اینجا
-     * عددی ثبت می‌شود که **در نسخهٔ باگ‌دار منفی می‌شود**: بایاسِ محاسبه‌شده
-     * برای پایین‌ترین وجه هر حجمِ نشسته. اگر منفی باشد، یعنی وجه نشسته از
-     * سطح میزبانش عقب‌تر کلید می‌گیرد و زیرش می‌رود — همان ظاهر/غیب شدن.
-     */
-    var lastSeatBias = 0f
-        private set
-    var minSeatBias = Float.MAX_VALUE
-        private set
-    var seatMeasurements = 0
-        private set
-    var lastFaceKey = 0f
-        private set
-    var lastSurfaceKey = 0f
-        private set
-    var faceMeasurements = 0
-        private set
-    var seatViolations = 0
-        private set
-    /**
-     * مرکز **واقعی** سطح میزبان برای تشخیص.
-     *
-     * تفاوتش با [seatRef] حیاتی است: `seatRef` همان چیزی است که کد
-     * **استفاده** می‌کند (و در نسخهٔ باگ‌دار اشتباه بود). این‌ها مستقل از
-     * کدِ محاسبه‌اند و از فراخوان می‌آیند، پس می‌توانند بگویند کد درست
-     * کار کرده یا نه. اگر یک عدد را با خودش مقایسه کنیم، تست همیشه سبز
-     * می‌شود — همان دامی که چند دور ما را گمراه کرد.
-     */
-    private val diagSurface = FloatArray(3)
-    var diagSurfaceValid = true
-    fun resetSeatDiagnostics() {
-        lastSeatBias = 0f
-        minSeatBias = Float.MAX_VALUE
-        seatMeasurements = 0
-        lastFaceKey = 0f
-        lastSurfaceKey = 0f
-        faceMeasurements = 0
-        seatViolations = 0
-    }
-
-    /**
      * عمق دید یک نقطهٔ **محلی** — دقیقاً همان عددی که `Scene3D.submit`
      * به‌عنوان `depth` ذخیره می‌کند (camera-space z پس از چرخش و پیچ).
      */
@@ -200,19 +156,7 @@ class Rig(private val scene: Scene3D) {
             val wallD = camDepth(biasRefLocal[0], biasRefLocal[1], biasRefLocal[2])
             // اگر پنجره از مرکز دیوار دورتر است، بایاس مثبت می‌شود و آن را
             // جلو می‌آورد؛ حاشیه تضمین می‌کند حتی با خطای رُند هم ببرد.
-            val out = (winD - wallD) + surfaceBias
-            // تشخیصی — با مرکز **واقعی** سطح، نه با همان مرجعی که کد استفاده
-            // کرد. اگر با مرجع خودِ کد مقایسه کنیم، جواب همیشه درست است و
-            // تست هیچ‌وقت باگ را نمی‌گیرد.
-            if (diagSurfaceValid) {
-                val trueSurfD = camDepth(diagSurface[0], diagSurface[1], diagSurface[2])
-                val key = winD - out
-                lastFaceKey = key
-                lastSurfaceKey = trueSurfD
-                faceMeasurements++
-                if (key > trueSurfD - 0.05f) seatViolations++
-            }
-            out
+            (winD - wallD) + surfaceBias
         } else depthBias
         val shaded = if (emissive) color else scene.lit(color, nx, ny, nz)
         if (tiled && texture != null) {
@@ -305,22 +249,6 @@ class Rig(private val scene: Scene3D) {
         val surfaceBias = seatBias
         val biasRef = if (seatBias > 0f) seatRef else null
         if (seatBias > 0f) { seatRef[0] = seatX; seatRef[1] = seatY; seatRef[2] = seatZ }
-        if (seatBias > 0f) {
-            // مرکز **واقعی** سطح از فراخوان می‌آید؛ مستقل از مرجعی که بایاس
-            // با آن حساب می‌شود تا تست بتواند اشتباه بودن مرجع را ببیند.
-            diagSurface[0] = surfaceX; diagSurface[1] = surfaceY; diagSurface[2] = surfaceZ
-        }
-        // تشخیصی: بایاس واقعیِ پایین‌ترین نقطهٔ این حجم را نسبت به سطح میزبان
-        // ثبت کن. اگر منفی شود، حجم از سطح خودش عقب‌تر مرتب می‌شود.
-        if (seatBias > 0f) {
-            val bx0 = (v(3, 0) + v(2, 0) + v(1, 0) + v(0, 0)) * 0.25f
-            val by0 = (v(3, 1) + v(2, 1) + v(1, 1) + v(0, 1)) * 0.25f
-            val bz0 = (v(3, 2) + v(2, 2) + v(1, 2) + v(0, 2)) * 0.25f
-            val measured = (camDepth(bx0, by0, bz0) - camDepth(seatX, seatY, seatZ)) + seatBias
-            lastSeatBias = measured
-            if (measured < minSeatBias) minSeatBias = measured
-            seatMeasurements++
-        }
         if (bottom) {
             face(v(3, 0), v(3, 1), v(3, 2), v(2, 0), v(2, 1), v(2, 2),
                 v(1, 0), v(1, 1), v(1, 2), v(0, 0), v(0, 1), v(0, 2),

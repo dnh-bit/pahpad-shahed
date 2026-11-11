@@ -28,10 +28,6 @@ class WorldRenderer(private val gfxContext: Context) {
 
     /** تشخیصی: چند حجمِ نشسته در آخرین فریم ساخته شد. */
     fun rigSeatedBuilt(): Int = rig.seatedBuilt
-    /** تشخیصی: تعداد نقضِ ترتیبِ اندازه‌گیری‌شده در Rig (باید ۰ باشد). */
-    fun rigSeatViolations(): Int = rig.seatViolations
-    fun rigFaceMeasurements(): Int = rig.faceMeasurements
-    fun resetRigDiagnostics() = rig.resetSeatDiagnostics()
 
     private val proj = FloatArray(3)
     private var exhaustTimer = 0f
