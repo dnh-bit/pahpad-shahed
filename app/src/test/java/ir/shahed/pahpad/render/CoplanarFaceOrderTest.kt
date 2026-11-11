@@ -153,7 +153,7 @@ class CoplanarFaceOrderTest {
         // گزارش تعداد وجه‌های نشسته در این نما — برای اینکه بدانیم اصلاً
         // پاراپت/کانتینری در کادر بوده است.
         val seated = renderer.scene.debugFaces().count { it.depthBias != 0f }
-        println("وجه نشسته در این نما: $seated")
+        println("وجه نشسته در این نما: $seated (ساخته‌شده در Rig: ${renderer.rigSeatedBuilt()})")
         assertTrue("در این نما هیچ وجه نشسته‌ای رندر نشد — دوربین جای مناسبی نیست", seated > 0)
     }
 }

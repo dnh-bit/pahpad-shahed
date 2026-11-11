@@ -314,9 +314,18 @@ class Rig(private val scene: Scene3D) {
         color: Int, side: Bitmap? = null, top: Bitmap? = side,
         tiledFaces: Boolean = false, seatBias: Float = 0.9f
     ) {
+        // شمارندهٔ تشخیصی: تست‌ها با این می‌فهمند پاراپت/کانتینر واقعاً ساخته
+        // شده یا نه. بدونش تست «۰ جفت» می‌داد و ما فکر می‌کردیم یعنی سالم است.
+        seatedBuilt++
         box(cx, baseY, cz, sx, sy2, sz, color, side, top,
             bottom = false, tiledFaces = tiledFaces, topFace = true, seatBias = seatBias)
     }
+
+    /** چند حجمِ نشسته در این فریم ساخته شد (تشخیصی). */
+    var seatedBuilt = 0
+        private set
+
+    fun resetDiagnostics() { seatedBuilt = 0 }
 
     /** هرم ناقص: نیم‌عرض پایین و بالا جدا؛ برای بدنه‌ی شیب‌دار، برجک و دودکش. */
     fun taper(

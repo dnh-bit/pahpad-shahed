@@ -26,6 +26,9 @@ class WorldRenderer(private val gfxContext: Context) {
     private val hardware = Vehicles(gfxContext)
     private val rig = Rig(scene)
 
+    /** تشخیصی: چند حجمِ نشسته در آخرین فریم ساخته شد. */
+    fun rigSeatedBuilt(): Int = rig.seatedBuilt
+
     private val proj = FloatArray(3)
     private var exhaustTimer = 0f
     private var wreckTimer = 0f
