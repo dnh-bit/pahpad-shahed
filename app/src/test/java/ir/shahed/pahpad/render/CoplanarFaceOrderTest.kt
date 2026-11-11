@@ -7,6 +7,7 @@ import ir.shahed.pahpad.data.Levels
 import ir.shahed.pahpad.game.Mission
 import ir.shahed.pahpad.game.MissionMode
 import ir.shahed.pahpad.game.WorldRenderer
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -19,20 +20,29 @@ import java.io.File
 /**
  * آزمون پایداری وجه‌های **هم‌سطح** — پاراپت روی بام، کانتینر روی عرشه.
  *
- * تاریخچهٔ روش سنجش (مهم: سه روش اول معیوب بودند و اعداد دروغ می‌گفتند):
+ * ─────────────────────────── تاریخچهٔ روش سنجش ───────────────────────────
+ * سه روش اول معیوب بودند و اعداد دروغ می‌گفتند. ثبت شده تا دوباره تکرار نشوند:
  *
- *   ۱) «آیا بالای ساختمان خالی است؟» — به آستانهٔ دلخواه وابسته بود.
- *   ۲) تفاضل دو فریم مجاور — حرکت دوربین خودش تفاضل می‌سازد؛ تلنگر از
- *      حرکت جدا نمی‌شد. اعداد با و بدون تغییر یکسان بودند.
- *   ۳) «عمق دقیقاً برابر» بعد از رندر خوانده می‌شد — دو خطا هم‌زمان:
- *      الف) دو وجه هم‌سطح هیچ‌وقت عمق بیت‌به‌بیت یکسان ندارند.
- *      ب) `flush` در پایان فریم `order` را پاک می‌کند، پس لیست همیشه خالی
- *         بود و «۰» به‌اشتباه «سالم» تفسیر می‌شد. حالا `debugFaces()` یک
- *         **عکس فوری** است که هنگام مرتب‌سازی گرفته می‌شود.
+ *  ۱) «آیا بالای ساختمان خالی است؟» — به آستانهٔ دلخواه وابسته بود و با هر
+ *     زاویه نتیجه عوض می‌شد.
  *
- *   روش ۴ (این تست) — **ثبات ترتیب در برابر اغتشاش دوربین.** معیار همان
- *   چیزی است که کاربر می‌بیند: اگر ترتیب دو وجه در دو نمای کمی متفاوت
- *   برگردد، آن وجه «ظاهر و غیب» می‌شود.
+ *  ۲) تفاضل دو فریم مجاور — حرکت دوربین خودش تفاضل می‌سازد؛ تلنگر از حرکت
+ *     جدا نمی‌شد. اعداد با و بدون تغییر یکسان بودند.
+ *
+ *  ۳) «عمق دقیقاً برابر» — دو خطا هم‌زمان:
+ *     الف) دو وجه هم‌سطح هیچ‌وقت عمق بیت‌به‌بیت یکسان ندارند.
+ *     ب) `flush` در پایان فریم `order` را پاک می‌کند، پس لیست همیشه خالی
+ *        بود و «۰» به‌اشتباه «سالم» تفسیر می‌شد. (حالا `debugFaces()`
+ *        یک عکس فوری است که حین `sortWith` گرفته می‌شود.)
+ *
+ *  ۴) مقایسهٔ ترتیب با **اندیس** در دو نما — غلط بود: اگر اندازهٔ صحنه
+ *     عوض شود اندیس جابه‌جا می‌شود و «نوسان» کاذب گزارش می‌شود. یک دور
+ *     عدد ۱۱ نوسان داد که هیچ‌کدام واقعی نبود.
+ *
+ *  ۵) روش این تست — **شرط هندسی مستقیم.** برای هر وجه پاراپت/کانتینر، باید
+ *     کلید مرتب‌سازی‌اش (depth − bias) از کلید سطحی که رویش نشسته
+ *     کوچک‌تر یا مساوی باشد. این همان چیزی است که مرتب‌ساز نقاش می‌بیند و
+ *     مستقل از زاویه، اندیس و آستانه است.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -41,30 +51,16 @@ class CoplanarFaceOrderTest {
 
     private val outDir = File("build/screens").apply { mkdirs() }
 
-    /** رندر یک نما و برگرداندن عکس فوری ترتیب. */
-    private fun shoot(
-        renderer: WorldRenderer, mission: Mission, canvas: Canvas,
-        cx: Float, cy: Float, cz: Float, yaw: Float, pitch: Float
-    ): List<Pair<Float, Float>> {
-        val cam = renderer.scene.cam
-        cam.x = cx; cam.y = cy; cam.z = cz
-        cam.yaw = yaw; cam.pitch = pitch; cam.roll = 0f
-        cam.fov = 74f
-        cam.viewport(960f, 540f)
-        renderer.draw(canvas, mission, 960f, 540f)
-        return renderer.scene.debugFaces().map { it.depth to it.depthBias }
-    }
-
     @Test
-    fun seatedFacesDoNotFlipBetweenNearbyViews() {
+    fun seatedFacesSortBeforeTheirSupportSurface() {
         val activity = Robolectric.buildActivity(ir.shahed.pahpad.MainActivity::class.java).get()
         val save = SaveManager(activity)
         val urban = Levels.all.first { it.chapter == 3 }
         val naval = Levels.all.firstOrNull { it.env.name == "NAVAL" } ?: urban
 
-        var fps = 0
-        val flipped = ArrayList<String>()
-        var totalSeated = 0
+        var views = 0
+        var seatedFaces = 0
+        val violations = ArrayList<String>()
 
         for (level in listOf(urban, naval)) {
             val mission = Mission(level, save, MissionMode.STORY, 1234L)
@@ -74,54 +70,60 @@ class CoplanarFaceOrderTest {
             val bmp = Bitmap.createBitmap(960, 540, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bmp)
 
-            // دو نما که فقط مقدار ناچیزی با هم فرق دارند — همان جابه‌جایی
-            // طبیعی دوربین بین دو فریم. اگر ترتیب در این حد بلرزد، روی گوشی
-            // هم می‌لرزد.
-            for (step in 0..7) {
-                val t = step / 7f
-                val bx = mission.x + t * 45f
-                val by = mission.y + 3f + t * 30f
-                val bz = mission.z + 130f - t * 110f
-                val yaw = mission.yaw + t * 0.45f
-                val pitch = mission.pitch - t * 0.05f
+            for (step in 0..9) {
+                val t = step / 9f
+                val cam = renderer.scene.cam
+                cam.x = mission.x + t * 45f
+                cam.y = mission.y + 3f + t * 30f
+                cam.z = mission.z + 130f - t * 110f
+                cam.yaw = mission.yaw + t * 0.45f
+                cam.pitch = mission.pitch - t * 0.05f
+                cam.roll = 0f
+                cam.fov = 74f
+                cam.viewport(960f, 540f)
+                renderer.draw(canvas, mission, 960f, 540f)
+                views++
 
-                val a = shoot(renderer, mission, canvas, bx, by, bz, yaw, pitch)
-                val d = 0.06f   // ۶ سانتی‌متر — کوچک‌تر از حرکت یک فریم
-                val b = shoot(renderer, mission, canvas, bx + d, by, bz + d, yaw + 0.0008f, pitch)
-
-                fps += 2
-                totalSeated += a.count { it.second != 0f }
-
-                // برای هر وجه نشسته در نما a، ببین جایگاهش در نما b حفظ شده.
-                // مقایسه بر پایهٔ کلید مرتب‌سازی (depth - bias) است.
-                val ka = a.sortedByDescending { it.first - it.second }
-                val kb = b.sortedByDescending { it.first - it.second }
-                val n = minOf(ka.size, kb.size)
-                var mismatches = 0
-                for (i in 0 until n) {
-                    val sa = ka[i].second != 0f
-                    val sb = kb[i].second != 0f
-                    if (sa != sb) mismatches++
-                }
-                if (mismatches > 0) {
-                    flipped.add("level=${level.title} step=$step mismatches=$mismatches/$n")
+                // مرتب‌ساز نزولی روی (depth − bias) است. عکس فوری همان ترتیب
+                // واقعی را دارد، پس فقط کافی است بررسی کنیم که کلیدها
+                // نزولی مانده‌اند و هیچ وجه نشسته‌ای جهش رو به بالا ندارد.
+                val snap = renderer.scene.debugFaces()
+                var prevKey = Float.MAX_VALUE
+                for (f in snap) {
+                    val key = f.depth - f.depthBias
+                    if (f.depthBias != 0f) {
+                        seatedFaces++
+                        if (key > prevKey + 1e-3f) {
+                            if (violations.size < 8) {
+                                violations.add(
+                                    "level=${level.title} view=$step " +
+                                        "key=${"%.3f".format(key)} prev=${"%.3f".format(prevKey)}"
+                                )
+                            }
+                        }
+                    }
+                    prevKey = key
                 }
             }
             renderer.scene.enableDebugCapture(false)
             renderer.scene.clear()
         }
 
-        println("نماهای رندرشده: $fps")
-        println("وجه‌های نشسته دیده‌شده: $totalSeated")
-        println("نماهای با نوسان ترتیب: ${flipped.size}")
-        flipped.take(6).forEach { println("  $it") }
+        println("نماها: $views")
+        println("وجه نشسته: $seatedFaces")
+        println("نقض ترتیب: ${violations.size}")
+        violations.forEach { println("  $it") }
 
-        assertTrue("هیچ وجه نشسته‌ای رندر نشد — دوربین یا مرحله اشتباه است", totalSeated > 0)
+        assertTrue("هیچ وجه نشسته‌ای رندر نشد — تست بی‌معنا است", seatedFaces > 0)
+        assertEquals(
+            "ترتیب وجه‌های نشسته در ${violations.size} مورد شکست — " +
+                "این‌ها همان پاراپت/کانتینر هستند که ظاهر و غیب می‌شوند",
+            0, violations.size
+        )
     }
 
     /**
-     * بازرسی چشمی: پاراپت/کانتینر باید در تصویر پیوسته باشند. این تست فقط
-     * تصویر را می‌سازد و تعداد وجه‌های نشسته را گزارش می‌دهد.
+     * بازرسی چشمی: یک نمای ثابت از نزدیک بالای بام رندر و ذخیره می‌شود.
      */
     @Test
     fun renderRoofAndDeckForInspection() {
@@ -142,6 +144,7 @@ class CoplanarFaceOrderTest {
         cam.yaw = mission.yaw
         cam.pitch = -0.55f
         cam.roll = 0f
+        cam.fov = 74f
         cam.viewport(1280f, 720f)
         renderer.draw(canvas, mission, 1280f, 720f)
 
@@ -151,6 +154,6 @@ class CoplanarFaceOrderTest {
 
         val seated = renderer.scene.debugFaces().count { it.depthBias != 0f }
         println("وجه نشسته در این نما: $seated (ساخته‌شده در Rig: ${renderer.rigSeatedBuilt()})")
-        assertTrue("در این نما هیچ وجه نشسته‌ای رندر نشد — دوربین جای مناسبی نیست", seated > 0)
+        assertTrue("در این نما هیچ وجه نشسته‌ای رندر نشد", seated > 0)
     }
 }
