@@ -64,7 +64,7 @@ class LevelSelectScreen(game: MainActivity, private val chapterNumber: Int) : Ba
         val availH = bottom - top
         val cw = (availW - gap * (cols - 1)) / cols
         val rawCh = (availH - gap * (rows - 1)) / rows
-        val ch = rawCh.coerceIn(dp(116f), dp(190f))
+        val ch = rawCh.coerceAtMost(dp(190f)).coerceAtLeast(dp(92f))
 
         val gridH = rows * ch + (rows - 1) * gap
         val startY = top + ((availH - gridH) / 2f).coerceAtLeast(0f)
@@ -116,17 +116,19 @@ class LevelSelectScreen(game: MainActivity, private val chapterNumber: Int) : Ba
                     if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
             }
 
-            val infoTop = r.top + dp(42f) + lines.size * (titleSize + dp(4f)) + dp(10f)
-            ui.text(c, l.difficultyLabel, cx, infoTop, dp(11f), Theme.difficultyColor(l.difficulty))
+            val starsY = r.bottom - dp(34f)
+            val scoreY = r.bottom - dp(14f)
+            val infoTop = minOf(r.top + dp(42f) + lines.size * (titleSize + dp(3f)) + dp(6f), starsY - dp(15f))
+            ui.text(c, l.difficultyLabel, cx, infoTop, dp(10.5f), Theme.difficultyColor(l.difficulty))
 
             if (unlocked) {
-                ui.stars(c, cx, r.bottom - dp(50f), dp(9f), stars)
+                ui.stars(c, cx, starsY, dp(8.5f), stars)
                 val best = save.bestScoreOf(l.id)
                 ui.text(c, if (best > 0) Fa.grouped(best) else "بازی نشده",
-                    cx, r.bottom - dp(22f), dp(11f), if (best > 0) Theme.AMBER else Theme.TEXT_FAINT)
+                    cx, scoreY, dp(10.5f), if (best > 0) Theme.AMBER else Theme.TEXT_FAINT)
             } else {
-                ui.iconLock(c, cx, r.bottom - dp(44f), dp(11f))
-                ui.text(c, "قفل است", cx, r.bottom - dp(20f), dp(11f), Theme.TEXT_FAINT)
+                ui.iconLock(c, cx, starsY, dp(10.5f))
+                ui.text(c, "قفل است", cx, scoreY, dp(10.5f), Theme.TEXT_FAINT)
             }
         }
         ui.button(c, back)

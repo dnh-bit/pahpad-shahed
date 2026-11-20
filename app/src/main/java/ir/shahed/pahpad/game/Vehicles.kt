@@ -31,7 +31,14 @@ class Vehicles(private val context: Context) {
     private val wallTex: Bitmap? get() = tex("material_wall")
     private val roofTex: Bitmap? get() = tex("material_roof")
 
+    /** نقطهٔ مرجع بایاس برای وجه‌های تختِ روی عرشه (نوار فرود و نشانه‌ها)؛
+     *  face() آن را هم‌زمان مصرف می‌کند، پس بازاستفاده در هر فراخوانی امن است. */
+    private val biasRefScratch = FloatArray(3)
+
     companion object {
+        private val FREIGHT_COLORS = intArrayOf(
+            0xFF8E4A3C.toInt(), 0xFF3E6A78.toInt(), 0xFF6E7A46.toInt(), 0xFF8A8A82.toInt()
+        )
         const val SAND = 0xFF9C8B62.toInt()
         const val OLIVE = 0xFF5C6247.toInt()
         const val TRACK = 0xFF3B3B38.toInt()
@@ -263,9 +270,11 @@ class Vehicles(private val context: Context) {
         }
     }
 
-    /** ایستگاه رادار جست‌وجو با آرایه‌ی چرخان روی برج. */
-    fun radarStation(rig: Rig, x: Float, z: Float, spin: Float, unit: Float, detail: Int) {
-        rig.place(x, 0f, z, 0f, unit)
+    /** ایستگاه رادار جست‌وجو با آرایه‌ی چرخان روی برج.
+     *  [baseY] ارتفاع سکوی زیر ایستگاه است: روی زمین صفر، روی جزیره/عرشه
+     *  ارتفاع همان سکو — تا رادار در مراحل دریایی روی آب شناور نماند. */
+    fun radarStation(rig: Rig, x: Float, z: Float, spin: Float, unit: Float, detail: Int, baseY: Float = 0f) {
+        rig.place(x, baseY, z, 0f, unit)
         rig.box(0f, 0f, 0f, 11f, 0.40f, 11f, 0xFF7E7C74.toInt(), concrete, concrete)
         // ساختمان عملیات
         rig.box(-3.4f, 0.40f, -0.6f, 5.6f, 3.30f, 8.4f, 0xFF848880.toInt(), metal, roofTex)
@@ -295,20 +304,20 @@ class Vehicles(private val context: Context) {
         }
         rig.box(towerX, 8.60f, 0f, 4.6f, 0.50f, 4.6f, 0xFF9A9E94.toInt(), metal, metal)
 
-        // آرایه‌ی چرخان: صفحه‌ی بلند با بازوی تعادل در پشت
-        rig.place(x, 0f, z, spin, unit)
-        rig.taper(towerX, 9.10f, 0.35f, 6.60f, 0.42f, 6.20f, 0.34f, 4.40f,
+        // آرایه‌ی چرخان: محور چرخش دقیقاً روی مرکز برج است تا صفحه در هوا نچرخد
+        rig.place(x + towerX * unit, baseY, z, spin, unit)
+        rig.taper(0f, 9.10f, 0.35f, 6.60f, 0.42f, 6.20f, 0.34f, 4.40f,
             PALE, metal, metal, 0f, -0.30f)
-        rig.box(towerX, 9.10f, 0.75f, 13.4f, 0.22f, 0.28f, 0xFF5E655F.toInt())
-        rig.box(towerX, 13.30f, 0.30f, 12.8f, 0.24f, 0.30f, 0xFF5E655F.toInt())
-        rig.box(towerX, 9.90f, -1.30f, 2.20f, 1.20f, 1.60f, Theme.shade(STEEL, 0.9f), metal, metal)
+        rig.box(0f, 9.10f, 0.75f, 13.4f, 0.22f, 0.28f, 0xFF5E655F.toInt())
+        rig.box(0f, 13.30f, 0.30f, 12.8f, 0.24f, 0.30f, 0xFF5E655F.toInt())
+        rig.box(0f, 9.90f, -1.30f, 2.20f, 1.20f, 1.60f, Theme.shade(STEEL, 0.9f), metal, metal)
         if (detail <= 1) {
             for (sgn in -1..1 step 2) {
-                rig.tube(towerX + sgn * 6.2f, 9.20f, 0.35f, towerX + sgn * 1.4f, 9.20f, -1.20f,
+                rig.tube(sgn * 6.2f, 9.20f, 0.35f, sgn * 1.4f, 9.20f, -1.20f,
                     0.10f, 4, Theme.shade(STEEL, 0.85f), false)
             }
-            rig.tube(towerX, 13.50f, 0.30f, towerX, 15.60f, 0.10f, 0.12f, 5, PALE)
-            rig.box(towerX, 15.60f, 0.10f, 0.5f, 0.5f, 0.5f, Theme.RED)
+            rig.tube(0f, 13.50f, 0.30f, 0f, 15.60f, 0.10f, 0.12f, 5, PALE)
+            rig.box(0f, 15.60f, 0.10f, 0.5f, 0.5f, 0.5f, Theme.RED)
         }
 }
 
@@ -377,38 +386,63 @@ class Vehicles(private val context: Context) {
         val ws = floatArrayOf(b * 0.80f, b * 0.97f, b, b * 0.96f, b * 0.74f, b * 0.40f, b * 0.05f)
         val ks = floatArrayOf(b * 0.52f, b * 0.66f, b * 0.70f, b * 0.62f, b * 0.42f, b * 0.18f, b * 0.03f)
         val sheer = floatArrayOf(0f, 0f, 0.02f, 0.06f, 0.14f, 0.24f, 0.34f)
+        // جعبهٔ کل کشتی — مرجع مشترک لنگر وجه‌ها. بدنه با حاشیهٔ ۴ (یک لایه
+        // عقب‌تر از عرشه) لنگر می‌گیرد؛ عرشه با ۲.
+        val shipBox = floatArrayOf(0f, height * 1.25f, 0f, b, height * 1.25f, half)
         // در فاصله‌ی زیاد مقاطع دوتایی ادغام می‌شوند تا تعداد وجه‌ها پایین بماند
         val stride = if (detail == 2) 2 else 1
         var i = 0
+        rig.beginPart(Rig.PART_HULL)
         while (i < 6) {
             val j = (i + stride).coerceAtMost(6)
             val lift = (sheer[i] + sheer[j]) * 0.5f * height
-            rig.hull(zs[i], zs[j], ws[i], ws[j], 0.18f, deckY + lift, ks[i], ks[j], hullC, hullT, deckT)
+            rig.hull(zs[i], zs[j], ws[i], ws[j], 0.18f, deckY + lift, ks[i], ks[j], hullC, hullT, deckT,
+                farBox = shipBox)
             i = j
         }
-        // عرشه‌ی صاف روی بدنه
-        rig.box(0f, deckY, -half * 0.05f, b * 1.86f, 0.22f, length * 0.72f, deckC, deckT, deckT)
+        rig.endPart()
+        // عرشه‌ی صاف روی بدنه (برچسب تشخیصی روی وجه رویی — فقط برای تست)
+        // کلید عمق وجه رویی از دورترین رأس: وگرنه سازه‌های آن‌سوی مرکز عرشه
+        // زیر عرشهٔ خودشان می‌روند (رگرسیون ShipDeckOrderTest).
+        rig.beginPart(Rig.PART_DECK_PLATE)
+        rig.markNextTop(Rig.TAG_SHIP_DECK)
+        // بدون maxDepth: کلید وجه رویی باید دقیقاً «دورترین گوشه + ۲» باشد تا
+        // بدنه با حاشیهٔ ۴ یک لایهٔ **قطعی** عقب‌تر از آن بنشیند. با
+        // maxDepth، کلید عرشه به اندازهٔ (دورترین رأس − میانگین) عمیق‌تر
+        // می‌شد و در برخی ژست‌ها از لایهٔ بدنه هم عمیق‌تر می‌شد.
+        rig.box(0f, deckY, -half * 0.05f, b * 1.86f, 0.22f, length * 0.72f, deckC, deckT, deckT,
+            farBox = shipBox)
+        rig.clearTopMark()
+        rig.endPart()
 
         // --- برجک توپ اصلی روی سینه
         val gunZ = half * 0.58f
+        rig.beginPart(Rig.PART_ATTACH)
         rig.taper(0f, deckY + 0.22f, gunZ, b * 0.52f, b * 0.62f, b * 0.34f, b * 0.44f, height * 0.30f,
             supC, hullT, hullT, 0f, -b * 0.06f)
         rig.tube(0f, deckY + height * 0.42f, gunZ + b * 0.30f, 0f, deckY + height * 0.46f, gunZ + b * 1.55f,
             beam * 0.030f, 7, Theme.shade(DARK, 1.4f))
+        rig.endPart()
 
         // --- سلول‌های پرتاب عمودی
         val vlsZ = half * 0.34f
+        rig.beginPart(Rig.PART_SEATED)
         rig.box(0f, deckY + 0.22f, vlsZ, b * 1.05f, height * 0.10f, length * 0.10f, Theme.shade(supC, 0.92f), hullT)
         if (detail <= 1) {
+            // درپوش سلول‌ها حجم نشسته روی بلوک VLS است — با بایاس نشسته تا
+            // روی سطح بلوک نلرزد.
+            val vlsTopY = deckY + 0.22f + height * 0.10f
             for (cx in 0..3) {
                 for (cz in 0..1) {
-                    rig.box(
-                        (cx - 1.5f) * b * 0.24f, deckY + 0.22f + height * 0.10f, vlsZ + (cz - 0.5f) * length * 0.045f,
-                        b * 0.17f, height * 0.02f, length * 0.035f, DARK
+                    rig.boxSeated(
+                        (cx - 1.5f) * b * 0.24f, vlsTopY, vlsZ + (cz - 0.5f) * length * 0.045f,
+                        b * 0.17f, height * 0.02f, length * 0.035f, DARK,
+                        surfaceX = 0f, surfaceY = vlsTopY, surfaceZ = vlsZ
                     )
                 }
             }
         }
+        rig.endPart()
 
         // --- جزیره‌ی فرماندهی: سه طبقه‌ی باریک‌شونده و پل با شیشه‌ی تیره
         var sy = deckY + 0.22f
@@ -417,20 +451,42 @@ class Vehicles(private val context: Context) {
         var sz = half * 0.06f
         for (tier in 0..2) {
             val th = height * (0.34f - tier * 0.05f)
+            rig.beginPart(Rig.PART_ISLAND_TIER + tier)
             rig.taper(0f, sy, sz, sw, sl * 0.5f, sw * 0.86f, sl * 0.45f, th, supC, hullT, hullT)
+            rig.endPart()
             if (tier == 1) {
+                // پنجره‌های پل روی وجه‌های طبقه. پنل نازک است و دیوار میزبانش
+                // یک چهارضلعی بزرگ: اگر با عمق میانگین خودش مرتب شود، از
+                // ارتفاعی پایین‌تر از پنجره (پروفایل پرواز کاربر) دیوار
+                // میانگینش نزدیک‌تر می‌شود و روی پنل را می‌پوشاند. با بایاس
+                // قفل‌شده روی همان وجه (compress = ۱) کلید پنل همیشه
+                // depth(دیوار) − ۱ است، پس هیچ‌وقت پشت دیوار نمی‌رود.
+                rig.beginPart(Rig.PART_PANEL)
+                val wallY = sy + th * 0.5f
+                rig.beginBias(1f, 0f, wallY, sz + sl * 0.48f, compress = 1f)
                 rig.box(0f, sy + th * 0.55f, sz + sl * 0.48f, sw * 1.62f, th * 0.30f, 0.16f, GLASS)
+                rig.endBias()
                 for (s in -1..1 step 2) {
+                    rig.beginBias(1f, s * sw * 0.93f, wallY, sz, compress = 1f)
                     rig.box(s * sw * 0.86f, sy + th * 0.55f, sz, 0.16f, th * 0.30f, sl * 0.7f, GLASS)
+                    rig.endBias()
                 }
+                rig.endPart()
             }
             // آرایه‌ی رادار فازی روی بدنه‌ی جزیره
             if (tier == 0 && detail <= 1) {
+                rig.beginPart(Rig.PART_PANEL)
+                val wallY = sy + th * 0.5f
+                rig.beginBias(1f, 0f, wallY, sz + sl * 0.47f, compress = 1f)
                 rig.box(0f, sy + th * 0.40f, sz + sl * 0.47f, sw * 1.10f, th * 0.44f, 0.18f, 0xFF3C4A50.toInt())
+                rig.endBias()
                 for (s in -1..1 step 2) {
+                    rig.beginBias(1f, s * sw * 0.93f, wallY, sz - sl * 0.05f, compress = 1f)
                     rig.box(s * sw * 0.84f, sy + th * 0.40f, sz - sl * 0.10f, 0.18f, th * 0.44f, sl * 0.55f,
                         0xFF3C4A50.toInt())
+                    rig.endBias()
                 }
+                rig.endPart()
             }
             sy += th
             sw *= 0.80f
@@ -438,40 +494,80 @@ class Vehicles(private val context: Context) {
             sz -= length * 0.012f
         }
 
-        // --- دکل رادار
+        // --- دکل رادار: چهار پایهٔ همگرا + دو تیر عرضی که دقیقاً بین همان
+        // پایه‌ها کشیده می‌شوند (قبلاً تیرها از مرکز خالی شروع می‌شدند و
+        // به هیچ‌چیز وصل نبودند: دو میلهٔ شناور کنار پل).
         val mastBase = sy
+        val mastTop = mastBase + height * 0.58f
+        fun legX(s: Int, t: Float) = s * (sw * 0.8f + (sw * 0.22f - sw * 0.8f) * t)
+        fun legZ(g: Int, t: Float) = sz + g * (sl * 0.35f + (sl * 0.10f - sl * 0.35f) * t)
+        rig.beginPart(Rig.PART_MAST)
         for (sx in -1..1 step 2) {
             for (szg in -1..1 step 2) {
-                rig.tube(sx * sw * 0.8f, mastBase, sz + szg * sl * 0.35f, sx * sw * 0.22f, mastBase + height * 0.58f,
-                    sz + szg * sl * 0.10f, beam * 0.020f, 4, Theme.shade(supC, 0.9f), false)
+                rig.tube(legX(sx, 0f), mastBase, legZ(szg, 0f), legX(sx, 1f), mastTop,
+                    legZ(szg, 1f), beam * 0.020f, 4, Theme.shade(supC, 0.9f), false)
             }
         }
-        rig.box(0f, mastBase + height * 0.58f, sz, sw * 0.9f, height * 0.05f, sl * 0.6f, supC, hullT)
-        if (detail <= 1) {
-            rig.disc(0f, mastBase + height * 0.74f, sz, 0.25f, 0.2f, 0.94f, beam * 0.16f, 9, PALE)
-            rig.tube(0f, mastBase + height * 0.63f, sz, 0f, mastBase + height * 0.96f, sz, beam * 0.014f, 5, PALE)
-            for (s in -1..1 step 2) {
-                rig.tube(0f, mastBase + height * 0.40f, sz, s * sw * 1.5f, mastBase + height * 0.36f, sz,
-                    beam * 0.010f, 4, PALE, false)
+        for (t in floatArrayOf(0.32f, 0.66f)) {
+            for (g in -1..1 step 2) {
+                rig.tube(legX(-1, t), mastBase + height * 0.58f * t, legZ(g, t),
+                    legX(1, t), mastBase + height * 0.58f * t, legZ(g, t),
+                    beam * 0.008f, 3, Theme.shade(supC, 1.05f), false)
             }
+        }
+        rig.endPart()
+        rig.beginPart(Rig.PART_ATTACH)
+        rig.box(0f, mastTop, sz, sw * 0.9f, height * 0.05f, sl * 0.6f, supC, hullT)
+        rig.endPart()
+        if (detail <= 1) {
+            // میلهٔ عمودی از روی سکو تا نوک؛ بشقاب دقیقاً روی سرِ همین میله
+            // می‌نشیند (مرکز بشقاب = سر میله) — قطعهٔ شناور در کار نیست.
+            rig.beginPart(Rig.PART_MAST_ARM)
+            rig.tube(0f, mastTop + height * 0.05f, sz, 0f, mastBase + height * 0.96f, sz,
+                beam * 0.014f, 5, PALE)
+            rig.endPart()
+            rig.beginPart(Rig.PART_DISH)
+            rig.disc(0f, mastBase + height * 0.96f, sz, 0f, 0.30f, 0.95f, beam * 0.16f, 9, PALE)
+            rig.endPart()
         }
 
         // --- دودکش مایل به عقب
         val fz = -half * 0.16f
+        rig.beginPart(Rig.PART_ATTACH)
         rig.taper(0f, deckY + height * 0.42f, fz, b * 0.58f, length * 0.045f, b * 0.42f, length * 0.032f,
             height * 0.52f, Theme.shade(supC, 0.94f), hullT, hullT, 0f, -length * 0.020f)
         rig.box(0f, deckY + height * 0.94f, fz - length * 0.020f, b * 0.90f, height * 0.04f, length * 0.075f,
             DARK)
+        rig.endPart()
 
         // --- بخش عقب: آشیانه و سطح فرود بالگرد
+        rig.beginPart(Rig.PART_ATTACH)
         rig.box(0f, deckY + 0.22f, -half * 0.52f, b * 1.30f, height * 0.32f, length * 0.16f, supC, hullT, hullT)
-        rig.box(0f, deckY + 0.24f, -half * 0.82f, b * 1.55f, 0.10f, length * 0.20f, Theme.shade(deckC, 0.86f), deckT)
+        rig.endPart()
+        // صفحه‌ی پد حجم نشسته روی عرشه است (مرجع = مرکز روی عرشه).
+        val deckRefX = 0f; val deckRefY = deckY + 0.22f; val deckRefZ = -half * 0.05f
+        rig.beginPart(Rig.PART_SEATED)
+        // وجه رویی صفحهٔ پد برچسب «سطح» می‌گیرد تا تست بتواند حلقه‌ها را
+        // دقیقاً با همان وجه بسنجد (نه با درپوش VLS که جای دیگری است).
+        rig.markNextTop(Rig.TAG_PAD)
+        rig.boxSeated(0f, deckY + 0.24f, -half * 0.82f, b * 1.55f, 0.10f, length * 0.20f,
+            Theme.shade(deckC, 0.86f), deckT, deckT, seatBias = 2.2f,
+            surfaceX = deckRefX, surfaceY = deckRefY, surfaceZ = deckRefZ)
+        rig.clearTopMark()
+        rig.endPart()
         if (detail <= 1) {
-            rig.disc(0f, deckY + 0.36f, -half * 0.82f, 0f, 1f, 0f, b * 0.62f, 12, 0xFF8C8F82.toInt())
-            rig.disc(0f, deckY + 0.38f, -half * 0.82f, 0f, 1f, 0f, b * 0.42f, 12, Theme.shade(deckC, 0.7f))
+            // حلقه‌های پد: هم‌خانوادهٔ صفحه‌ی پد (همان مرجع، حاشیهٔ بیشتر)
+            // تا با آن چشمک نزنند و همیشه رویش بمانند.
+            rig.beginPart(Rig.PART_PAD_RING)
+            rig.beginBias(2.8f, deckRefX, deckRefY, deckRefZ)
+            rig.disc(0f, deckY + 0.46f, -half * 0.82f, 0f, 1f, 0f, b * 0.62f, 12, 0xFF8C8F82.toInt())
+            rig.disc(0f, deckY + 0.52f, -half * 0.82f, 0f, 1f, 0f, b * 0.42f, 12, Theme.shade(deckC, 0.7f))
+            rig.endBias()
+            rig.endPart()
         }
         // --- سلاح نقطه‌زن و قایق تندرو
         if (detail == 0) {
+            rig.beginPart(Rig.PART_ATTACH)
             for (s in -1..1 step 2) {
                 val cx = s * b * 0.92f
                 rig.tube(cx, deckY + height * 0.36f, -half * 0.34f, cx, deckY + height * 0.50f, -half * 0.34f,
@@ -482,25 +578,31 @@ class Vehicles(private val context: Context) {
                 rig.box(s * b * 1.05f, deckY + height * 0.24f, half * 0.14f, b * 0.20f, height * 0.10f,
                     length * 0.05f, Theme.shade(supC, 0.88f), hullT)
             }
+            rig.endPart()
             // نرده‌های عرشه
+            rig.beginPart(Rig.PART_DECK_MARK)
             for (s in -1..1 step 2) {
                 rig.tube(s * b * 0.94f, deckY + 0.22f, -half * 0.9f, s * b * 0.94f, deckY + 0.22f, half * 0.72f,
                     beam * 0.006f, 3, PALE, false)
                 rig.tube(s * b * 0.94f, deckY + 1.05f, -half * 0.9f, s * b * 0.94f, deckY + 1.05f, half * 0.72f,
                     beam * 0.006f, 3, PALE, false)
             }
+            rig.endPart()
         }
         // --- کف موج دماغه روی خط آب
         if (!destroyed && detail <= 1) {
+            rig.beginPart(Rig.PART_HULL)
             for (s in -1..1 step 2) {
                 rig.face(
                     s * b * 0.20f, 0.16f, half * 0.98f,
                     s * b * 1.35f, 0.16f, half * 0.34f,
                     s * b * 1.20f, 0.16f, -half * 0.40f,
                     s * b * 0.30f, 0.16f, -half * 0.10f,
-                    Theme.withAlpha(0xFFE6EFF2.toInt(), 0.42f)
+                    Theme.withAlpha(0xFFE6EFF2.toInt(), 0.42f),
+                    farBox = shipBox, farMargin = 4f
                 )
             }
+            rig.endPart()
         }
     }
 
@@ -523,64 +625,165 @@ class Vehicles(private val context: Context) {
         val zs = floatArrayOf(-half, -half * 0.6f, 0f, half * 0.55f, half * 0.85f, half)
         val ws = floatArrayOf(hb * 0.86f, hb, hb, hb * 0.9f, hb * 0.52f, hb * 0.08f)
         val ks = floatArrayOf(hb * 0.6f, hb * 0.74f, hb * 0.76f, hb * 0.6f, hb * 0.3f, hb * 0.05f)
+        // جعبهٔ کل ناو — باید **همهٔ** سازه‌ها (تا نوک دکل/بشقاب) را دربر بگیرد،
+        // وگرنه سازهٔ بیرون‌زده در نمای کم‌ارتفاع می‌تواند از لنگر عمیق‌تر شود
+        // و پشت عرشه بیفتد. ارتفاع پوشش: ۰ تا ۲٫۵ برابر ارتفاع ناو.
+        val shipBox = floatArrayOf(0f, height * 1.25f, 0f, db, height * 1.25f, half)
         for (i in 0 until 5) {
-            rig.hull(zs[i], zs[i + 1], ws[i], ws[i + 1], 0.2f, deckY, ks[i], ks[i + 1], hullC, hullT, deckT)
+            rig.beginPart(Rig.PART_HULL)
+            // بدنه یک لایه عقب‌تر از عرشه (حاشیهٔ ۴ در برابر ۲): عرشه همیشه
+            // روی بدنه می‌افتد و کلید بدنه از محدودهٔ خط‌ها/هواپیماها بیرون
+            // است (اندازه‌گیری: پیش از این، وجه رویی بدنه تا ۳۰٬۰۰۰ پیکسل
+            // مربع روی عرشه و روی خط فرود می‌افتاد و با آنها می‌لرزید).
+            rig.hull(zs[i], zs[i + 1], ws[i], ws[i + 1], 0.2f, deckY, ks[i], ks[i + 1], hullC, hullT, deckT,
+                farBox = shipBox)
+            rig.endPart()
         }
-        // عرشه‌ی پرواز با آویز جانبی
-        rig.box(0f, deckY, 0f, db * 2f, height * 0.06f, length * 0.98f, deckC, hullT, deckT)
+        // عرشه‌ی پرواز با آویز جانبی. روی عرشه یک چهارضلعی ۲۶۸ متری نیست:
+        // در چهار سگمنت طولی کشیده می‌شود تا عمق میانگین هر تکه محلی
+        // بماند — با یک وجه‌ی غول‌پیکر، جزیره و هر چیز روی نیمه‌ی دور
+        // عرشه با نصف دیگر قاطی می‌شد و لبه‌ها می‌لرزیدند.
+        val deckTopY = deckY + height * 0.06f
+        rig.beginPart(Rig.PART_DECK_PLATE)
+        rig.box(0f, deckY, 0f, db * 2f, height * 0.06f, length * 0.98f, deckC, hullT, deckT,
+            topFace = false, allFarBox = shipBox, allFarMargin = 3f)
+        // برچسب تشخیصی روی وجه‌های رویی عرشهٔ سگمنتی (فقط برای تست)
+        rig.markBlock(Rig.TAG_SHIP_DECK)
+        for (seg in 0..3) {
+            val z0 = -half * 0.98f + seg * (length * 0.98f) / 4f
+            val z1 = z0 + (length * 0.98f) / 4f
+            // کلید عمق هر سگمنت عرشه از دورترین رأسش + لنگر به دورترین گوشهٔ
+            // کل کشتی (رگرسیون ShipDeckOrderTest).
+            rig.face(-db, deckTopY, z0, db, deckTopY, z0, db, deckTopY, z1, -db, deckTopY, z1,
+                deckC, deckT, farBox = shipBox)
+        }
+        rig.unmarkBlock()
+        rig.endPart()
+        rig.markBlock(Rig.TAG_SHIP_PART)
+        // ------------------------------------------------------------------
+        // یک مرجع مشترک برای *همهٔ* تجهیزات روی عرشه (خط فرود، خط مرکزی،
+        // منجنیق، هواپیمای پارک‌شده). قبلاً هر سگمنت مرجع خودش را داشت و
+        // همین باعث می‌شد دو قطعهٔ مجاور که به دو سگمنت مختلف افتاده‌اند
+        // کلیدهایی با ده‌ها متر اختلاف بگیرند و ترتیبشان با چرخش دوربین
+        // برگردد. با مرجع واحد، اختلاف کلید = ۰٫۰۳ × اختلاف عمق واقعی
+        // (هم‌علامت و پایدار) و حاشیه‌ها لایه‌بندی را ثابت می‌کنند:
+        //   عرشه (لنگر ۲) ← نشانه‌های کف (۱٫۵) ← خط فرود (۱٫۸) ←
+        //   تجهیزات ایستاده/هواپیما (۲٫۲) ← حلقه‌های پد (۲٫۸، در ناوشکن)
+        // ------------------------------------------------------------------
+        val deckRefX = 0f; val deckRefY = deckTopY; val deckRefZ = 0f
         if (detail <= 1) {
-            // خط فرود زاویه‌دار و خط مرکزی
-            rig.face(-db * 0.86f, deckY + height * 0.062f, -half * 0.92f,
-                -db * 0.20f, deckY + height * 0.062f, -half * 0.92f,
-                db * 0.34f, deckY + height * 0.062f, half * 0.62f,
-                db * 0.00f, deckY + height * 0.062f, half * 0.62f,
-                0xFF3E4346.toInt(), deckT)
+            val stripY = deckY + height * 0.062f
+            fun stripPortX(z: Float) = -db * 0.86f + (z + half * 0.92f) / (half * 1.54f) * (db * 0.86f)
+            fun stripStbdX(z: Float) = -db * 0.20f + (z + half * 0.92f) / (half * 1.54f) * (db * 0.54f)
+            val zb = floatArrayOf(-half * 0.92f, -half * 0.49f, 0f, half * 0.49f, half * 0.62f)
+            rig.beginPart(Rig.PART_DECK_MARK)
+            rig.beginBias(1.8f, deckRefX, deckRefY, deckRefZ)
+            for (i in 0..3) {
+                val z0 = zb[i]; val z1 = zb[i + 1]
+                rig.face(stripPortX(z0), stripY, z0,
+                    stripStbdX(z0), stripY, z0,
+                    stripStbdX(z1), stripY, z1,
+                    stripPortX(z1), stripY, z1,
+                    0xFF3E4346.toInt(), deckT)
+            }
+            rig.endBias()
+            // خط‌های مرکزی و منجنیق‌ها
+            rig.beginBias(1.5f, deckRefX, deckRefY, deckRefZ)
             for (k in -3..3) {
-                rig.box(-db * 0.53f + k * 0.02f, deckY + height * 0.064f, k * length * 0.12f,
-                    0.55f, 0.03f, length * 0.055f, 0xFFD8D6C4.toInt())
+                val dz = k * length * 0.12f
+                rig.box(-db * 0.53f + k * 0.02f, deckTopY + height * 0.0005f, dz,
+                    0.55f, 0.05f, length * 0.055f, 0xFFD8D6C4.toInt(), deckT)
             }
             // دو منجنیق جلو
             for (s in -1..0) {
-                rig.box(s * db * 0.42f + db * 0.10f, deckY + height * 0.064f, half * 0.52f,
-                    0.75f, 0.03f, length * 0.30f, 0xFF35393B.toInt())
+                rig.box(s * db * 0.42f + db * 0.10f, deckTopY + height * 0.0005f, half * 0.52f,
+                    0.75f, 0.05f, length * 0.30f, 0xFF35393B.toInt(), deckT)
             }
+            rig.endBias()
+            rig.endPart()
         }
-        // جزیره در سمت راست
+        // جزیره در سمت راست — همهٔ طبقه‌ها با یک مرکز مشترک (iz) روی هم می‌نشینند.
         var sy = deckY + height * 0.06f
         var sw = beam * 0.11f
         var sl = length * 0.11f
         val ix = db * 0.72f
+        val iz = -length * 0.04f
         for (tier in 0..3) {
             val th = height * (0.26f - tier * 0.035f)
-            rig.taper(ix, sy, -length * 0.04f, sw, sl * 0.5f, sw * 0.88f, sl * 0.46f, th,
+            rig.beginPart(Rig.PART_ISLAND_TIER + tier)
+            rig.taper(ix, sy, iz, sw, sl * 0.5f, sw * 0.88f, sl * 0.46f, th,
                 Theme.shade(hullC, 1.06f), hullT, hullT)
+            rig.endPart()
             if (tier == 1) {
-                rig.box(ix, sy + th * 0.55f, -length * 0.04f + sl * 0.48f, sw * 1.7f, th * 0.3f, 0.2f, GLASS)
+                // پنجره‌های پل: پنل نازکی که وجه جلویی طبقه را سوراخ می‌کند.
+                // با بایاس قفل‌شده روی همان وجه (compress = ۱) کلیدش همیشه
+                // depth(وجه میزبان) − ۱ است، پس از هیچ ارتفاعی پشت دیوار نمی‌رود.
+                rig.beginPart(Rig.PART_PANEL)
+                rig.beginBias(1f, ix, sy + th * 0.5f, iz + sl * 0.48f, compress = 1f)
+                rig.box(ix, sy + th * 0.55f, iz + sl * 0.48f, sw * 1.7f, th * 0.3f, 0.2f, GLASS)
+                rig.endBias()
+                rig.endPart()
             }
             sy += th
             sw *= 0.84f
             sl *= 0.84f
         }
-        rig.taper(ix, sy, -length * 0.10f, sw * 1.1f, sl * 0.5f, sw * 0.8f, sl * 0.4f, height * 0.34f,
-            Theme.shade(hullC, 0.96f), hullT, hullT, 0f, -length * 0.02f)
+        // بالاترین بلوک جزیره دقیقاً روی وجه رویی طبقهٔ سوم می‌نشیند (مرکز
+        // یکی، بدون آفست z). نسخهٔ قبل با cz = −0.10L و shiftZ یک صفحهٔ
+        // جداافتاده می‌ساخت که کنار برج شناور بود.
+        val capH = height * 0.16f
+        rig.beginPart(Rig.PART_ISLAND_CAP)
+        rig.taper(ix, sy, iz, sw, sl * 0.5f, sw * 0.86f, sl * 0.44f, capH,
+            Theme.shade(hullC, 0.96f), hullT, hullT)
+        rig.endPart()
+        val capTop = sy + capH
         if (detail <= 1) {
+            // ------------------------------------------------------------
+            // مجموعهٔ دکل: چهار پایه از سقف جزیره تا سکوی رادار، خود سکو،
+            // و یک دوک عمودی که بشقاب **دقیقاً روی سرش** می‌نشیند. قبلاً
+            // دیسک ۰٫۱ ارتفاع بالاتر از سر لوله‌ها شناور بود و هیچ‌چیز
+            // وصلش نمی‌کرد؛ در رندر هم همین دیده می‌شد.
+            // ------------------------------------------------------------
+            val platY = capTop + height * 0.18f
+            val platH = height * 0.05f
+            val platW = sw * 0.62f
+            val platL = sl * 0.30f
+            rig.beginPart(Rig.PART_MAST)
             for (sx in -1..1 step 2) {
                 for (szg in -1..1 step 2) {
-                    rig.tube(ix + sx * sw * 0.7f, sy, szg * sl * 0.3f, ix + sx * sw * 0.2f, sy + height * 0.42f,
-                        szg * sl * 0.1f, beam * 0.008f, 4, PALE, false)
+                    rig.tube(ix + sx * sw * 0.78f, capTop, iz + szg * sl * 0.38f,
+                        ix + sx * platW, platY, iz + szg * platL,
+                        beam * 0.010f, 4, Theme.shade(hullC, 1.1f), false)
                 }
             }
-            rig.disc(ix, sy + height * 0.52f, 0f, 0.3f, 0.2f, 0.9f, beam * 0.075f, 9, PALE)
+            rig.endPart()
+            rig.beginPart(Rig.PART_ATTACH)
+            rig.box(ix, platY, iz, platW * 2f + beam * 0.02f, platH, platL * 2f + beam * 0.02f,
+                Theme.shade(hullC, 1.12f), hullT, hullT)
+            rig.endPart()
+            val platTop = platY + platH
+            val dishY = platTop + height * 0.07f
+            rig.beginPart(Rig.PART_MAST_ARM)
+            rig.tube(ix, platTop, iz, ix, dishY, iz, beam * 0.012f, 5, PALE)
+            rig.endPart()
+            rig.beginPart(Rig.PART_DISH)
+            rig.disc(ix, dishY, iz, 0f, 0.30f, 0.95f, beam * 0.075f, 10, PALE)
+            rig.endPart()
         }
         // هواپیماهای پارک‌شده روی عرشه
         if (detail == 0 && !destroyed) {
+            rig.beginPart(Rig.PART_JET)
+            rig.beginBias(3.0f, deckRefX, deckRefY, deckRefZ)
             for (k in 0..3) {
-                jet(rig, -db * 0.74f, deckY + height * 0.07f, -half * 0.66f + k * length * 0.17f, 1f)
+                jet(rig, -db * 0.74f, deckY + height * 0.062f, -half * 0.66f + k * length * 0.17f, 1f)
             }
             for (k in 0..1) {
-                jet(rig, db * 0.30f, deckY + height * 0.07f, -half * 0.78f + k * length * 0.13f, -1f)
+                jet(rig, db * 0.30f, deckY + height * 0.062f, -half * 0.78f + k * length * 0.13f, -1f)
             }
+            rig.endBias()
+            rig.endPart()
         }
+        rig.unmarkBlock()
     }
 
     /** جنگنده‌ی پارک‌شده روی عرشه: بدنه‌ی باریک، بال دلتا و دو دم عمودی. */
@@ -619,32 +822,78 @@ class Vehicles(private val context: Context) {
         val deckY = height * 0.6f
         val zs = floatArrayOf(-half, -half * 0.4f, half * 0.5f, half * 0.86f, half)
         val ws = floatArrayOf(b * 0.86f, b, b * 0.94f, b * 0.6f, b * 0.08f)
+        val shipBox = floatArrayOf(0f, height * 1.25f, 0f, b, height * 1.25f, half)
         for (i in 0 until 4) {
+            rig.beginPart(Rig.PART_HULL)
             rig.hull(zs[i], zs[i + 1], ws[i], ws[i + 1], 0.2f, deckY, ws[i] * 0.7f, ws[i + 1] * 0.7f,
-                hull, metal, deckTex)
+                hull, metal, deckTex, farBox = shipBox)
+            rig.endPart()
         }
-        rig.box(0f, deckY, half * 0.02f, b * 1.7f, 0.2f, length * 0.8f, 0xFF7A6E5E.toInt(), deckTex, deckTex)
+        rig.beginPart(Rig.PART_DECK_PLATE)
+        rig.markNextTop(Rig.TAG_SHIP_DECK)
+        rig.box(0f, deckY, half * 0.02f, b * 1.7f, 0.2f, length * 0.8f, 0xFF7A6E5E.toInt(), deckTex, deckTex,
+            farBox = shipBox)
+        rig.clearTopMark()
+        rig.endPart()
         // خانه‌ی سکان در عقب
+        rig.beginPart(Rig.PART_ATTACH)
         rig.taper(0f, deckY + 0.2f, -half * 0.66f, b * 0.9f, length * 0.07f, b * 0.78f, length * 0.06f,
             height * 0.9f, PALE, metal, metal)
-        rig.box(0f, deckY + height * 0.75f, -half * 0.66f + length * 0.07f, b * 1.5f, height * 0.2f, 0.2f, GLASS)
+        rig.endPart()
+        // شیشهٔ پل: روی همان صفحهٔ وجه جلویی خانه (قبلاً ~۱ متر جلوتر از
+        // دیوار شناور بود). بایاس قفل روی وجه میزبان دارد.
+        rig.beginPart(Rig.PART_PANEL)
+        rig.beginBias(1f, 0f, deckY + 0.2f + height * 0.45f, -half * 0.66f + length * 0.065f, compress = 1f)
+        rig.box(0f, deckY + height * 0.75f, -half * 0.66f + length * 0.0628f, b * 1.5f, height * 0.2f, 0.2f, GLASS)
+        rig.endBias()
+        rig.endPart()
+        rig.beginPart(Rig.PART_ATTACH)
         rig.taper(0f, deckY + height * 1.1f, -half * 0.72f, b * 0.3f, length * 0.025f, b * 0.24f, length * 0.02f,
             height * 0.5f, 0xFF4E4A44.toInt(), metal, metal)
-        // کانتینرها روی عرشه
-        // همان باگ پاراپت: عرشه چهارضلعی بزرگ با عمق میانگین در مرکزش، کانتینر
-        // کوچک با عمق نزدیک لبه. با نزدیک شدن دوربین ترتیب برعکس می‌شد و
-        // کانتینرها ظاهر/غیب می‌شدند. boxSeated بایاس دقیق می‌دهد.
+        rig.endPart()
+        // کانتینرها روی عرشه — باکس ساده با کلید عمق واقعی خودش.
+        // قبلاً boxSeated بودند با مرجعِ مرکز عرشه: کلید هر ۱۲ کانتینر به
+        // سمت یک نقطه‌ی مرکزی فشرده می‌شد و ترتیب متقابلشان با چند متر خطا
+        // برمی‌گشت (همان خانواده‌ی باگ عرشه). حالا که وجه رویی عرشه به
+        // دورترین گوشه‌ی کشتی لنگر شده، کانتینر با کلید واقعی همیشه جلوی
+        // عرشه می‌ماند و ترتیب کانتینرها نسبت به هم دقیق است.
+        // بافت هم نداشتند: metal تیره‌ی بدنه رنگ‌ها را خفه می‌کرد و
+        // کانتینرها مثل تکه‌های سیاه بدنه دیده می‌شدند — رنگ تخت خواناست.
         for (k in 0..3) {
             for (row in -1..1) {
-                rig.boxSeated(row * b * 0.55f, deckY + 0.2f, -half * 0.2f + k * length * 0.16f,
+                rig.beginPart(Rig.PART_SEATED)
+                rig.box(row * b * 0.55f, deckY + 0.2f, -half * 0.2f + k * length * 0.16f,
                     b * 0.5f, height * 0.34f, length * 0.14f,
-                    intArrayOf(0xFF8E4A3C.toInt(), 0xFF3E6A78.toInt(), 0xFF6E7A46.toInt(), 0xFF8A8A82.toInt())[(k + row + 4) % 4],
-                    metal, metal,
-                    // مرجع = مرکز خودِ عرشه، همان نقطه‌ای که عمق میانگین وجه
-                    // رویی عرشه در آن است (نه مرکز کانتینر).
-                    surfaceX = 0f, surfaceY = deckY + 0.2f, surfaceZ = half * 0.02f)
+                    FREIGHT_COLORS[(k + row + 4) % 4])
+                rig.endPart()
             }
         }
+    }
+
+    /**
+     * جزیره‌ی کوچک صخره‌ای با سکوی صاف در بالا — سکوی طبیعی پدافند و رادار
+     * در مراحل دریایی تا هیچ سامانه‌ای «روی آب» ننشیند. ارتفاع کل سازه
+     * دقیقاً [h] است و روی سکو در y=h تمام می‌شود؛ میزبان‌ها y خود را
+     * برابر h می‌گذارند.
+     */
+    fun island(rig: Rig, x: Float, z: Float, yaw: Float, w: Float, h: Float, d: Float) {
+        rig.place(x, 0f, z, yaw, 1f)
+        val rock = 0xFF6E6258.toInt()
+        val rockTop = 0xFF7D7268.toInt()
+        val sand = 0xFFA08D64.toInt()
+        // دامنه‌ی ساحلی شنی از خط آب
+        rig.taper(0f, 0f, 0f, w * 0.54f, d * 0.54f, w * 0.46f, d * 0.46f, h * 0.22f, sand, concrete, concrete)
+        // بدنه‌ی صخره‌ای دوطبقه
+        rig.taper(0f, h * 0.18f, 0f, w * 0.46f, d * 0.46f, w * 0.30f, d * 0.30f, h * 0.62f, rock, concrete, concrete)
+        rig.taper(0f, h * 0.80f, 0f, w * 0.30f, d * 0.30f, w * 0.26f, d * 0.26f,
+            (h - 0.5f - h * 0.80f).coerceAtLeast(0.05f), rockTop, concrete, concrete)
+        // سکوی صاف بالا
+        rig.box(0f, h - 0.5f, 0f, w * 0.54f, 0.5f, d * 0.54f, sand, concrete, concrete)
+        // دو تیغه‌ی سنگی روی دامنه برای شکستن یکنواختی
+        rig.taper(w * 0.30f, h * 0.30f, d * 0.18f, w * 0.10f, d * 0.10f, w * 0.03f, d * 0.03f,
+            h * 0.30f, rock, concrete, concrete)
+        rig.taper(-w * 0.28f, h * 0.26f, -d * 0.22f, w * 0.08f, d * 0.08f, w * 0.02f, d * 0.02f,
+            h * 0.24f, rockTop, concrete, concrete)
     }
 
     // ============================================================== سازه‌ی هدف
@@ -841,34 +1090,6 @@ class Vehicles(private val context: Context) {
                     rig.tube(s * 1.05f, 0.52f, wz + 15f, s * 1.35f, 0.52f, wz + 15f, 0.52f, 7, TRACK, false)
                 }
             }
-        }
-    }
-
-    /** ساختمان هدف: پی، بدنه، طبقه‌ی همکف شیشه‌ای، هره و تجهیزات بام. */
-    fun building(rig: Rig, x: Float, z: Float, w: Float, h: Float, d: Float, yaw: Float, destroyed: Boolean, detail: Int) {
-        rig.place(x, 0f, z, yaw, 1f)
-        val c = if (destroyed) CHAR else 0xFFA8A492.toInt()
-        val wt = if (destroyed) burnt else wallTex
-        val rt = if (destroyed) burnt else roofTex
-        rig.box(0f, 0f, 0f, w, h * 0.99f, d, c, wt, rt)
-        // سطح ۱ فقط هره‌ی بام را اضافه می‌کند؛ جزئیات سنگین مخصوص نمای نزدیک است
-        if (detail <= 1) {
-            rig.box(0f, h * 0.99f, 0f, w * 1.03f, max(0.5f, h * 0.05f), d * 1.03f,
-                Theme.shade(c, 1.1f), concrete, rt)
-        }
-        if (detail == 0) {
-            rig.box(0f, 0f, 0f, w * 1.05f, max(0.6f, h * 0.045f), d * 1.05f,
-                Theme.shade(c, 0.82f), concrete, concrete)
-            rig.box(0f, h * 0.05f, -d * 0.5f, w * 0.42f, h * 0.14f, 0.3f, GLASS)
-            rig.box(0f, h * 0.19f, -d * 0.56f, w * 0.5f, 0.3f, d * 0.14f, Theme.shade(c, 1.15f), concrete)
-        }
-        if (detail == 0) {
-            rig.box(-w * 0.2f, h * 1.045f, d * 0.1f, w * 0.26f, max(1.4f, h * 0.09f), d * 0.26f,
-                Theme.shade(c, 0.94f), concrete, rt)
-            rig.box(w * 0.24f, h * 1.045f, -d * 0.16f, w * 0.18f, max(1.0f, h * 0.06f), d * 0.30f,
-                Theme.shade(c, 0.86f), concrete, rt)
-            rig.tube(w * 0.4f, h * 1.05f, d * 0.4f, w * 0.4f, h * 1.05f + max(3f, h * 0.16f), d * 0.4f,
-                0.16f, 4, PALE)
         }
     }
 }

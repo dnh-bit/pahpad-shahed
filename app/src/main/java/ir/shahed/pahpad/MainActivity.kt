@@ -23,8 +23,13 @@ class MainActivity : Activity() {
 
     lateinit var save: SaveManager
     lateinit var audio: GameAudio
+    companion object {
+        @Volatile private var crashHandlerInstalled = false
+    }
+
     private lateinit var root: FrameLayout
     private var current: BaseScreen? = null
+    private var transitioning = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,11 +38,15 @@ class MainActivity : Activity() {
         save = SaveManager(this)
         audio = GameAudio(this, save)
 
-        // ذخیرهٔ آخرین کرش برای نمایش در تنظیمات (هیچ ارسالی؛ فقط محلی)
-        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { t, e ->
-            save.reportCrash(t, e)
-            defaultHandler?.uncaughtException(t, e)
+        // ذخیرهٔ آخرین کرش برای نمایش در تنظیمات (فقط یک بار روی کل فرآیند تا اکتیویتی نشت نکند)
+        if (!crashHandlerInstalled) {
+            crashHandlerInstalled = true
+            val appSave = SaveManager(applicationContext)
+            val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler { t, e ->
+                appSave.reportCrash(t, e)
+                defaultHandler?.uncaughtException(t, e)
+            }
         }
 
         root = FrameLayout(this)
@@ -53,9 +62,12 @@ class MainActivity : Activity() {
 
     /** نمایش یک صفحه‌ی جدید و آزادسازی صفحه‌ی قبلی */
     fun show(screen: BaseScreen) {
+        if (isFinishing || isDestroyed) return
         // پایان ماموریت → خروج از صفحهٔ نتیجه: اینترستيشال با سقف نمایش،
         // سپس جابه‌جایی صفحه؛ در آفلاین/عدم آمادگی مستقیم جابه‌جا می‌شود.
         if (current is ResultScreen && screen !is ResultScreen) {
+            if (transitioning) return
+            transitioning = true
             AdManager.maybeShowInterstitial(this) { reallyShow(screen) }
         } else {
             reallyShow(screen)
@@ -63,6 +75,8 @@ class MainActivity : Activity() {
     }
 
     private fun reallyShow(screen: BaseScreen) {
+        transitioning = false
+        if (isFinishing || isDestroyed) return
         current?.let {
             it.stopLoop()
             it.onExit()

@@ -83,6 +83,7 @@ class GameAudio(context: Context, private val save: SaveManager) {
                 if (!enabled() || token != effectGeneration.get()) return@execute
                 val tr = buildTrack(data) ?: return@execute
                 track = tr
+                if (!enabled() || token != effectGeneration.get()) return@execute
                 tr.setVolume(volume.coerceIn(0f, 1f))
                 tr.play()
                 var remaining = data.size * 1000L / rate + 60L
@@ -182,6 +183,7 @@ class GameAudio(context: Context, private val save: SaveManager) {
                 if (!enabled() || token != engineGeneration.get()) return@execute
                 val tr = buildTrack(data) ?: return@execute
                 track = tr
+                if (!enabled() || token != engineGeneration.get()) return@execute
                 check(tr.setLoopPoints(0, data.size, -1) == AudioTrack.SUCCESS)
                 var smooth = intensity
                 var volume = 0f

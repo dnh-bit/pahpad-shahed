@@ -64,8 +64,7 @@ class Mission(
     enum class Phase { READY, FLYING, ENDED }
 
     // ------------------------------------------------------------ مشخصات پهباد
-    val model: DroneModels.Model =
-        DroneModels.byId(save.selectedDroneId) ?: DroneModels.all.first()
+    val model: DroneModels.Model = save.effectiveDrone()
 
     private val lvlRange = save.upgradeLevel(model.id, UpgradeKind.RANGE)
     private val lvlSpeed = save.upgradeLevel(model.id, UpgradeKind.SPEED)
@@ -121,6 +120,7 @@ class Mission(
      * `maxRange` نوار را تا مدّتی روی ۱۰۰٪ پین می‌کرد (باگ «کم نشدن نوار سوخت»).
      */
     private var fuelMax = 1f
+    private var droneDamage = 0
     var damage = 0
         private set
     var elapsed = 0f
@@ -197,7 +197,13 @@ class Mission(
         // (بیشینهٔ برد مدل یا ۱٫۴۵ برابر فاصلهٔ ماموریت) + ۱۵٪ ذخیره برای پیچ و مانور
         fuelLeft = Math.max(maxRange, level.distance * 1.45f) * 1.15f
         fuelMax = fuelLeft.coerceAtLeast(1f)
+        droneDamage = 0
         signalLoss = 0f
+        radarLock = false
+        ewActive = false
+        steerX = 0f
+        steerY = 0f
+        alarmTimer = 0f
         phase = Phase.READY
     }
 
@@ -216,7 +222,9 @@ class Mission(
 
     // ------------------------------------------------------------ حلقه اصلی
 
-    fun update(dt: Float) {
+    fun update(dtRaw: Float) {
+        if (!dtRaw.isFinite() || dtRaw <= 0f) return
+        val dt = dtRaw.coerceAtMost(0.1f)
         for (i in toasts.indices.reversed()) {
             toasts[i].life -= dt
             if (toasts[i].life <= 0f) toasts.removeAt(i)
@@ -232,7 +240,7 @@ class Mission(
 
         elapsed += dt
         if (level.timeLimit > 0f) {
-            timeLeft -= dt
+            timeLeft = (timeLeft - dt).coerceAtLeast(0f)
             if (timeLeft <= 0f) {
                 finish(false, "زمان ماموریت به پایان رسید")
                 return
@@ -282,11 +290,7 @@ class Mission(
         velX = moveX; velY = moveY; velZ = moveZ
 
         // ---- سوخت (فقط مسافت پیموده‌شده توسط خود پهباد؛ باد سوخت نمی‌سوزاند)
-        val used = Math.sqrt(
-            ((x - prevX - wx * dt) * (x - prevX - wx * dt) +
-             (y - prevY) * (y - prevY) +
-             (z - prevZ - wz * dt) * (z - prevZ - wz * dt)).toDouble()
-        ).toFloat() * (if (boost) 1.25f else 1f)
+        val used = speedMps * dt * (if (boost) 1.25f else 1f)
         fuelLeft -= used
         if (fuelLeft <= 0f) {
             fuelLeft = 0f
@@ -310,11 +314,10 @@ class Mission(
         // ---- برخورد با هدف
         if (checkTargetImpact(false)) return
 
-        // ---- جایزه‌های مخفی
+        // ---- جایزه‌های مخفی (بررسی روی پاره‌خط حرکت برای جلوگیری از عبور در سرعت بالا)
         for (b in world.bonuses) {
             if (b.collected) continue
-            val ddx = b.x - x; val ddy = b.y - y; val ddz = b.z - z
-            if (ddx * ddx + ddy * ddy + ddz * ddz < 22f * 22f) {
+            if (distancePointSegment(b.x, b.y, b.z, prevX, prevY, prevZ, x, y, z) < 22f) {
                 b.collected = true
                 bonusesCollected++
                 onCollect?.invoke()
@@ -380,6 +383,7 @@ class Mission(
         val sp = 235f
         world.missiles.add(
             Missile(sx, sy, sz, (tx - sx) / len * sp, (ty - sy) / len * sp, (tz - sz) / len * sp)
+                .also { it.ignoreProp = a.hostProp }
         )
     }
 
@@ -392,13 +396,13 @@ class Mission(
             m.y += m.vy * dt
             m.z += m.vz * dt
             m.life -= dt
-            if (world.projectileHitsProp(px, py, pz, m.x, m.y, m.z)) {
+            if (world.projectileHitsPropExcept(px, py, pz, m.x, m.y, m.z, m.ignoreProp)) {
                 it.remove()
                 continue
             }
             onTracer?.invoke(m.x, m.y, m.z)
             if (phase == Phase.FLYING) {
-                val d = distancePointSegment(x, y, z, px, py, pz, m.x, m.y, m.z)
+                val d = distancePointSegment(0f, 0f, 0f, px - prevX, py - prevY, pz - prevZ, m.x - x, m.y - y, m.z - z)
                 if (d < 12f) {
                     m.alive = false
                     takeDamage()
@@ -410,35 +414,70 @@ class Mission(
 
     private fun takeDamage() {
         damage++
+        droneDamage++
         shake = 1f
         onHit?.invoke()
-        if (damage >= armor) {
+        if (droneDamage >= armor) {
             explodeDrone("پهپاد توسط پدافند دشمن ساقط شد")
         } else {
-            toast("آسیب پدافندی: ${ir.shahed.pahpad.core.Fa.num(damage)} از ${ir.shahed.pahpad.core.Fa.num(armor)}",
+            toast("آسیب پدافندی: ${ir.shahed.pahpad.core.Fa.num(droneDamage)} از ${ir.shahed.pahpad.core.Fa.num(armor)}",
                 1.8f, ir.shahed.pahpad.core.Theme.RED)
         }
     }
 
     // ------------------------------------------------------------ برخورد با هدف
 
+    private fun distanceSegmentTargetBox(
+        t: Target, ax: Float, ay: Float, az: Float, bx: Float, by: Float, bz: Float
+    ): Float {
+        val s = kotlin.math.sin(t.heading)
+        val c = kotlin.math.cos(t.heading)
+        val hw = t.w * 0.5f
+        val hd = t.d * 0.5f
+        var minDist = Float.MAX_VALUE
+        for (i in 0..4) {
+            val u = i / 4f
+            val px = ax + (bx - ax) * u
+            val py = ay + (by - ay) * u
+            val pz = az + (bz - az) * u
+            val dx = px - t.x
+            val dz = pz - t.z
+            val lx = dx * c + dz * s
+            val lz = -dx * s + dz * c
+            val qx = (kotlin.math.abs(lx) - hw).coerceAtLeast(0f)
+            val qy = when {
+                py < 0f -> -py
+                py > t.h -> py - t.h
+                else -> 0f
+            }
+            val qz = (kotlin.math.abs(lz) - hd).coerceAtLeast(0f)
+            val d = kotlin.math.sqrt(qx * qx + qy * qy + qz * qz)
+            if (d < minDist) minDist = d
+        }
+        return minDist
+    }
+
     private fun checkTargetImpact(forced: Boolean): Boolean {
         var best: Target? = null
-        var bestDist = Float.MAX_VALUE
+        var bestBoxDist = Float.MAX_VALUE
+        var bestCenterDist = Float.MAX_VALUE
         for (t in world.targets) {
             if (t.destroyed) continue
-            val d = distancePointSegment(
-                t.x, t.centerY, t.z, prevX, prevY, prevZ, x, y, z
-            )
-            if (d < bestDist) {
-                bestDist = d
+            val boxD = distanceSegmentTargetBox(t, prevX, prevY, prevZ, x, y, z)
+            val centerD = distancePointSegment(t.x, t.centerY, t.z, prevX, prevY, prevZ, x, y, z)
+            if (boxD < bestBoxDist) {
+                bestBoxDist = boxD
+                bestCenterDist = centerD
                 best = t
             }
         }
         val t = best ?: return false
         val effective = t.hitRadius + blastRadius * 0.35f
-        if (bestDist <= effective || (forced && bestDist <= effective * 1.6f)) {
-            impact(t, bestDist)
+        val boxPad = blastRadius * 0.35f
+        val hitSphere = bestCenterDist <= effective || (forced && bestCenterDist <= effective * 1.6f)
+        val hitBox = bestBoxDist <= boxPad || (forced && bestBoxDist <= boxPad * 1.6f)
+        if (hitSphere || hitBox) {
+            impact(t, kotlin.math.min(bestCenterDist, bestBoxDist))
             return true
         }
         return false
@@ -497,7 +536,7 @@ class Mission(
     private fun nextWave() {
         wave++
         baseSeed = baseSeed * 31 + wave
-        val scale = 1f + wave * 0.35f
+        val scale = 1f + (wave - 1) * 0.35f
         world = World(level, baseSeed, scale)
         // بونوس‌های موج قبلی که جمع نشده‌اند با تعویض دنیا غیرقابل‌دسترس می‌شوند؛
         // فقط بونوس‌های جمع‌شده + بونوس‌های موج تازه در مخرج ستارهٔ دو می‌مانند
@@ -506,6 +545,7 @@ class Mission(
         resetDrone()
         phase = Phase.FLYING
         speedMps = minSpeedKmh / 3.6f
+        onLaunch?.invoke()
         toast("موج ${ir.shahed.pahpad.core.Fa.num(wave)} آغاز شد", 2f, ir.shahed.pahpad.core.Theme.AMBER)
     }
 
@@ -537,7 +577,10 @@ class Mission(
 
         val stars = StarRules.stars(success, bonusesCollected, totalBonuses, damage, elapsed, par)
 
-        val coinMul = if (mode == MissionMode.DAILY) 2f else 1f
+        // جایزهٔ دوبرابر چالش روزانه فقط در صورت موفقیت و یک بار در روز پرداخت می‌شود؛
+        // تلاش‌های ناموفق جایزهٔ دوبرابر را نمی‌سوزانند.
+        val dailyBonus = mode == MissionMode.DAILY && success && !save.dailyRewardClaimed
+        val coinMul = if (dailyBonus) 2f else 1f
         // لغو ماموریت هیچ پاداشی ندارد؛ شکست فقط پاداش تسلی‌بخش می‌گیرد
         val coins = when {
             aborted -> 0
@@ -576,6 +619,7 @@ class Mission(
 
         // ثبت در حافظه
         if (coins > 0) save.addCoins(coins)
+        if (dailyBonus && !aborted && coins > 0) save.claimDailyReward()
         if (xp > 0) save.addXp(xp)
         if (!aborted) {
             when (mode) {
@@ -622,10 +666,9 @@ class Mission(
     fun bearingToTarget(): Float {
         val t = world.activeTarget() ?: return 0f
         val ang = Math.atan2((t.x - x).toDouble(), (t.z - z).toDouble()).toFloat()
-        var diff = ang - yaw
-        while (diff > Math.PI) diff -= (Math.PI * 2).toFloat()
-        while (diff < -Math.PI) diff += (Math.PI * 2).toFloat()
-        return diff
+        val diff = (ang - yaw).toDouble()
+        if (!diff.isFinite()) return 0f
+        return Math.atan2(Math.sin(diff), Math.cos(diff)).toFloat()
     }
 
     val bonusInfo: String

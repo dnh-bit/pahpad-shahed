@@ -11,16 +11,25 @@ android {
     defaultConfig {
         // بیلد تست با شناسهٔ جدا نصب می‌شود تا نسخهٔ اصلی روی گوشی جای آن را نگیرد
         val moddedBuild = (project.findProperty("modded") as String?)?.toBoolean() ?: false
-        applicationId = if (moddedBuild) "ir.shahed.pahpad.mod" else "ir.shahed.pahpad"
+        // بیلد تستِ کنار نسخهٔ اصلی: فقط شناسه و اسم عوض می‌شود، قفل‌ها و
+        // پیشرفت مثل نسخهٔ واقعی می‌مانند (برخلاف modded که همه‌چیز را باز می‌کند)
+        //   -PtestBuild=true
+        val testBuild = (project.findProperty("testBuild") as String?)?.toBoolean() ?: false
+        applicationId = when {
+            moddedBuild -> "ir.shahed.pahpad.mod"
+            testBuild -> "ir.shahed.pahpad.test"
+            else -> "ir.shahed.pahpad"
+        }
+        resValue("string", "app_name", if (testBuild) "پهپاد شاهد تست" else "پهپاد شاهد")
         minSdk = 24
         targetSdk = 34
-        versionCode = 27
-        versionName = "0.2.7"
+        versionCode = 28
+        versionName = "0.2.8"
         resourceConfigurations += listOf("fa")
 
-        // حالت تست: همهٔ مراحل و پهبادها باز. فقط با
+        // حالت مود: همهٔ مراحل و پهبادها باز؛ فقط با
         //   -Pmodded=true
-        // فعال می‌شود؛ بیلد عادی هیچ تغییری نمی‌کند.
+        // فعال می‌شود. بیلد عادی (از جمله بیلد رسمی گیت‌هاب) همیشه قفل است.
         buildConfigField("boolean", "MODDED", moddedBuild.toString())
     }
     buildFeatures { buildConfig = true }
@@ -39,7 +48,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     val keystorePropsFile = rootProject.file("app/keystore.properties")
     if (keystorePropsFile.exists()) {
-        val keystoreProps = Properties().apply { load(FileInputStream(keystorePropsFile)) }
+        val keystoreProps = Properties().apply { FileInputStream(keystorePropsFile).use { load(it) } }
         signingConfigs {
             create("upload") {
                 storeFile = file(keystoreProps["storeFile"] as String)
@@ -49,6 +58,21 @@ android {
             }
         }
         buildTypes { getByName("release") { signingConfig = signingConfigs.getByName("upload") } }
+    }
+    if (!keystorePropsFile.exists()) {
+        // بیلد انتشارِ بدون امضا نباید ساکت بگذرد: APK بی‌امضا روی هیچ
+        // گوشی‌ای نصب نمی‌شود و ممکن است اشتباهی جای نسخهٔ نهایی جا بخورد.
+        // راه فرار صریح برای بیلد محلی: -PallowUnsignedRelease=true
+        gradle.taskGraph.whenReady {
+            val releaseRequested = allTasks.any {
+                it.name.contains("Release") &&
+                    (it.name.startsWith("assemble") || it.name.startsWith("bundle") || it.name.startsWith("package"))
+            }
+            val allowed = (project.findProperty("allowUnsignedRelease") as String?)?.toBoolean() == true
+            if (releaseRequested && !allowed) throw GradleException(
+                "Release build requires app/keystore.properties — or pass -PallowUnsignedRelease=true for a local unsigned build."
+            )
+        }
     }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     // تست‌های رندر باید به assets واقعی (بافت‌ها و فونت) دسترسی داشته باشند

@@ -75,6 +75,9 @@ class BriefingScreen(
         return map.bottom - t * map.height()
     }
 
+    private fun rx(meters: Float): Float = (meters / 900f) * map.width()
+    private fun ry(meters: Float): Float = (meters / (level.distance + 380f)) * map.height()
+
     override fun render(c: Canvas) {
         ui.background(c, vw, vh)
         Deco.resources(this, c)
@@ -127,28 +130,33 @@ class BriefingScreen(
         var gy = map.top
         while (gy < map.bottom) { c.drawLine(map.left, gy, map.right, gy, ui.stroke); gy += dp(24f) }
 
-        // مناطق جنگ الکترونیک
+        // مناطق جنگ الکترونیک (بیضی با مقیاس دقیق محور X و Z)
         for (e in world.ewZones) {
+            val px = mx(e.x); val py = my(e.z)
+            val radX = rx(e.radius); val radY = ry(e.radius)
             ui.fill.color = Theme.withAlpha(Theme.VIOLET, 0.14f)
             ui.fill.shader = null
-            c.drawCircle(mx(e.x), my(e.z), (e.radius / 900f) * map.width(), ui.fill)
+            c.drawOval(px - radX, py - radY, px + radX, py + radY, ui.fill)
         }
         // مناطق رادار
         for (r in world.radars) {
+            val px = mx(r.x); val py = my(r.z)
+            val radX = rx(r.radius); val radY = ry(r.radius)
             ui.stroke.color = Theme.withAlpha(Theme.BLUE, 0.5f)
             ui.stroke.strokeWidth = dp(1.2f)
-            c.drawCircle(mx(r.x), my(r.z), (r.radius / 900f) * map.width(), ui.stroke)
+            c.drawOval(px - radX, py - radY, px + radX, py + radY, ui.stroke)
         }
         // پدافند
         for (a in world.aaSites) {
             val px = mx(a.x)
             val py = my(a.z)
+            val radX = rx(a.range); val radY = ry(a.range)
             ui.fill.color = Theme.withAlpha(Theme.RED, 0.12f)
             ui.fill.shader = null
-            c.drawCircle(px, py, (a.range / 900f) * map.width(), ui.fill)
+            c.drawOval(px - radX, py - radY, px + radX, py + radY, ui.fill)
             ui.stroke.color = Theme.withAlpha(Theme.RED, 0.55f)
             ui.stroke.strokeWidth = dp(1f)
-            c.drawCircle(px, py, (a.range / 900f) * map.width(), ui.stroke)
+            c.drawOval(px - radX, py - radY, px + radX, py + radY, ui.stroke)
             ui.fill.color = Theme.RED
             c.drawCircle(px, py, dp(3.5f), ui.fill)
         }
@@ -157,10 +165,11 @@ class BriefingScreen(
             ui.iconStar(c, mx(b.x), my(b.z), dp(4.5f), Theme.withAlpha(Theme.AMBER, 0.8f))
         }
         // مسیر پیشنهادی
-        ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.55f)
-        ui.stroke.strokeWidth = dp(1.6f)
-        val t0 = world.targets.first()
-        c.drawLine(mx(0f), my(0f), mx(t0.x), my(t0.z), ui.stroke)
+        world.targets.firstOrNull()?.let { t0 ->
+            ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.55f)
+            ui.stroke.strokeWidth = dp(1.6f)
+            c.drawLine(mx(0f), my(0f), mx(t0.x), my(t0.z), ui.stroke)
+        }
 
         // اهداف
         for (t in world.targets) {
@@ -214,7 +223,7 @@ class BriefingScreen(
         }
 
         // ------------------------------------------------------ شرط ستاره‌ها
-        val model = DroneModels.byId(save.selectedDroneId) ?: DroneModels.all.first()
+        val model = save.effectiveDrone()
         val cruise = model.speedAt(save.upgradeLevel(model.id, UpgradeKind.SPEED)) * 0.8f / 3.6f
         val par = StarRules.parTime(level.distance, cruise, level.targets)
         val preview = StarRules.preview(level.targets, par, world.bonuses.size)

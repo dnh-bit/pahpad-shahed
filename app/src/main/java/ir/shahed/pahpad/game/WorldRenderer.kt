@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import ir.shahed.pahpad.core.Gfx
 import ir.shahed.pahpad.core.Theme
+import ir.shahed.pahpad.data.Env
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -164,7 +165,7 @@ class WorldRenderer(private val gfxContext: Context) {
             for (a in mission.world.aaSites) {
                 if (a.alive && a.flash > 0f) {
                     fx.spark(
-                        a.x + sin(a.barrelYaw) * 8f, a.muzzleHeight,
+                        a.x - sin(a.barrelYaw) * 8f, a.muzzleHeight,
                         a.z + cos(a.barrelYaw) * 8f, Theme.AMBER
                     )
                 }
@@ -199,6 +200,15 @@ class WorldRenderer(private val gfxContext: Context) {
 
     fun draw(c: Canvas, mission: Mission, w: Float, h: Float) {
         val world = mission.world
+        // مراحل دریایی: جزئیات کشتی‌ها، هدف، پدافند و رادار ثابت است و با
+        // فاصله عوض نمی‌شود (بچ ۹). سازنده‌ها تکه‌هایی از هندسه را پشت
+        // سطح جزئیات قایم می‌کنند (توپ نقطه‌زن/قایق فقط در ۰، دیسک رادار
+        // و آرایه در <=۱، گام بدنه در ۲) و تعویض سطح در مرزهای ۲۵۰/۸۲۰
+        // متر یعنی «ظاهر شدن» ناگهانی قطعه و عوض شدن فرم بدنه در میانه‌ی
+        // پرواز — اندازه‌گیری مستقیم: ناوچه‌ی اسکورت ۱۸۲ وجه در ۱۵۰ متر
+        // در برابر ۸۳ وجه در ۴۵۰ متر. کشتی‌ها کم‌اند و جزئیات کاملشان
+        // ارزان است؛ سطوح دیگر (ساختمان‌ها و…) LOD عادی خودشان را دارند.
+        val naval = world.level.env == Env.NAVAL
         if (lodWorld !== world) {
             lodStates.clear()
             lodWorld = world
@@ -206,6 +216,7 @@ class WorldRenderer(private val gfxContext: Context) {
         look = EnvLook.of(world.level.env)
         scene.configure(look)
         scene.begin()
+        shipDiagFrame.clear()
         art.draw(c, scene, world, w, h)
         // Ground layer first: roads are flushed on their own so that every ground
         // decal drawn afterwards (shadows, threat rings, blast rings) sits ON the
@@ -233,9 +244,14 @@ class WorldRenderer(private val gfxContext: Context) {
             when (p.kind) {
                 PropKind.TREE, PropKind.PALM, PropKind.BUSH, PropKind.ROCK -> billboard(p)
                 // ناوهای پس‌زمینه یک پله ساده‌تر از هدف اصلی رندر می‌شوند
-                PropKind.SHIP -> hardware.warship(rig, p.x, p.z, p.rot, p.w, p.h, p.d, false,
-                    (detail + 1).coerceAtMost(2))
-                PropKind.FREIGHTER -> hardware.freighter(rig, p.x, p.z, p.rot, p.w, p.h, p.d)
+                PropKind.SHIP -> shipMark(p.x, p.z, p.rot, p.w, p.h, p.d) {
+                    hardware.warship(rig, p.x, p.z, p.rot, p.w, p.h, p.d, false,
+                        if (naval) 1 else (detail + 1).coerceAtMost(2))
+                }
+                PropKind.FREIGHTER -> shipMark(p.x, p.z, p.rot, p.w, p.h, p.d) {
+                    hardware.freighter(rig, p.x, p.z, p.rot, p.w, p.h, p.d)
+                }
+                PropKind.ISLAND -> hardware.island(rig, p.x, p.z, p.rot, p.w, p.h, p.d)
                 PropKind.TOWER_MAST -> {
                     plain()
                     scene.box(p.x, 0f, p.z, p.w * .28f, p.h, p.d * .28f, p.color, p.rot)
@@ -253,12 +269,13 @@ class WorldRenderer(private val gfxContext: Context) {
             zone(c, r.x, r.z, r.radius, Theme.BLUE)
             val rd2 = (r.x - camX) * (r.x - camX) + (r.z - camZ) * (r.z - camZ)
             val rFade = fadeByDistance(rd2, 500f)
-            if (rFade > 0f) art.castShadow(c, scene, r.x, r.z, 9f, 9f, 6f, 0f, .42f, rFade)
+            // رادارِ روی جزیره/عرشه سایه‌ی زمینی ندارد (سکویش زیر آن است)
+            if (r.y <= 0f && rFade > 0f) art.castShadow(c, scene, r.x, r.z, 9f, 9f, 6f, 0f, .42f, rFade)
             val dx = r.x - camX
             val dz = r.z - camZ
             val d2 = dx * dx + dz * dz
             // ایستگاه رادار بزرگ‌تر از مقیاس واقعی است تا از ارتفاع پرواز خوانا بماند
-            if (d2 <= maxD2) hardware.radarStation(rig, r.x, r.z, r.spin, 2.2f, lod(r, d2))
+            if (d2 <= maxD2) hardware.radarStation(rig, r.x, r.z, r.spin, 2.2f, if (naval) 0 else lod(r, d2), r.y)
         }
         for (e in world.ewZones) zone(c, e.x, e.z, e.radius, Theme.VIOLET)
 
@@ -270,7 +287,7 @@ class WorldRenderer(private val gfxContext: Context) {
             val d2 = dx * dx + dz * dz
             if (d2 > maxD2) continue
             zone(c, a.x, a.z, a.range, Theme.RED)
-            val detail = lod(a, d2)
+            val detail = if (naval) 0 else lod(a, d2)
             val aFade = fadeByDistance(d2, 550f)
             if (a.y <= 0f && aFade > 0f) art.castShadow(c, scene, a.x, a.z, 6f, 8f, 3.2f, a.bodyYaw, .5f, aFade)
             if (a.kind == AASite.KIND_GUN) {
@@ -289,7 +306,7 @@ class WorldRenderer(private val gfxContext: Context) {
             val tFade = fadeByDistance(d2, 700f)
             if (!t.destroyed && tFade > 0f && t.shape != TargetShape.SHIP && t.shape != TargetShape.CARRIER)
                 art.castShadow(c, scene, t.x, t.z, t.w, t.d, t.h * .8f, t.heading, .5f, tFade)
-            target(t, lod(t, d2))
+            target(t, if (naval) 0 else lod(t, d2))
         }
         // Pulsing ground ring on the active target: readable from any distance.
         world.activeTarget()?.let { t ->
@@ -309,7 +326,7 @@ class WorldRenderer(private val gfxContext: Context) {
         for (m in world.missiles) missile(m)
         for (a in world.aaSites) {
             if (!a.alive || a.flash <= 0f) continue
-            fx.light(scene, a.x + sin(a.barrelYaw) * 3f, a.muzzleHeight + 1f, a.z + cos(a.barrelYaw) * 3f,
+            fx.light(scene, a.x - sin(a.barrelYaw) * 3f, a.muzzleHeight + 1f, a.z + cos(a.barrelYaw) * 3f,
                 6f * (a.flash / .12f).coerceIn(0f, 1f) + 2f, fx.glowAmber, .9f)
         }
 
@@ -319,7 +336,7 @@ class WorldRenderer(private val gfxContext: Context) {
                 // سایهٔ پهباد با ارتفاع نرم محو می‌شود، نه با آستانهٔ ۲۲۰ متر.
                 val altFade = 1f - ((alt - 160f) / 60f).coerceIn(0f, 1f)
                 art.shadow(
-                    c, scene, mission.x - alt * scene.sunX / scene.sunY, mission.z - alt * scene.sunZ / scene.sunY,
+                    c, scene, mission.x - alt * scene.shadowX, mission.z - alt * scene.shadowZ,
                     7f + alt * .035f, 7f + alt * .035f, (.40f - alt * .0015f).coerceAtLeast(.06f), altFade
                 )
             }
@@ -333,6 +350,41 @@ class WorldRenderer(private val gfxContext: Context) {
     private var look: EnvLook = EnvLook.DESERT
     /** شمارندهٔ شناسهٔ گروه تشخیصی (فقط برای تست). */
     private var diagGroupSeq = 0
+
+    /** تشخیصی: مشخصات هر کشتی رندرشدهٔ فریم جاری + شناسهٔ گروهش (فقط برای تست). */
+    class ShipDiag(
+        val group: Int,
+        val x: Float, val z: Float, val rot: Float,
+        val w: Float, val h: Float, val d: Float
+    )
+    private val shipDiagFrame = ArrayList<ShipDiag>()
+    fun diagShips(): List<ShipDiag> = shipDiagFrame
+
+    /**
+     * برچسب تشخیصی دور ساخت یک کشتی — **هرگز** در رندر اثر ندارد.
+     *
+     * چرا: تست‌های پایداری ناو باید بتوانند وجه‌های هر کشتی را از هم جدا
+     * کنند تا بتوانند ترتیب واقعی دو کشتی را با هم بسنجند. همهٔ وجه‌های
+     * عادیِ این کشتی `tag=شناسه` می‌گیرند و حجم‌های نشستهٔ داخلش
+     * (درپوش VLS، خط فرود، پد) `tag=TAG_SEAT` با `group=شناسه`.
+     */
+    private inline fun shipMark(
+        x: Float, z: Float, rot: Float, w: Float, h: Float, d: Float,
+        body: () -> Unit
+    ) {
+        val g = ++diagGroupSeq
+        rig.beginGroup(g)
+        scene.debugTag = g
+        scene.debugGroup = g
+        shipDiagFrame.add(ShipDiag(g, x, z, rot, w, h, d))
+        try {
+            body()
+        } finally {
+            scene.debugTag = 0
+            scene.debugGroup = 0
+            rig.endGroup()
+        }
+    }
 
 
     /**
@@ -361,6 +413,8 @@ class WorldRenderer(private val gfxContext: Context) {
                 art.castShadow(c, scene, p.x, p.z, p.w, p.d, p.h, p.rot, .50f, fade)
             }
             PropKind.ROCK -> art.castShadow(c, scene, p.x, p.z, p.w * .8f, p.d * .7f, p.h * .6f, p.rot, .45f, fade)
+            // جزیره در آب نشسته: فقط تیرگیِ تماس در خط آب، نه سایه‌ی کشیده روی دریا
+            PropKind.ISLAND -> art.castShadow(c, scene, p.x, p.z, p.w * 1.04f, p.d * 1.04f, 0f, p.rot, .30f, fade)
             PropKind.TOWER_MAST -> art.castShadow(c, scene, p.x, p.z, p.w * .28f, p.d * .28f, p.h, p.rot, .45f, fade)
             else -> art.castShadow(c, scene, p.x, p.z, p.w * .55f, p.w * .55f, p.h * .75f, 0f, .40f, fade)
         }
@@ -573,7 +627,7 @@ class WorldRenderer(private val gfxContext: Context) {
                 val frameBase = Theme.shade(color, 1.9f)
                 val frameCol = frameBase
                 // فقط حدود ۱ از ۵ پنجره روشن — بیشتر از این، شبکه شطرنجی به‌نظر می‌رسد
-                fun litWindow(b: Int, f: Int): Boolean = ((b * 7 + f * 11 + phase) % (look.litChance * 2)) == 0
+                fun litWindow(b: Int, f: Int): Boolean = look.litChance > 0 && ((b * 7 + f * 11 + phase) % (look.litChance * 2)) == 0
                 // تعداد پنجره از عرض واقعی دیوار حساب می‌شود (نه سقف ثابت ۴).
                 // با سقف ۴، ساختمان ۵۱ متری فقط ۴ پنجره می‌گرفت و دیوار خالی می‌ماند.
                 // سقف بالا فقط برای جلوگیری از انفجار تعداد وجه در ساختمان‌های غول‌پیکر است.
@@ -614,8 +668,8 @@ class WorldRenderer(private val gfxContext: Context) {
                                     val fz = zz + side.toFloat() * 0.004f
                                     val frame = frameCol
                                     val fh = 0.09f
-                                    rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefZ)
-                                    rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefZ)
+                                    rig.face(x0, y1 - fh, fz, x1, y1 - fh, fz, x1, y1, fz, x0, y1, fz, frame, cullBack = true, surfaceBias = winBias + 0.05f, biasRefLocal = wallRefZ)
+                                    rig.face(x0, y0, fz, x1, y0, fz, x1, y0 + fh * 1.6f, fz, x0, y0 + fh * 1.6f, fz, frame, cullBack = true, surfaceBias = winBias + 0.05f, biasRefLocal = wallRefZ)
                                 }
                             }
                         }
@@ -647,8 +701,8 @@ class WorldRenderer(private val gfxContext: Context) {
                                 }
                                 if (drawFrames) {
                                     val fh = 0.09f
-                                    rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frameCol, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefX)
-                                    rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frameCol, cullBack = true, surfaceBias = winBias, biasRefLocal = wallRefX)
+                                    rig.face(fx0, y1 - fh, z0, fx0, y1 - fh, z1, fx0, y1, z1, fx0, y1, z0, frameCol, cullBack = true, surfaceBias = winBias + 0.05f, biasRefLocal = wallRefX)
+                                    rig.face(fx0, y0, z0, fx0, y0, z1, fx0, y0 + fh * 1.6f, z1, fx0, y0 + fh * 1.6f, z0, frameCol, cullBack = true, surfaceBias = winBias + 0.05f, biasRefLocal = wallRefX)
                                 }
                             }
                         }
@@ -708,10 +762,17 @@ class WorldRenderer(private val gfxContext: Context) {
     private fun target(t: Target, detail: Int) {
         when (t.shape) {
             TargetShape.BUNKER -> hardware.bunker(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
-            TargetShape.BUILDING -> building(t.x, t.z, t.w, t.h, t.d, t.heading, 0xFFA8A492.toInt(), t.destroyed, detail)
+            TargetShape.BUILDING -> building(t.x, t.z, t.w, t.h, t.d, t.heading, 0xFFA8A492.toInt(), t.destroyed, detail, t,
+                // مثل ساختمان‌های شهر: کلید پایدار + فاصله از مرکز صحنه تا
+                // پنجره‌های هدف هم رسم شوند و الگویشان با حرکت دوربین نجوشد.
+                Math.sqrt((t.x * t.x + t.z * t.z).toDouble()).toFloat())
             TargetShape.TOWER -> hardware.gantry(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
-            TargetShape.SHIP -> hardware.warship(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)
-            TargetShape.CARRIER -> hardware.carrier(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)
+            TargetShape.SHIP -> shipMark(t.x, t.z, t.heading, t.w, t.h, t.d) {
+                hardware.warship(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)
+            }
+            TargetShape.CARRIER -> shipMark(t.x, t.z, t.heading, t.w, t.h, t.d) {
+                hardware.carrier(rig, t.x, t.z, t.heading, t.w, t.h, t.d, t.destroyed, detail)
+            }
             TargetShape.VEHICLE -> convoy(t, detail)
             TargetShape.BRIDGE -> hardware.bridgeSpan(rig, t.x, t.z, t.w, t.h, t.d, t.heading, t.destroyed, detail)
             TargetShape.ANTENNA -> hardware.latticeMast(rig, t.x, t.z, t.h, t.destroyed, detail)
@@ -727,8 +788,8 @@ class WorldRenderer(private val gfxContext: Context) {
         // تانک روی مرکز هدف قرار می‌گیرد تا نقطه‌ی برخورد با تصویر بخواند
         hardware.tank(rig, t.x, t.z, t.heading, 1.15f, t.heading - 0.35f, t.destroyed, detail)
         if (detail <= 1) {
-            hardware.apc(rig, t.x + s * 14f, t.z + c * 14f, t.heading, 1.1f, t.destroyed, detail)
-            hardware.truck(rig, t.x - s * 15f, t.z - c * 15f, t.heading, 1.1f, t.destroyed, detail)
+            hardware.apc(rig, t.x - s * 14f, t.z + c * 14f, t.heading, 1.1f, t.destroyed, detail)
+            hardware.truck(rig, t.x + s * 15f, t.z - c * 15f, t.heading, 1.1f, t.destroyed, detail)
         }
     }
 
@@ -736,11 +797,11 @@ class WorldRenderer(private val gfxContext: Context) {
     private fun train(t: Target, detail: Int) {
         val s = sin(t.heading)
         val c = cos(t.heading)
-        hardware.locomotive(rig, t.x + s * 56f, t.z + c * 56f, t.heading, t.destroyed, detail)
+        hardware.locomotive(rig, t.x - s * 56f, t.z + c * 56f, t.heading, t.destroyed, detail)
         for (i in -2..1) {
             val off = i * 24f
             hardware.wagon(
-                rig, t.x + s * off, t.z + c * off, t.heading,
+                rig, t.x - s * off, t.z + c * off, t.heading,
                 if (i == 0) 0 else (i + 3) % 3, t.destroyed, detail
             )
         }

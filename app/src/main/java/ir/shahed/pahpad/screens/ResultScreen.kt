@@ -47,15 +47,23 @@ class ResultScreen(
     /** پاداش ویدیویی فقط برای ماموریت ناموفق — بونوس سکه برای تمدید مهمات/سوخت */
     private val bonus = UiButton("تماشای ویدیو ← ۱۰ سکه", Theme.VIOLET) { claimBonus() }
     private var bonusClaimed = false
+    private var adInFlight = false
 
     private fun claimBonus() {
-        if (bonusClaimed) return
+        if (bonusClaimed || adInFlight) return
+        adInFlight = true
         AdManager.showRewarded(game) {
-            bonusClaimed = true
-            bonus.visible = false
-            save.addCoins(10)
-            audio.beep(880f, 140, 0.45f)
-            Toast.makeText(game, "۱۰ سکه هدیه اضافه شد ✦", Toast.LENGTH_SHORT).show()
+            post {
+                adInFlight = false
+                bonusClaimed = true
+                bonus.visible = false
+                save.addCoins(10)
+                audio.beep(880f, 140, 0.45f)
+                if (game.currentScreen() === this) {
+                    if (vw > 0f && vh > 0f) layoutUi(vw, vh)
+                    Toast.makeText(game, "۱۰ سکه هدیه اضافه شد ✦", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -76,6 +84,7 @@ class ResultScreen(
         buttons.addAll(listOf(next, again, menu, bonus))
         next.visible = res.success && nextLevel != null
         if (!next.visible) next.enabled = false
+        bonus.visible = !bonusClaimed && !res.success && AdManager.isRewardedAdReady()
     }
 
     override fun onBack(): Boolean {
@@ -99,7 +108,11 @@ class ResultScreen(
 
     override fun update(dt: Float) {
         // دکمهٔ پاداش فقط دو شرط: ماموریت ناموفق + ویدیویی باکش
-        bonus.visible = !bonusClaimed && !res.success && AdManager.isRewardedAdReady()
+        val wantBonus = !bonusClaimed && !res.success && AdManager.isRewardedAdReady()
+        if (bonus.visible != wantBonus) {
+            bonus.visible = wantBonus
+            if (vw > 0f && vh > 0f) layoutUi(vw, vh)
+        }
         revealTimer += dt
         if (revealTimer > 0.22f && revealed < steps) {
             revealed++
@@ -190,23 +203,26 @@ class ResultScreen(
     private fun drawScoreRows(c: Canvas) {
         val rw = vw * 0.44f
         val rx = vw - rw - dp(16f)
-        var y = dp(88f)
+        var y = dp(84f)
+        val footerLimit = vh - dp(64f) - dp(34f)
+        val rowStep = ((footerLimit - y) / rows.size.coerceAtLeast(1)).coerceIn(dp(28f), dp(40f))
+        val rowH = (rowStep - dp(4f)).coerceAtLeast(dp(24f))
         ui.text(c, "جزئیات امتیاز", rx + rw - dp(6f), y - dp(14f), dp(12.5f), Theme.TEXT, bold = true,
             align = Paint.Align.RIGHT)
         for ((i, row) in rows.withIndex()) {
             val shown = i + rules.size < revealed
-            ui.panel(c, rx, y, rw, dp(36f), Theme.withAlpha(Theme.PANEL, if (shown) 1f else 0.4f),
+            ui.panel(c, rx, y, rw, rowH, Theme.withAlpha(Theme.PANEL, if (shown) 1f else 0.4f),
                 Theme.LINE, dp(10f))
-            ui.text(c, row.first, rx + rw - dp(14f), y + dp(18f), dp(12f),
+            ui.text(c, row.first, rx + rw - dp(14f), y + rowH * 0.46f, dp(11.5f),
                 if (shown) Theme.TEXT else Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
             val value = if (shown) Fa.num(row.second) + " / " + Fa.num(row.third) else "—"
-            ui.text(c, value, rx + dp(14f), y + dp(18f), dp(12f),
+            ui.text(c, value, rx + dp(14f), y + rowH * 0.46f, dp(11.5f),
                 if (shown && row.second > 0) Theme.AMBER else Theme.TEXT_FAINT, align = Paint.Align.LEFT)
             if (shown) {
-                ui.bar(c, rx + dp(86f), y + dp(28f), (rw - dp(190f)).coerceAtLeast(dp(20f)), dp(3.5f),
+                ui.bar(c, rx + dp(86f), y + rowH - dp(6f), (rw - dp(190f)).coerceAtLeast(dp(20f)), dp(3.5f),
                     row.second.toFloat() / row.third.toFloat(), Theme.MINT)
             }
-            y += dp(40f)
+            y += rowStep
         }
         y += dp(4f)
         ui.text(c, "امتیاز پاداش‌ها جداگانه است؛ جمع همهٔ آن‌ها ستارهٔ دوم را می‌دهد.",

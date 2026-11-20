@@ -57,7 +57,7 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
     private val items = audioItems + gfxItems + listOf(reset)
 
     init {
-        buttons.addAll(items)
+        // دکمه‌های اسکرول‌شونده فقط از طریق viewport هندل می‌شوند
         buttons.add(back)
         refresh()
     }
@@ -162,9 +162,12 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
     /** لمس داخل ویوپورت باید اسکرول کند، نه اینکه به دکمه برسد */
     override fun claimsTouch(x: Float, y: Float): Boolean = viewport.contains(x, y)
 
+    private var downY = 0f
+
     override fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean {
-        if (viewport.contains(x, y)) {
+        if (dragPointer == -1 && viewport.contains(x, y)) {
             dragPointer = pointerId
+            downY = y
             lastY = y
             moved = false
         }
@@ -175,18 +178,25 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
         if (pointerId != dragPointer) return
         val dy = y - lastY
         lastY = y
-        if (abs(dy) >= 0.5f) {
+        if (!moved && maxScroll > 0f && abs(y - downY) >= dp(8f)) {
             moved = true
+        }
+        if (moved && maxScroll > 0f) {
             scrollY = (scrollY - dy).coerceIn(0f, maxScroll)
             layoutUi(vw, vh)
         }
     }
 
     override fun onTouchUp(x: Float, y: Float, pointerId: Int) {
-        if (pointerId == dragPointer && !moved) {
+        if (pointerId != dragPointer) return
+        if (!moved && viewport.contains(x, y)) {
             // ضربهٔ کوتاه = کلیک روی دکمه‌ای که زیر انگشت است
             for (b in items.reversed()) {
                 if (b.visible && b.enabled && b.rect.contains(x, y)) {
+                    if (b !== reset && confirmReset) {
+                        confirmReset = false
+                        refresh()
+                    }
                     audio.click()
                     b.onClick()
                     break

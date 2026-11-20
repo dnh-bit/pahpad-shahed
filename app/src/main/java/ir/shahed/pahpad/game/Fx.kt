@@ -45,47 +45,58 @@ class Fx(capacity: Int = 900) {
     private var nextParticle=0
     private var tracerToggle=false
 
-    // ------------------------------------------------------------ sprites
-    private fun puff(rgb:Int,seed:Long,density:Float):Bitmap {
-        val n=64;val bmp=Bitmap.createBitmap(n,n,Bitmap.Config.ARGB_8888)
-        val c=Canvas(bmp);val p=Paint(Paint.ANTI_ALIAS_FLAG);val r=Random(seed)
-        val base=rgb and 0xFFFFFF
-        for(k in 0 until 6) {
-            val cx=n/2f+(r.nextFloat()-.5f)*n*.28f;val cy=n/2f+(r.nextFloat()-.5f)*n*.28f
-            val rad=n*(.20f+r.nextFloat()*.16f)
-            val lift=if(cy<n/2f)1.10f else .86f // lit tops, shaded bellies
-            val col=Theme.shade(0xFF000000.toInt() or base,lift) and 0xFFFFFF
-            p.shader=RadialGradient(cx,cy,rad,intArrayOf((((density*150).toInt()) shl 24) or col,(((density*60).toInt()) shl 24) or col,col),
-                floatArrayOf(0f,.55f,1f),Shader.TileMode.CLAMP)
-            c.drawCircle(cx,cy,rad,p)
+    // ------------------------------------------------------------ sprites (مشترک و کش‌شده بین ماموریت‌ها)
+    companion object {
+        private val RING_COS = FloatArray(41) { i -> cos(i * 2f * PI.toFloat() / 40f) }
+        private val RING_SIN = FloatArray(41) { i -> sin(i * 2f * PI.toFloat() / 40f) }
+
+        private fun puff(rgb:Int,seed:Long,density:Float):Bitmap {
+            val n=64;val bmp=Bitmap.createBitmap(n,n,Bitmap.Config.ARGB_8888)
+            val c=Canvas(bmp);val p=Paint(Paint.ANTI_ALIAS_FLAG);val r=Random(seed)
+            val base=rgb and 0xFFFFFF
+            for(k in 0 until 6) {
+                val cx=n/2f+(r.nextFloat()-.5f)*n*.28f;val cy=n/2f+(r.nextFloat()-.5f)*n*.28f
+                val rad=n*(.20f+r.nextFloat()*.16f)
+                val lift=if(cy<n/2f)1.10f else .86f // lit tops, shaded bellies
+                val col=Theme.shade(0xFF000000.toInt() or base,lift) and 0xFFFFFF
+                p.shader=RadialGradient(cx,cy,rad,intArrayOf((((density*150).toInt()) shl 24) or col,(((density*60).toInt()) shl 24) or col,col),
+                    floatArrayOf(0f,.55f,1f),Shader.TileMode.CLAMP)
+                c.drawCircle(cx,cy,rad,p)
+            }
+            p.shader=RadialGradient(n/2f,n/2f,n/2f,intArrayOf((((density*120).toInt()) shl 24) or base,(((density*40).toInt()) shl 24) or base,base),
+                floatArrayOf(0f,.6f,1f),Shader.TileMode.CLAMP)
+            c.drawCircle(n/2f,n/2f,n/2f,p)
+            return bmp
         }
-        p.shader=RadialGradient(n/2f,n/2f,n/2f,intArrayOf((((density*120).toInt()) shl 24) or base,(((density*40).toInt()) shl 24) or base,base),
-            floatArrayOf(0f,.6f,1f),Shader.TileMode.CLAMP)
-        c.drawCircle(n/2f,n/2f,n/2f,p)
-        return bmp
+        private fun glow(core:Int,rim:Int):Bitmap {
+            val n=64;val bmp=Bitmap.createBitmap(n,n,Bitmap.Config.ARGB_8888)
+            val p=Paint(Paint.ANTI_ALIAS_FLAG)
+            p.shader=RadialGradient(n/2f,n/2f,n/2f,
+                intArrayOf(core,Theme.withAlpha(rim,.75f),Theme.withAlpha(rim,.22f),Theme.withAlpha(rim,0f)),
+                floatArrayOf(0f,.18f,.5f,1f),Shader.TileMode.CLAMP)
+            Canvas(bmp).drawCircle(n/2f,n/2f,n/2f,p)
+            return bmp
+        }
+        private val sharedSmokeSprites by lazy { arrayOf(puff(0x2B2826,11L,1f),puff(0x55514D,12L,.95f),puff(0x8A8680,13L,.85f)) }
+        private val sharedVaporSprite by lazy { puff(0xD5DADF.toInt(),14L,.7f) }
+        private val sharedFireSprites by lazy { arrayOf(glow(0xFFFFFBEA.toInt(),0xFFFFD27A.toInt()),glow(0xFFFFE7A8.toInt(),0xFFFF9A2E.toInt()),glow(0xFFFFB25A.toInt(),0xFFE0461A.toInt())) }
+        private val sharedGlowRed by lazy { glow(0xFFFFE0E0.toInt(),0xFFFF2A2A.toInt()) }
+        private val sharedGlowGreen by lazy { glow(0xFFE6FFE9.toInt(),0xFF2BFF6A.toInt()) }
+        private val sharedGlowWhite by lazy { glow(0xFFFFFFFF.toInt(),0xFFBFD8FF.toInt()) }
     }
-    private fun glow(core:Int,rim:Int):Bitmap {
-        val n=64;val bmp=Bitmap.createBitmap(n,n,Bitmap.Config.ARGB_8888)
-        val p=Paint(Paint.ANTI_ALIAS_FLAG)
-        p.shader=RadialGradient(n/2f,n/2f,n/2f,
-            intArrayOf(core,Theme.withAlpha(rim,.75f),Theme.withAlpha(rim,.22f),Theme.withAlpha(rim,0f)),
-            floatArrayOf(0f,.18f,.5f,1f),Shader.TileMode.CLAMP)
-        Canvas(bmp).drawCircle(n/2f,n/2f,n/2f,p)
-        return bmp
-    }
-    private val smokeSprites=arrayOf(puff(0x2B2826,11L,1f),puff(0x55514D,12L,.95f),puff(0x8A8680,13L,.85f))
-    private val vaporSprite=puff(0xD5DADF.toInt(),14L,.7f)
-    private val fireSprites=arrayOf(glow(0xFFFFFBEA.toInt(),0xFFFFD27A.toInt()),glow(0xFFFFE7A8.toInt(),0xFFFF9A2E.toInt()),glow(0xFFFFB25A.toInt(),0xFFE0461A.toInt()))
-    val glowRed=glow(0xFFFFE0E0.toInt(),0xFFFF2A2A.toInt())
-    val glowGreen=glow(0xFFE6FFE9.toInt(),0xFF2BFF6A.toInt())
-    val glowWhite=glow(0xFFFFFFFF.toInt(),0xFFBFD8FF.toInt())
-    val glowAmber=fireSprites[1]
+    private val smokeSprites get() = sharedSmokeSprites
+    private val vaporSprite get() = sharedVaporSprite
+    private val fireSprites get() = sharedFireSprites
+    val glowRed: Bitmap get() = sharedGlowRed
+    val glowGreen: Bitmap get() = sharedGlowGreen
+    val glowWhite: Bitmap get() = sharedGlowWhite
+    val glowAmber: Bitmap get() = sharedFireSprites[1]
 
     private fun spawn():Particle? {
         repeat(pool.size) {
             val p=pool[nextParticle]
             nextParticle=(nextParticle+1)%pool.size
-            if(!p.alive) { p.engineSmoke=false; p.style=SOLID; p.alpha=1f; p.shade=0; return p }
+            if(!p.alive) { p.engineSmoke=false; p.style=SOLID; p.alpha=1f; p.shade=0; p.color=0xFFFFFFFF.toInt(); return p }
         }
         return null
     }
@@ -197,15 +208,19 @@ class Fx(capacity: Int = 900) {
         p.vx=rnd.nextFloat()*10f-5f;p.vy=rnd.nextFloat()*8f;p.vz=rnd.nextFloat()*10f-5f
         p.maxLife=.4f;p.life=p.maxLife;p.size=.7f;p.growth=.5f;p.gravity=-8f;p.drag=.95f;p.color=color;p.alpha=1f
     }
-    fun update(dt:Float) {
+    fun update(dtRaw:Float) {
+        if(!dtRaw.isFinite()||dtRaw<=0f)return
+        val dt=dtRaw.coerceAtMost(0.1f)
         for(b in blasts)if(b.age<1f)b.age+=dt
         for(p in pool) {
             if(!p.alive)continue
             p.life-=dt
             if(p.life<=0f){p.alive=false;continue}
             p.vy+=p.gravity*dt
-            val drag=p.drag.toDouble().pow((dt*60f).toDouble()).toFloat()
-            p.vx*=drag;p.vy*=drag;p.vz*=drag
+            if(p.drag<0.9999f) {
+                val drag=p.drag.toDouble().pow((dt*60f).toDouble()).toFloat()
+                p.vx*=drag;p.vy*=drag;p.vz*=drag
+            }
             p.x+=p.vx*dt;p.y+=p.vy*dt;p.z+=p.vz*dt;p.size+=p.growth*dt
             if(p.y<0f){p.y=0f;p.vy=-p.vy*.3f}
         }
@@ -224,8 +239,7 @@ class Fx(capacity: Int = 900) {
     private fun ring(c:Canvas,scene:Scene3D,x:Float,z:Float,radius:Float,color:Int,width:Float) {
         var px=x+radius;var pz=z
         for(i in 1..40) {
-            val a=i*2f*PI.toFloat()/40
-            val nx=x+cos(a)*radius;val nz=z+sin(a)*radius
+            val nx=x+RING_COS[i]*radius;val nz=z+RING_SIN[i]*radius
             scene.line(px,.18f,pz,nx,.18f,nz,c,color,width)
             px=nx;pz=nz
         }
@@ -258,15 +272,15 @@ class Fx(capacity: Int = 900) {
                     val s=if(t>.66f)0 else if(t>.33f)1 else 2
                     scene.particle(proj[0],proj[1],proj[2],r,Theme.withAlpha(0xFFFFFFFF.toInt(),p.alpha*min(1f,t*1.6f)),fireSprites[s],true)
                 }
-                else -> scene.particle(proj[0],proj[1],proj[2],max(r,1.4f),Theme.withAlpha(0xFFFFFFFF.toInt(),t),fireSprites[0],true)
+                else -> scene.particle(proj[0],proj[1],proj[2],max(r,1.4f),Theme.withAlpha(p.color,p.alpha*t),fireSprites[0],true)
             }
         }
         for(b in blasts) {
             if(b.age>=.18f||!cam.project(b.x,b.y,b.z,proj))continue
             val k=1f-b.age/.18f
             val radius=cam.scaleAt(proj[2],(14f+b.age*160f)*sqrt(b.power)).coerceAtMost(cam.height*.45f)
-            scene.particle(proj[0],proj[1],proj[2]-1f,radius*2.2f,Theme.withAlpha(0xFFFFFFFF.toInt(),k*.55f),fireSprites[1],true)
-            scene.particle(proj[0],proj[1],proj[2]-1.1f,radius,Theme.withAlpha(0xFFFFFFFF.toInt(),k),fireSprites[0],true)
+            scene.particle(proj[0],proj[1],(proj[2]-1f).coerceAtLeast(0.05f),radius*2.2f,Theme.withAlpha(0xFFFFFFFF.toInt(),k*.55f),fireSprites[1],true)
+            scene.particle(proj[0],proj[1],(proj[2]-1.1f).coerceAtLeast(0.04f),radius,Theme.withAlpha(0xFFFFFFFF.toInt(),k),fireSprites[0],true)
         }
     }
 }

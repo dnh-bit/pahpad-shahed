@@ -49,8 +49,8 @@ class ChapterSelectScreen(game: MainActivity) : BaseScreen(game) {
         val gap = dp(12f)
         val n = cards.size
         val cw = (w - margin * 2f - gap * (n - 1)) / n
-        val chH = h * 0.52f
-        val top = h * 0.24f
+        val top = dp(78f)
+        val chH = (h - top - dp(66f)).coerceAtLeast(dp(186f))
         for ((i, b) in cards.withIndex()) {
             b.set(margin + i * (cw + gap), top, cw, chH)
         }
@@ -81,30 +81,38 @@ class ChapterSelectScreen(game: MainActivity) : BaseScreen(game) {
                 "DESERT" -> "env_desert"; "URBAN" -> "env_urban"
                 "NAVAL" -> "env_naval"; else -> "env_special"
             }
-            ui.image(ui.context, c, envName, r.left + dp(10f), r.top + dp(16f),
-                r.width() - dp(20f), dp(88f), radius = dp(10f))
+            val bannerH = (r.height() * 0.30f).coerceIn(dp(44f), dp(84f))
+            ui.image(ui.context, c, envName, r.left + dp(10f), r.top + dp(14f),
+                r.width() - dp(20f), bannerH, radius = dp(10f))
             // چیپ شماره فصل
             val chipW = dp(54f)
-            val chipTop = r.top + dp(16f) + dp(88f) + dp(10f)
+            val chipTop = r.top + dp(14f) + bannerH + dp(6f)
             ui.fill.color = Theme.withAlpha(b.accent, 0.16f)
-            c.drawRoundRect(cx - chipW/2, chipTop, cx + chipW/2, chipTop + dp(18f), dp(8f), dp(8f), ui.fill)
-            ui.text(c, "فصل " + Fa.num(ch.number), cx, chipTop + dp(9f), dp(11f), b.accent, bold = true)
-            ui.text(c, ch.title, cx, r.top + dp(150f), dp(13.5f), if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
-            for ((i, line) in ui.wrap(ch.subtitle, dp(11f), r.width() - dp(24f)).withIndex()) {
-                ui.text(c, line, cx, r.top + dp(168f) + i * dp(13f), dp(11f), Theme.TEXT_DIM)
+            c.drawRoundRect(cx - chipW/2, chipTop, cx + chipW/2, chipTop + dp(17f), dp(8f), dp(8f), ui.fill)
+            ui.text(c, "فصل " + Fa.num(ch.number), cx, chipTop + dp(8.5f), dp(10.5f), b.accent, bold = true)
+            val titleY = chipTop + dp(28f)
+            val titleSize = ui.fitSize(ch.title, dp(13.5f), r.width() - dp(16f), bold = true, minSize = dp(10.5f))
+            ui.text(c, ch.title, cx, titleY, titleSize, if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true)
+            val footerTop = r.bottom - dp(58f)
+            val subLines = ui.wrap(ch.subtitle, dp(10.5f), r.width() - dp(20f))
+            for ((i, line) in subLines.withIndex()) {
+                val ly = titleY + dp(16f) + i * dp(12.5f)
+                if (ly + dp(6f) < footerTop) {
+                    ui.text(c, line, cx, ly, dp(10.5f), Theme.TEXT_DIM)
+                }
             }
 
             if (unlocked) {
-                ui.text(c, Fa.num(levels.size) + " ماموریت", cx, r.bottom - dp(66f), dp(12f), Theme.TEXT_DIM)
-                ui.iconStar(c, cx + dp(26f), r.bottom - dp(40f), dp(8f), Theme.AMBER)
-                ui.text(c, Fa.num(stars) + " از " + Fa.num(maxStars), cx - dp(4f), r.bottom - dp(40f),
-                    dp(13f), Theme.AMBER, bold = true)
-                ui.bar(c, r.left + dp(16f), r.bottom - dp(24f), r.width() - dp(32f), dp(6f),
+                ui.text(c, Fa.num(levels.size) + " ماموریت", cx, r.bottom - dp(50f), dp(11f), Theme.TEXT_DIM)
+                ui.iconStar(c, cx + dp(26f), r.bottom - dp(32f), dp(7.5f), Theme.AMBER)
+                ui.text(c, Fa.num(stars) + " از " + Fa.num(maxStars), cx - dp(4f), r.bottom - dp(32f),
+                    dp(12f), Theme.AMBER, bold = true)
+                ui.bar(c, r.left + dp(16f), r.bottom - dp(18f), r.width() - dp(32f), dp(5.5f),
                     if (maxStars > 0) stars.toFloat() / maxStars else 0f, b.accent)
             } else {
-                ui.iconLock(c, cx, r.bottom - dp(56f), dp(13f))
-                ui.text(c, "نیازمند " + Fa.num(ch.requiredStars) + " ستاره", cx, r.bottom - dp(26f),
-                    dp(12f), Theme.TEXT_FAINT)
+                ui.iconLock(c, cx, r.bottom - dp(44f), dp(12f))
+                ui.text(c, "نیازمند " + Fa.num(ch.requiredStars) + " ستاره", cx, r.bottom - dp(20f),
+                    dp(11.5f), Theme.TEXT_FAINT)
             }
         }
         ui.button(c, back)

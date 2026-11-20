@@ -31,7 +31,10 @@ object StarRules {
     fun parTime(distance: Float, cruiseMps: Float, targets: Int): Float {
         val legs = targets.coerceAtLeast(1)
         val cruise = cruiseMps.coerceAtLeast(20f)
-        return (distance / cruise) * PAR_FACTOR * legs
+        // فاصلهٔ مسیر خودش پرواز بین اهداف را پوشش می‌دهد؛ برای هر هدفِ
+        // اضافه فقط حاشیهٔ مانور می‌دهیم، نه یک ضریب کامل دیگر — وگرنه
+        // ستارهٔ زمانی در ماموریت‌های چندهدفه تقریباً رایگان می‌شد.
+        return (distance / cruise) * PAR_FACTOR * (1f + 0.3f * (legs - 1))
     }
 
     class Rule(
@@ -82,6 +85,7 @@ object StarRules {
         val cleanRun = damage == 0
         val inTime = parTime > 0f && elapsed <= parTime
         val cleanText = when {
+            !success -> "نیازمند تکمیل ماموریت"
             cleanRun -> "بدون آسیب پدافندی"
             inTime -> "زمان " + Fa.clock(elapsed) + " از " + Fa.clock(parTime)
             else -> Fa.num(damage) + " آسیب · زمان " + Fa.clock(elapsed)

@@ -2,6 +2,7 @@ package ir.shahed.pahpad.screens
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import ir.shahed.pahpad.BuildConfig
 import ir.shahed.pahpad.MainActivity
 import ir.shahed.pahpad.core.BaseScreen
 import ir.shahed.pahpad.core.Fa
@@ -66,15 +67,17 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
 
         // ——— ستون چپ: هویت بازی ———
         val lx = vw * 0.26f
-        // نشان کوچک تاکتیکی بالای عنوان
-        val badgeY = dp(42f)
+        // نشان کوچک تاکتیکی بالای عنوان (زیر نوار رتبه و با عرض پویا)
+        val badgeText = "یگان پهپادی  •  آماده عملیات"
+        val badgeW = ui.measure(badgeText, dp(9f), true) + dp(20f)
+        val badgeY = dp(58f)
         ui.fill.color = Theme.withAlpha(Theme.MINT, 0.10f)
         ui.fill.shader = null
-        c.drawRoundRect(lx - dp(52f), badgeY - dp(10f), lx + dp(52f), badgeY + dp(10f), dp(10f), dp(10f), ui.fill)
+        c.drawRoundRect(lx - badgeW / 2f, badgeY - dp(10f), lx + badgeW / 2f, badgeY + dp(10f), dp(10f), dp(10f), ui.fill)
         ui.stroke.color = Theme.withAlpha(Theme.MINT, 0.30f)
         ui.stroke.strokeWidth = dp(1f)
-        c.drawRoundRect(lx - dp(52f), badgeY - dp(10f), lx + dp(52f), badgeY + dp(10f), dp(10f), dp(10f), ui.stroke)
-        ui.text(c, "یگان پهپادی  •  آماده عملیات", lx, badgeY, dp(9f), Theme.MINT, bold = true)
+        c.drawRoundRect(lx - badgeW / 2f, badgeY - dp(10f), lx + badgeW / 2f, badgeY + dp(10f), dp(10f), dp(10f), ui.stroke)
+        ui.text(c, badgeText, lx, badgeY, dp(9f), Theme.MINT, bold = true)
 
         // تصویر هیرو با قاب تاکتیکی
         val panelW = vw * 0.36f
@@ -131,7 +134,7 @@ class MainMenuScreen(game: MainActivity) : BaseScreen(game) {
         ui.iconStar(c, px + panelW - dp(14f) - ui.measure("ستاره‌ها  " + Fa.num(save.totalStars) + " / " + Fa.num(Levels.all.size * 3), dp(11.5f)) - dp(10f), py + dp(80f) - dp(2f), dp(5f), Theme.AMBER)
 
         drawButtons(c)
-        ui.text(c, "نسخه " + Fa.num("0.0.10"), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
+        ui.text(c, "نسخه " + Fa.num(BuildConfig.VERSION_NAME), vw - dp(16f), vh - dp(16f), dp(10.5f), Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
     }
 
     private fun drawCornerBrackets(c: Canvas, x: Float, y: Float, w: Float, h: Float) {

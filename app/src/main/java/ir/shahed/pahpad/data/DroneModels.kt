@@ -55,7 +55,7 @@ object DroneModels {
         fun guidanceAt(level: Int) = DroneModels.anchored(level, 1.0f, 1.5f, 2.2f) * guidanceMul
         fun blastAt(level: Int) = DroneModels.anchored(level, 18f, 30f, 45f) * blastMul
         fun armorAt(level: Int): Int =
-            (Math.round(DroneModels.anchored(level, 1f, 3f, 5f)) + armorBonus).coerceAtLeast(1)
+            (level.coerceIn(1, armorCap) + armorBonus).coerceAtLeast(1)
 
         /** سقف سطح مجاز برای این نوع ارتقا روی این بدنه */
         fun maxLevel(kind: UpgradeKind): Int = if (kind == UpgradeKind.ARMOR) armorCap else techCap
@@ -102,7 +102,7 @@ object DroneModels {
         Model(
             id = "shahedx",
             name = "شاهد-ایکس",
-            requiredStars = 50,
+            requiredStars = 40,
             tagline = "نسخه فوق پیشرفته با تمام قابلیت‌ها",
             color = Theme.VIOLET,
             rangeMul = 1.8f, speedMul = 1.7f, guidanceMul = 1.35f, blastMul = 1.7f,

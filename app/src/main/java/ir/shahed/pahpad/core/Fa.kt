@@ -26,8 +26,10 @@ object Fa {
     fun num(value: Long): String = num(value.toString())
 
     fun num(value: Float, decimals: Int): String {
-        val fixed = if (decimals <= 0) Math.round(value).toString()
-        else String.format(java.util.Locale.US, "%.${decimals}f", value)
+        if (!value.isFinite()) return num(0)
+        val clean = if (kotlin.math.abs(value) < 1e-6f) 0f else value
+        val fixed = if (decimals <= 0) Math.round(clean).toString()
+        else String.format(java.util.Locale.US, "%.${decimals}f", clean)
         return num(fixed)
     }
 
@@ -46,6 +48,7 @@ object Fa {
 
     /** زمان به شکل ۰۱:۲۴ */
     fun clock(seconds: Float): String {
+        if (!seconds.isFinite()) return num("00:00")
         val total = Math.max(0, Math.round(seconds))
         val m = total / 60
         val s = total % 60

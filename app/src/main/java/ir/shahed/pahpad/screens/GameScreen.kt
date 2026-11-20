@@ -109,34 +109,32 @@ class GameScreen(
         save.graphicsQuality = (save.graphicsQuality + 1) % 3
         renderer.applyQuality(save.graphicsQuality)
         refreshSettingsLabels()
-        audio.click()
     }
     private val gfxEffects = UiButton("افکت‌ها", Theme.VIOLET) {
         save.effectsOn = !save.effectsOn
         renderer.effectsEnabled = save.effectsOn
         refreshSettingsLabels()
-        audio.click()
     }
     private val gfxSound = UiButton("صدا", Theme.MINT) {
         save.soundOn = !save.soundOn
         refreshSettingsLabels()
-        audio.click()
     }
     private val gfxControl = UiButton("شیوه کنترل", Theme.BLUE) {
         save.tiltControl = !save.tiltControl
         calibrated = false
+        // ثبت سنسور باید همان لحظه با تنظیم تازه همگام شود؛ وگرنه تیلت
+        // روشن می‌شود ولی شنونده‌ای ثبت نیست و جوی‌استیک هم کنار رفته
+        // است → پهباد تا پایان ماموریت بی‌کنترل می‌ماند.
+        if (save.tiltControl) registerSensor() else unregisterSensor()
         refreshSettingsLabels()
-        audio.click()
     }
     private val gfxBack = UiButton("بازگشت به توقف", Theme.TEXT_DIM) {
         settingsOpen = false
         refreshPauseVisibility()
-        audio.click()
     }
     private val settings = UiButton("تنظیمات", Theme.BLUE) {
         settingsOpen = true
         refreshPauseVisibility()
-        audio.click()
     }
 
     init {
@@ -185,7 +183,12 @@ class GameScreen(
             finished = true
             finishTimer = 0f
             audio.stopEngine()
-            if (res.success) audio.success() else audio.failure()
+            when {
+                res.success -> audio.success()
+                // خروج دستی از منوی توقف «شکست» نیست؛ ملودی شکست نباید
+                // روی منوی اصلی پخش شود.
+                !res.aborted -> audio.failure()
+            }
         }
     }
 
@@ -211,7 +214,7 @@ class GameScreen(
 
     override fun onScreenResume() {
         super.onScreenResume()
-        registerSensor()
+        if (!paused) registerSensor()
     }
 
     private fun registerSensor() {
@@ -228,6 +231,13 @@ class GameScreen(
 
     override fun onBack(): Boolean {
         if (finished) return true
+        // اول پنل تنظیماتِ توقف بسته می‌شود، نه کل منوی توقف
+        if (settingsOpen) {
+            settingsOpen = false
+            refreshPauseVisibility()
+            audio.click()
+            return true
+        }
         setPaused(!paused)
         return true
     }
@@ -281,23 +291,19 @@ class GameScreen(
 
     // ------------------------------------------------------------ حس‌گر
 
+    private var displayRotation = Surface.ROTATION_90
+
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_ACCELEROMETER) return
         val v0 = event.values[0]
         val v1 = event.values[1]
-        var ax: Float
-        var ay: Float
-        val rotation = try {
-            @Suppress("DEPRECATION")
-            (game.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
-        } catch (t: Throwable) {
-            Surface.ROTATION_90
-        }
-        when (rotation) {
-            Surface.ROTATION_90 -> { ax = -v1; ay = v0 }
-            Surface.ROTATION_270 -> { ax = v1; ay = -v0 }
-            Surface.ROTATION_180 -> { ax = -v0; ay = -v1 }
-            else -> { ax = v0; ay = v1 }
+        val ax: Float
+        val ay: Float
+        when (displayRotation) {
+            Surface.ROTATION_90 -> { ax = v1; ay = v0 }
+            Surface.ROTATION_270 -> { ax = -v1; ay = -v0 }
+            Surface.ROTATION_180 -> { ax = v0; ay = -v1 }
+            else -> { ax = -v0; ay = v1 }
         }
         if (!calibrated) {
             restAx = ax
@@ -305,8 +311,10 @@ class GameScreen(
             calibrated = true
         }
         val sens = 4.2f
-        tiltX = ((ax - restAx) / sens).coerceIn(-1f, 1f)
-        tiltY = ((ay - restAy) / sens).coerceIn(-1f, 1f)
+        val rawX = ((ax - restAx) / sens).coerceIn(-1f, 1f)
+        val rawY = ((ay - restAy) / sens).coerceIn(-1f, 1f)
+        tiltX += (rawX - tiltX) * 0.28f
+        tiltY += (rawY - tiltY) * 0.28f
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
@@ -314,35 +322,43 @@ class GameScreen(
     // ------------------------------------------------------------ لمس
 
     override fun layoutUi(w: Float, h: Float) {
+        displayRotation = try {
+            if (android.os.Build.VERSION.SDK_INT >= 30) game.display?.rotation ?: Surface.ROTATION_90
+            else @Suppress("DEPRECATION") (game.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
+        } catch (_: Throwable) {
+            Surface.ROTATION_90
+        }
         val size = dp(64f)
         boostRect.set(w - dp(20f) - size, h - dp(20f) - size, w - dp(20f), h - dp(20f))
         camRect.set(w - dp(20f) - size, boostRect.top - dp(12f) - dp(48f), w - dp(20f), boostRect.top - dp(12f))
         pauseRect.set(w - dp(58f), dp(14f), w - dp(20f), dp(52f))
 
         val bw = dp(190f)
-        val bh = dp(46f)
+        val gap = dp(8f)
+        val py = h * 0.32f
+        val bh = ((h - py - dp(16f) - gap * 3f) / 4f).coerceIn(dp(36f), dp(46f))
         val cx = w / 2f - bw / 2f
-        resume.set(cx, h * 0.34f, bw, bh)
-        retry.set(cx, h * 0.34f + bh + dp(10f), bw, bh)
-        settings.set(cx, h * 0.34f + (bh + dp(10f)) * 2f, bw, bh)
-        quit.set(cx, h * 0.34f + (bh + dp(10f)) * 3f, bw, bh)
-        // پنل تنظیمات: چهار ردیف + بازگشت
-        val sy = h * 0.30f
-        gfxQuality.set(cx, sy, bw, bh)
-        gfxEffects.set(cx, sy + (bh + dp(10f)), bw, bh)
-        gfxSound.set(cx, sy + (bh + dp(10f)) * 2f, bw, bh)
-        gfxControl.set(cx, sy + (bh + dp(10f)) * 3f, bw, bh)
-        gfxBack.set(cx, sy + (bh + dp(10f)) * 4f, bw, bh)
+        resume.set(cx, py, bw, bh)
+        retry.set(cx, py + (bh + gap), bw, bh)
+        settings.set(cx, py + (bh + gap) * 2f, bw, bh)
+        quit.set(cx, py + (bh + gap) * 3f, bw, bh)
+        // پنل تنظیمات: چهار ردیف + بازگشت با مقیاس‌پذیری روی صفحات کوتاه
+        val sy = h * 0.25f
+        val sbh = ((h - sy - dp(14f) - gap * 4f) / 5f).coerceIn(dp(34f), dp(46f))
+        gfxQuality.set(cx, sy, bw, sbh)
+        gfxEffects.set(cx, sy + (sbh + gap), bw, sbh)
+        gfxSound.set(cx, sy + (sbh + gap) * 2f, bw, sbh)
+        gfxControl.set(cx, sy + (sbh + gap) * 3f, bw, sbh)
+        gfxBack.set(cx, sy + (sbh + gap) * 4f, bw, sbh)
     }
 
     override fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean {
-        if (finished) return true
+        if (finished || paused) return true
         if (pauseRect.contains(x, y)) {
-            setPaused(!paused)
+            setPaused(true)
             audio.click()
             return true
         }
-        if (paused) return true
 
         if (mission.phase == Mission.Phase.READY) {
             mission.launch()
@@ -606,12 +622,14 @@ class GameScreen(
         c.drawLine(cx, cy + dp(8f), cx, cy + dp(18f), ui.stroke)
         ui.fill.color = Theme.MINT
         c.drawCircle(cx, cy, dp(1.8f), ui.fill)
-        // REC
+        // REC (در ناحیهٔ آزاد بالا-چپ قاب FPV تا با دکمه توقف و پنل سرعت هم‌پوشانی نداشته باشد)
+        val recX = vw * 0.30f
+        val recY = m + dp(14f)
         if ((time * 1.2f) % 1f < .6f) {
             ui.fill.color = Theme.RED
-            c.drawCircle(vw - m - dp(64f), m + dp(16f), dp(4f), ui.fill)
+            c.drawCircle(recX - dp(58f), recY, dp(4f), ui.fill)
         }
-        ui.text(c, "EO/IR  " + Fa.clock(mission.elapsed), vw - m - dp(12f), m + dp(16f), dp(10f),
+        ui.text(c, "EO/IR  " + Fa.clock(mission.elapsed), recX, recY, dp(10f),
             Theme.withAlpha(Theme.MINT, .8f), align = Paint.Align.RIGHT)
         ui.text(c, "دوربین نوک پهپاد", cx, vh - dp(112f), dp(10.5f), Theme.withAlpha(Theme.MINT, 0.7f))
     }
@@ -1098,8 +1116,8 @@ class GameScreen(
         ui.fill.color = Theme.withAlpha(Theme.BG_DEEP, 0.82f)
         ui.fill.shader = null
         c.drawRect(0f, 0f, vw, vh, ui.fill)
-        ui.text(c, "ماموریت متوقف شد", vw / 2f, vh * 0.28f, dp(24f), Theme.TEXT, bold = true)
-        ui.text(c, level.title, vw / 2f, vh * 0.35f, dp(13f), Theme.TEXT_DIM)
+        ui.text(c, if (settingsOpen) "تنظیمات" else "ماموریت متوقف شد", vw / 2f, vh * 0.16f, dp(22f), Theme.TEXT, bold = true)
+        if (!settingsOpen) ui.text(c, level.title, vw / 2f, vh * 0.24f, dp(13f), Theme.TEXT_DIM)
         drawButtons(c)
     }
 

@@ -1,7 +1,10 @@
 package ir.shahed.pahpad.core
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import java.util.concurrent.atomic.AtomicBoolean
 import ir.tapsell.plus.AdRequestCallback
 import ir.tapsell.plus.AdShowListener
 import ir.tapsell.plus.TapsellPlus
@@ -36,14 +39,16 @@ object AdManager {
     private const val ZONE_INTERSTITIAL = "5cfaa942e8d17f0001ffb292"
     private const val ZONE_REWARDED = "5cfaa802e8d17f0001ffb28e"
 
-    private var initialized = false
-    private var initAttempted = false
-    private var interstitialId: String? = null
-    private var rewardedId: String? = null
+    @Volatile private var initialized = false
+    @Volatile private var initAttempted = false
+    @Volatile private var interstitialId: String? = null
+    @Volatile private var rewardedId: String? = null
 
     // سقفِ نمایش اینترستيشال: نه بعد از هر مرگ — هر N پایان ماموریت، با حداقل فاصله
     private const val INTERSTITIAL_EVERY_N_FINISHED = 2
     private const val INTERSTITIAL_MIN_GAP_MS = 60_000L
+    /** اگر SDK هیچ کالبکی نداد، بعد از این مدت ناوبری به‌زور ادامه می‌یابد. */
+    private const val INTERSTITIAL_WATCHDOG_MS = 4_000L
     private var finishCounter = 0
     private var lastInterstitialMs = 0L
 
@@ -51,11 +56,14 @@ object AdManager {
 
     /** یک بار در onCreate صدا زده می‌شود؛ پیش‌کَش بلافاصله بعد از init موفق. */
     fun setup(activity: Activity) {
+        if (initialized) return
         initAttempted = true
         TapsellPlus.initialize(activity, APP_KEY, object : TapsellPlusInitListener {
             override fun onInitializeSuccess(adNetworks: AdNetworks) {
                 initialized = true
-                TapsellPlus.setDebugMode(Log.DEBUG)
+                if (ir.shahed.pahpad.BuildConfig.DEBUG) {
+                    TapsellPlus.setDebugMode(Log.DEBUG)
+                }
                 Log.d(TAG, "Tapsell initialized (${adNetworks.name})")
                 // پیش‌کش در پس‌زمینه — خارج از مسیر رندر
                 preloadInterstitial(activity)
@@ -136,18 +144,41 @@ object AdManager {
         lastInterstitialMs = System.currentTimeMillis()
         interstitialId = null
 
-        TapsellPlus.showInterstitialAd(activity, id, object : AdShowListener() {
-            override fun onClosed(adModel: TapsellPlusAdModel) {
-                preloadInterstitial(activity)
-                onFinished()
-            }
+        // پایان دقیقاً یک بار تضمین می‌شود: اگر show پرتاب کند یا SDK هیچ
+        // کالبکی ندهد (بسته/خطا)، ناوبری صفحه‌ها نباید قورت داده شود و
+        // بازیکن روی صفحهٔ نتیجه گیر نمی‌کند.
+        val done = AtomicBoolean(false)
+        val handler = Handler(Looper.getMainLooper())
+        lateinit var watchdog: Runnable
+        fun finishOnce() {
+            if (!done.compareAndSet(false, true)) return
+            handler.removeCallbacks(watchdog)
+            if (Looper.myLooper() == Looper.getMainLooper()) onFinished() else handler.post { onFinished() }
+        }
+        watchdog = Runnable { finishOnce() }
+        handler.postDelayed(watchdog, INTERSTITIAL_WATCHDOG_MS)
 
-            override fun onError(errorModel: TapsellPlusErrorModel) {
-                Log.e(TAG, "Interstitial error: ${errorModel.errorMessage}")
-                preloadInterstitial(activity)
-                onFinished()
-            }
-        })
+        try {
+            TapsellPlus.showInterstitialAd(activity, id, object : AdShowListener() {
+                override fun onOpened(adModel: TapsellPlusAdModel) {
+                    handler.removeCallbacks(watchdog)
+                }
+
+                override fun onClosed(adModel: TapsellPlusAdModel) {
+                    preloadInterstitial(activity)
+                    finishOnce()
+                }
+
+                override fun onError(errorModel: TapsellPlusErrorModel) {
+                    Log.e(TAG, "Interstitial error: ${errorModel.errorMessage}")
+                    preloadInterstitial(activity)
+                    finishOnce()
+                }
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Interstitial show failed: ${e.message}")
+            finishOnce()
+        }
     }
 
     // ───────────────────────────── جایزه‌ای ────────────────────────────────
@@ -162,19 +193,26 @@ object AdManager {
         if (id == null) return
         rewardedId = null
 
-        TapsellPlus.showRewardedVideoAd(activity, id, object : AdShowListener() {
-            override fun onRewarded(adModel: TapsellPlusAdModel) {
-                onRewardEarned()
-            }
+        val mainHandler = Handler(Looper.getMainLooper())
+        try {
+            TapsellPlus.showRewardedVideoAd(activity, id, object : AdShowListener() {
+                override fun onRewarded(adModel: TapsellPlusAdModel) {
+                    if (Looper.myLooper() == Looper.getMainLooper()) onRewardEarned()
+                    else mainHandler.post { onRewardEarned() }
+                }
 
-            override fun onClosed(adModel: TapsellPlusAdModel) {
-                preloadRewarded(activity)
-            }
+                override fun onClosed(adModel: TapsellPlusAdModel) {
+                    preloadRewarded(activity)
+                }
 
-            override fun onError(errorModel: TapsellPlusErrorModel) {
-                Log.e(TAG, "Rewarded error: ${errorModel.errorMessage}")
-                preloadRewarded(activity)
-            }
-        })
+                override fun onError(errorModel: TapsellPlusErrorModel) {
+                    Log.e(TAG, "Rewarded error: ${errorModel.errorMessage}")
+                    preloadRewarded(activity)
+                }
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Rewarded show failed: ${e.message}")
+            preloadRewarded(activity)
+        }
     }
 }

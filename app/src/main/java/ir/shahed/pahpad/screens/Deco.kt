@@ -85,12 +85,8 @@ object Deco {
             val half = size * 1.15f
             spritePaint.alpha = 255
             spritePaint.isFilterBitmap = true
-            c.drawBitmap(
-                sprite,
-                android.graphics.Rect(0, 0, sprite.width, sprite.height),
-                android.graphics.RectF(cx - half, cy - half, cx + half, cy + half),
-                spritePaint
-            )
+            mapDstRect.set(cx - half, cy - half, cx + half, cy + half)
+            c.drawBitmap(sprite, null, mapDstRect, spritePaint)
             c.restore()
             return
         }
@@ -117,6 +113,7 @@ object Deco {
 
     /** Paint مشترک نقشه — ساختن Paint در هر فریم GC را فشار می‌دهد */
     private val spritePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val mapDstRect = android.graphics.RectF()
 
     /** شبح پهباد برای صفحه‌ها و لوگو */
     fun droneIcon(s: BaseScreen, c: Canvas, cx: Float, cy: Float, size: Float, color: Int, rotation: Float = 0f) {

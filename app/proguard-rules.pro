@@ -6,3 +6,6 @@
 -dontwarn ir.tapsell.**
 -dontwarn org.jetbrains.annotations.**
 
+# حفظ شماره خط برای گزارش کرش داخلی
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

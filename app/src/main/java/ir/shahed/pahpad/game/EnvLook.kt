@@ -63,7 +63,7 @@ class EnvLook(
         /** Clear maritime noon; high sun behind-left keeps ships readable. */
         val NAVAL = EnvLook(
             zenith = 0xFF1B5896.toInt(), upper = 0xFF5E9ED2.toInt(), glow = 0xFFD9EAF1.toInt(), fog = 0xFFCFE0E8.toInt(),
-            groundFallback = 0xFF245C74.toInt(),
+            groundFallback = 0xFF2C6A8A.toInt(),
             sunX = -.42f, sunY = .70f, sunZ = .58f,
             sunR = 1.0f, sunG = .97f, sunB = .92f,
             skyR = .50f, skyG = .59f, skyB = .70f,

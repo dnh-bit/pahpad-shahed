@@ -119,6 +119,7 @@ class SceneryArt(private val context: Context) {
         val sunVisible = cam.project(cam.x + scene.sunX * 1000f, cam.y + scene.sunY * 1000f, cam.z + scene.sunZ * 1000f, ground)
         val sunSx = ground[0]; val sunSy = ground[1]
         if (sunVisible) {
+            blend.alpha = 255
             blend.xfermode = screen
             val big = h * 1.25f
             local.setScale(big, big); local.postTranslate(sunSx, sunSy); bloom?.setLocalMatrix(local)
@@ -158,25 +159,30 @@ class SceneryArt(private val context: Context) {
         val drift = if (env == Env.NAVAL) phase * 3.4f else 0f
         if (valid && bitmap != null) {
             val shader = terrainShaders.getOrPut(env) { BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT) }
-            val tile = if (env == Env.NAVAL) 110f else 180f
+            // تایل دریا بزرگ‌تر شد تا موج‌های بافت از ارتفاع پرواز هم
+            // دیده شوند؛ با ۱۱۰ متر موج‌ها زیر فشردگی پرسپکتیو گم می‌شدند
+            // و دریا «کف تیره» می‌ماند (بازخورد کاربر).
+            val tile = if (env == Env.NAVAL) 150f else 180f
             if (groundLayer(c, shader, bitmap.width.toFloat(), bitmap.height.toFloat(), tile, drift, 255, null, w, top, bottom)) {
                 Gfx.get(context, "terrain_macro")?.let { macro ->
                     val m1 = macroShader ?: BitmapShader(macro, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).also { macroShader = it }
                     val m2 = macroFineShader ?: BitmapShader(macro, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT).also { macroFineShader = it }
                     // Two incommensurate multiply layers break up the 180 m tile grid.
-                    val strength = if (env == Env.NAVAL) 150 else 255
+                    // روی آب ضعیف‌ترند: با قدرت قبلی بافت دریا زیر دو لایه‌ی
+                    // ضرب تقریباً سیاه می‌شد و «کف تیره» دیده می‌شد، نه آب.
+                    val strength = if (env == Env.NAVAL) 115 else 255
                     groundLayer(c, m1, macro.width.toFloat(), macro.height.toFloat(), 1613f, drift, strength, multiply, w, top, bottom)
                     groundLayer(c, m2, macro.width.toFloat(), macro.height.toFloat(), 389f, drift, strength / 2, multiply, w, top, bottom)
                 }
             }
         }
         // Sun glitter on water, at the sun's mirror depression angle.
-        if (env == Env.NAVAL && sunVisible) {
+        if (env == Env.NAVAL && sunVisible && scene.sunY > 0.01f) {
             val el = asin(scene.sunY.coerceIn(-1f, 1f))
             val gy = horizon + f * tan(el) * .55f
-            local.setScale(f * .34f, max(f * tan(el) * .75f, 1f)); local.postTranslate(sunSx, gy); glint?.setLocalMatrix(local)
-            blend.xfermode = screen; blend.shader = glint
-            c.drawRect(sunSx - f * .34f, top, sunSx + f * .34f, gy + f * tan(el) * .75f, blend)
+            local.setScale(f * .44f, max(f * tan(el) * .75f, 1f)); local.postTranslate(sunSx, gy); glint?.setLocalMatrix(local)
+            blend.alpha = 255; blend.xfermode = screen; blend.shader = glint
+            c.drawRect(sunSx - f * .44f, top, sunSx + f * .44f, gy + f * tan(el) * .75f, blend)
             blend.shader = null; blend.xfermode = null
         }
         // Aerial perspective over the ground, same curve as the geometry fog.
@@ -258,16 +264,17 @@ class SceneryArt(private val context: Context) {
         val cx = w / 2f; val cy = h / 2f
         val look = scene.look
         blend.shader = null; blend.xfermode = screen
-        val ghosts = floatArrayOf(.35f, .62f, 1.18f, 1.55f)
-        val sizes = floatArrayOf(.035f, .018f, .06f, .026f)
-        for (k in ghosts.indices) {
-            val gx = sx + (cx - sx) * ghosts[k] * 2f
-            val gy = sy + (cy - sy) * ghosts[k] * 2f
+        for (k in flareGhosts.indices) {
+            val gx = sx + (cx - sx) * flareGhosts[k] * 2f
+            val gy = sy + (cy - sy) * flareGhosts[k] * 2f
             blend.color = Theme.withAlpha(if (k % 2 == 0) look.sunHalo else 0xFF9FD3FF.toInt(), .10f * edge)
-            c.drawCircle(gx, gy, h * sizes[k], blend)
+            c.drawCircle(gx, gy, h * flareSizes[k], blend)
         }
-        blend.xfermode = null
+        blend.xfermode = null; blend.alpha = 255
     }
+
+    private val flareGhosts = floatArrayOf(.35f, .62f, 1.18f, 1.55f)
+    private val flareSizes = floatArrayOf(.035f, .018f, .06f, .026f)
 
     fun roads(scene: Scene3D, world: World) {
         if (world.level.env != Env.URBAN && world.level.env != Env.SPECIAL) return

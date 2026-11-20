@@ -82,6 +82,24 @@ class Face {
      * بام ساختمانِ همسایه را انتخاب می‌کند (خطای تشخیصی، نه باگ واقعی).
      */
     var debugGroup=0
+    /**
+     * شناسهٔ تشخیصیِ حجم/خانواده (جزیره، دکل، پنلِ چسبیده، …) — فقط برای
+     * تست. هیچ نقشی در مرتب‌سازی ندارد.
+     *
+     * چرا جدا از [debugTag]: برچسبِ فعلی فقط «عرشه/سازه/نشسته» را می‌گوید
+     * و برای سنجش جفت‌های درون یک سازه (طبقه‌های جزیره، پنل و دیوارِ میزبانش،
+     * پایهٔ دکل و دیسکش) کافی نیست؛ تست باید بداند کدام وجه به کدام حجم
+     * تعلق دارد تا بتواند «همیشه باید جلوتر باشد» را بسنجد.
+     */
+    var debugPart=0
+    /** مرکز جهانی وجه پیش از برش با صفحهٔ نزدیک — فقط برای تست (تشخیص). */
+    var wx=0f; var wy=0f; var wz=0f
+    /** کمینه/بیشینهٔ ارتفاع جهانی وجه — فقط برای تست (سنجش اتصال قطعات). */
+    var wy0=0f; var wy1=0f
+    /** کادر جهانی وجه در صفحهٔ افقی — فقط برای تست (هم‌مرکزی قطعات). */
+    var wx0=0f; var wx1=0f; var wz0=0f; var wz1=0f
+    /** نرمال جهانی وجه — فقط برای تست (شناسایی وجهِ میزبان هم‌جهت). */
+    var nxE=0f; var nyE=0f; var nzE=0f
 }
 
 /** Pooled painter renderer with near-plane clipping and depth-sorted image planes.
@@ -211,7 +229,38 @@ class Scene3D {
         val depth: Float,
         val depthBias: Float,
         val tag: Int,
-        val group: Int
+        val group: Int,
+        /** شناسهٔ تشخیصیِ حجم/خانواده — فقط برای تست. */
+        val part: Int,
+        /** مرکز جهانی وجه پیش از برش — فقط برای تست (شناسایی حجم). */
+        val wx: Float,
+        val wy: Float,
+        val wz: Float,
+        /** کمینه/بیشینهٔ ارتفاع جهانی این وجه — برای سنجش اتصال عمودی قطعات. */
+        val wy0: Float,
+        val wy1: Float,
+        /** کادر جهانی در صفحهٔ افقی — برای سنجش هم‌مرکزی قطعات. */
+        val wx0: Float,
+        val wx1: Float,
+        val wz0: Float,
+        val wz1: Float,
+        /** نرمال جهانی وجه — برای یافتن وجه میزبانِ هم‌جهت. */
+        val nxE: Float,
+        val nyE: Float,
+        val nzE: Float,
+        /** محدودهٔ صفحهٔ وجه — برای این‌که تست بداند دو وجه اصلاً روی
+         *  صفحه همپوشانی دارند یا نه؛ مقایسهٔ ترتیب بدون شرط همپوشانی،
+         *  نقض‌های کاذب می‌سازد (وجه دوری که جلوتر است ولی جای دیگری
+         *  را روی صفحه نمی‌پوشاند، بی‌گناه است). */
+        val minX: Float,
+        val maxX: Float,
+        val minY: Float,
+        val maxY: Float,
+        /** چندضلعی وجه روی صفحه (x0,y0,x1,y1,...) — برای این‌که تست همپوشانی
+         *  واقعی دو وجه را بسنجد، نه فقط همپوشانی کادرشان: کادرِ یک سازهٔ
+         *  بلند با کادرِ سگمنتِ دیگری از همان عرشه همپوشانی دارد، در حالی
+         *  که پیکسل‌هایشان همدیگر را نمی‌پوشانند و نقضی در کار نیست. */
+        val poly: FloatArray
     )
     private val debugSnapshot = ArrayList<FaceSnapshot>()
     fun debugFaces(): List<FaceSnapshot> = debugSnapshot
@@ -229,17 +278,21 @@ class Scene3D {
     var debugTag = 0
     /** شناسهٔ گروه تشخیصی که وجه‌های بعدی می‌گیرند (پاراپت + بام خودش). */
     var debugGroup = 0
+    /** شناسهٔ تشخیصیِ حجم/خانواده که وجه‌های بعدی می‌گیرند — فقط برای تست. */
+    var debugPart = 0
+    /** نرمال جهانی وجه بعدی — فقط برای تست. */
+    var debugNx = 0f; var debugNy = 0f; var debugNz = 0f
     fun clear(){order.clear();pool.clear();shaders.clear();lightFilters.clear();used=0;wallTexture=null;roofTexture=null}
     private fun next():Face {
         if(used==pool.size)pool.add(Face())
-        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f; it.sprite=null; it.additive=false; it.filter=null; it.debugTag=0; it.debugGroup=0 }
+        return pool[used++].also { it.bitmap=null; it.transparent=false; it.hasOutline=false; it.opacity=1f; it.radius=0f; it.depthBias=0f; it.sprite=null; it.additive=false; it.filter=null; it.debugTag=0; it.debugGroup=0; it.debugPart=0; it.nxE=0f; it.nyE=0f; it.nzE=0f }
     }
     /** Smooth aerial perspective; also sampled by SceneryArt for the ground haze. */
     fun fogFactor(depth:Float):Float {
         val t=((depth-fogStart)/(fogEnd-fogStart)).coerceIn(0f,1f)
         return (t*t*(3f-2f*t))*.97f
     }
-    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f,tiled:Boolean=false,bias:Float=0f) {
+    private fun submit(n:Int,color:Int,outline:Int,texture:Bitmap?,transparent:Boolean,opacity:Float=1f,tiled:Boolean=false,bias:Float=0f,maxDepth:Boolean=false) {
         val lightKey=pendingLight;pendingLight=-1
         val near=cam.near+0.002f
         var count=0
@@ -255,11 +308,52 @@ class Scene3D {
         }
         if(count<3)return
         var depth=0f
-        for(i in 0 until count)depth+=clipped[i][2]
-        depth/=count.toFloat()
+        if (maxDepth) {
+            // کلید مرتب‌سازی = دورترین رأس، نه میانگین. برای یک سطحِ بزرگِ
+            // تخت (عرشهٔ کشتی) میانگین در مرکز سطح می‌نشیند و هر سازه‌ای که
+            // آن‌سوی مرکز روی سطح نشسته، عمق میانگینش بزرگ‌تر از عرشه می‌شود
+            // و عرشه بعد از آن رسم می‌شود — سازه زیر عرشهٔ خودش می‌رود
+            // («قطعه غیب می‌شود»). دورترین رأس محافظه‌کارانه‌ترین کلید است:
+            // سطح همیشه پشتِ هر چیزی که رویش نشسته مرتب می‌شود، چون هیچ
+            // نقطه‌ای از سازهٔ رویش از دورترین لبهٔ سطح دورتر نیست (تا وقتی
+            // دوربین بالای صفحهٔ سطح است — در بازی همیشه همین‌طور است).
+            var m=Float.NEGATIVE_INFINITY
+            for(i in 0 until count) if(clipped[i][2]>m)m=clipped[i][2]
+            depth=m
+        } else {
+            for(i in 0 until count)depth+=clipped[i][2]
+            depth/=count.toFloat()
+        }
         if(depth>fogEnd*1.4f)return
         val f=next(); f.count=count; f.depth=depth; f.fog=fogFactor(depth); f.depthBias=bias
-        f.debugTag=debugTag; f.debugGroup=debugGroup
+        f.debugTag=debugTag; f.debugGroup=debugGroup; f.debugPart=debugPart
+        f.nxE=debugNx; f.nyE=debugNy; f.nzE=debugNz
+        if (debugCapture) {
+            // مرکز جهانی وجه (میانگین رأس‌های اصلی، پیش از برش) — برای این‌که
+            // تست بتواند وجه‌ها را به حجمِ سازنده‌شان نسبت دهد.
+            var ax=0f; var ay=0f; var az=0f
+            for(i in 0 until n){ ax+=input[i][0]; ay+=input[i][1]; az+=input[i][2] }
+            val inv=1f/n.toFloat(); ax*=inv; ay*=inv; az*=inv
+            // وارونِ Camera.toCamera (ماتریس چرخش، پس وارون = ترانهاده)
+            val c=cam; val sy=sin(c.yaw); val cyw=cos(c.yaw); val sp=sin(c.pitch); val cp=cos(c.pitch)
+            val dx=ax*cyw - ay*sy*sp + az*sy*cp
+            val dy=ay*cp + az*sp
+            val dz=-ax*sy - ay*cyw*sp + az*cyw*cp
+            f.wx=c.x+dx; f.wy=c.y+dy; f.wz=c.z+dz
+            var y0=Float.POSITIVE_INFINITY; var y1=Float.NEGATIVE_INFINITY
+            var x0=Float.POSITIVE_INFINITY; var x1=Float.NEGATIVE_INFINITY
+            var z0=Float.POSITIVE_INFINITY; var z1=Float.NEGATIVE_INFINITY
+            for(i in 0 until n){
+                val ay2=input[i][1]; val az2=input[i][2]
+                val wy = c.y + ay2*cp + az2*sp
+                val wxp = c.x + input[i][0]*cyw - ay2*sy*sp + az2*sy*cp
+                val wzp = c.z - input[i][0]*sy - ay2*cyw*sp + az2*cyw*cp
+                if(wy<y0)y0=wy; if(wy>y1)y1=wy
+                if(wxp<x0)x0=wxp; if(wxp>x1)x1=wxp
+                if(wzp<z0)z0=wzp; if(wzp>z1)z1=wzp
+            }
+            f.wy0=y0; f.wy1=y1; f.wx0=x0; f.wx1=x1; f.wz0=z0; f.wz1=z1
+        }
         f.opacity=opacity.coerceIn(0f,1f)
         f.color=Theme.withAlpha(Theme.mix(color,fogColor,f.fog),Color.alpha(color)/255f); f.outlineColor=outline; f.hasOutline=outline!=0
         var minX=Float.POSITIVE_INFINITY;var maxX=Float.NEGATIVE_INFINITY
@@ -340,22 +434,26 @@ class Scene3D {
         }
         return out.all { it.isFinite() }
     }
-    fun quad(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,outline:Int=0,texture:Bitmap?=null,transparent:Boolean=false) {
+    fun quad(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,outline:Int=0,texture:Bitmap?=null,transparent:Boolean=false,maxDepth:Boolean=false) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
-        submit(4,color,outline,texture,transparent)
+        submit(4,color,outline,texture,transparent,1f,false,0f,maxDepth)
     }
-    fun quadBiased(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,texture:Bitmap?=null,bias:Float=0f,emissive:Boolean=false) {
+    fun quadBiased(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,texture:Bitmap?=null,bias:Float=0f,emissive:Boolean=false,maxDepth:Boolean=false) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
-        submit(4,color,0,texture,false,1f,false,bias)
+        submit(4,color,0,texture,false,1f,false,bias,maxDepth)
     }
 
     /** همان quad، ولی بافت به‌جای کشیده‌شدن روی کل وجه، هر [textureMeters] متر تکرار می‌شود. */
-    fun quadTiled(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,texture:Bitmap?) {
+    fun quadTiled(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,x3:Float,y3:Float,z3:Float,color:Int,texture:Bitmap?,maxDepth:Boolean=false) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);cam.toCamera(x3,y3,z3,input[3])
-        submit(4,color,0,texture,false,1f,true)
+        submit(4,color,0,texture,false,1f,true,0f,maxDepth)
     }
     fun triangle(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,color:Int) {
         cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);submit(3,color,0,null,false)
+    }
+    /** همان مثلث، با بایاس — برای حلقه‌های رادار/پد که روی سطح نشسته‌اند. */
+    fun triangleBiased(x0:Float,y0:Float,z0:Float,x1:Float,y1:Float,z1:Float,x2:Float,y2:Float,z2:Float,color:Int,bias:Float) {
+        cam.toCamera(x0,y0,z0,input[0]);cam.toCamera(x1,y1,z1,input[1]);cam.toCamera(x2,y2,z2,input[2]);submit(3,color,0,null,false,1f,false,bias)
     }
     fun imagePlane(points:Array<FloatArray>,bitmap:Bitmap,opacity:Float=1f) {
         for(i in 0..3)cam.toCamera(points[i][0],points[i][1],points[i][2],input[i])
@@ -411,7 +509,20 @@ class Scene3D {
         if (debugCapture) {
             debugSnapshot.clear()
             for (f in order) {
-                debugSnapshot.add(FaceSnapshot(f.depth, f.depthBias, f.debugTag, f.debugGroup))
+                var nx = Float.POSITIVE_INFINITY; var xx = Float.NEGATIVE_INFINITY
+                var ny = Float.POSITIVE_INFINITY; var xy = Float.NEGATIVE_INFINITY
+                if (f.radius > 0f) {
+                    nx = f.xs[0] - f.radius; xx = f.xs[0] + f.radius
+                    ny = f.ys[0] - f.radius; xy = f.ys[0] + f.radius
+                } else for (i in 0 until f.count) {
+                    nx = min(nx, f.xs[i]); xx = max(xx, f.xs[i])
+                    ny = min(ny, f.ys[i]); xy = max(xy, f.ys[i])
+                }
+                val poly = FloatArray(f.count * 2)
+                for (i in 0 until f.count) { poly[2 * i] = f.xs[i]; poly[2 * i + 1] = f.ys[i] }
+                debugSnapshot.add(FaceSnapshot(f.depth, f.depthBias, f.debugTag, f.debugGroup, f.debugPart,
+                    f.wx, f.wy, f.wz, f.wy0, f.wy1, f.wx0, f.wx1, f.wz0, f.wz1,
+                    f.nxE, f.nyE, f.nzE, nx, xx, ny, xy, poly))
             }
         }
         for(f in order) {

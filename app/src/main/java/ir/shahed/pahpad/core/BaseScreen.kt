@@ -71,6 +71,8 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         if (looping) return
         looping = true
         lastFrame = 0L
+        fpsFrames = 0
+        fpsWindow = System.nanoTime()
         postInvalidateOnAnimation()
     }
 
@@ -84,6 +86,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
         pressedButton?.pressed = false
         pressedButton = null
         buttonPointer = -1
+        claimedPointer = -1
         onTouchCancel()
     }
 
@@ -121,12 +124,15 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
             render(canvas)
         }
         if (looping) {
-            // محدودیت نرخ فریم: روی گوشی‌های ضعیف ۳۰ فریم کافی و روان‌تر است
-            val cap = if (frameCapCached == 0) 30f else 60f
-            val frameBudgetNs = (1_000_000_000.0 / cap).toLong()
-            val elapsed = System.nanoTime() - frameStart
-            if (elapsed < frameBudgetNs) {
-                postInvalidateDelayed((frameBudgetNs - elapsed) / 1_000_000L)
+            // محدودیت نرخ فریم: در حالت ۶۰ فریم از همگام‌سازی VSync استفاده می‌شود تا پرش فریم رخ ندهد
+            if (frameCapCached == 0) {
+                val frameBudgetNs = 33_333_333L
+                val elapsed = System.nanoTime() - frameStart
+                if (elapsed < frameBudgetNs) {
+                    postInvalidateDelayed((frameBudgetNs - elapsed) / 1_000_000L)
+                } else {
+                    postInvalidateOnAnimation()
+                }
             } else {
                 postInvalidateOnAnimation()
             }
@@ -188,10 +194,12 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
                     return onTouchDown(event.getX(i), event.getY(i), event.getPointerId(i))
                 }
                 val b = findButton(event.getX(i), event.getY(i))
-                if (b != null && pressedButton == null) {
-                    b.pressed = true
-                    pressedButton = b
-                    buttonPointer = event.getPointerId(event.actionIndex)
+                if (b != null) {
+                    if (pressedButton == null) {
+                        b.pressed = true
+                        pressedButton = b
+                        buttonPointer = event.getPointerId(i)
+                    }
                     return true
                 }
                 return onTouchDown(event.getX(i), event.getY(i), event.getPointerId(i))
@@ -208,8 +216,9 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
                 return true
             }
             MotionEvent.ACTION_CANCEL -> {
-                for (i in 0 until event.pointerCount)
-                    onTouchUp(event.getX(i), event.getY(i), event.getPointerId(i))
+                // لغوِ سیستم (نوتیفیکیشن/تماس/ژست) «رها کردن انگشت» نیست:
+                // onTouchUp در فروشگاه و تنظیمات کلیک و خرید اجرا می‌کند، پس
+                // اینجا فقط لغو تمیزِ لمس‌ها؛ هر صفحه onTouchCancel خودش را دارد.
                 cancelTouches()
                 return true
             }
@@ -227,8 +236,8 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
                     b.pressed = false
                     pressedButton = null
                     buttonPointer = -1
-                    if (hit && event.actionMasked != MotionEvent.ACTION_CANCEL) {
-                        audio.click()
+                    if (hit) {
+                        if (b.playClickSound) audio.click()
                         b.onClick()
                     }
                     return true
@@ -280,6 +289,7 @@ abstract class BaseScreen(val game: MainActivity) : View(game) {
             audio.back()
             action()
         }
+        b.playClickSound = false
         buttons.add(b)
         return b
     }

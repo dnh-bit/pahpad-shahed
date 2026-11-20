@@ -17,7 +17,11 @@ class SplashScreen(game: MainActivity) : BaseScreen(game) {
     private fun go() {
         if (moved) return
         moved = true
-        post { game.show(MainMenuScreen(game)) }
+        post {
+            if (game.currentScreen() === this && !game.isFinishing && !game.isDestroyed) {
+                game.show(MainMenuScreen(game))
+            }
+        }
     }
 
     override fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean {

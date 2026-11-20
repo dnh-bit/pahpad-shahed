@@ -43,7 +43,7 @@ class SaveManager(context: Context) {
     }
 
     fun spendCoins(amount: Int): Boolean {
-        if (coins < amount) return false
+        if (amount <= 0 || coins < amount) return false
         coins -= amount
         return true
     }
@@ -57,6 +57,7 @@ class SaveManager(context: Context) {
     fun reportCrash(thread: Thread, error: Throwable) {
         try {
             val sb = StringBuilder()
+            sb.append("Thread: ").append(thread.name).append('\n')
             sb.append(error.javaClass.name).append(": ").append(error.message ?: "").append('\n')
             for (s in error.stackTrace.take(10)) {
                 sb.append("  at ").append(s.className)
@@ -76,7 +77,8 @@ class SaveManager(context: Context) {
                 cause = cause.cause
                 depth++
             }
-            sp.edit().putString("last_crash", sb.toString().take(1200)).apply()
+            // commit (نه apply): فرایند در حال مرگ است و گزارش نباید گم شود
+            sp.edit().putString("last_crash", sb.toString().take(1200)).commit()
         } catch (_: Throwable) {
             // گزارش‌گیری هرگز نباید جای crash handler اصلی را بگیرد
         }
@@ -101,11 +103,13 @@ class SaveManager(context: Context) {
     fun recordResult(levelId: String, stars: Int, score: Int, seconds: Float): Int {
         val e = sp.edit()
         val oldStars = starsOf(levelId)
-        val newStars = maxOf(oldStars, stars)
+        val newStars = maxOf(oldStars, stars.coerceIn(0, 3))
         e.putInt("stars_$levelId", newStars)
         if (score > bestScoreOf(levelId)) e.putInt("best_$levelId", score)
         val oldTime = bestTimeOf(levelId)
-        if (oldTime <= 0f || (seconds > 0f && seconds < oldTime)) e.putFloat("time_$levelId", seconds)
+        if (seconds.isFinite() && seconds > 0f && (oldTime <= 0f || seconds < oldTime)) {
+            e.putFloat("time_$levelId", seconds)
+        }
         e.apply()
         return (newStars - oldStars).coerceAtLeast(0)
     }
@@ -140,7 +144,7 @@ class SaveManager(context: Context) {
         for (l in Levels.all) {
             if (isLevelUnlocked(l.id) && starsOf(l.id) == 0) return l.id
         }
-        return Levels.all.first().id
+        return Levels.all.last().id
     }
 
     fun hasProgress(): Boolean = totalStars > 0 || xp > 0
@@ -158,6 +162,17 @@ class SaveManager(context: Context) {
         return totalStars >= d.requiredStars
     }
 
+    /**
+     * پهباد مؤثر برای پرواز و نمایش در بریفینگ: انتخاب ذخیره‌شده اگر باز
+     * باشد، وگرنه بهترین پهبادِ باز. جلوی پرواز با پهباد قفل را می‌گیرد
+     * حتی اگر selectedDroneId از قبل (یا از نسخهٔ قدیمی) قفل ذخیره شده باشد.
+     */
+    fun effectiveDrone(): DroneModels.Model {
+        val sel = DroneModels.byId(selectedDroneId)
+        if (sel != null && isDroneUnlocked(sel.id)) return sel
+        return DroneModels.all.lastOrNull { isDroneUnlocked(it.id) } ?: DroneModels.all.first()
+    }
+
     fun upgradeLevel(droneId: String, kind: UpgradeKind): Int {
         val cap = DroneModels.byId(droneId)?.maxLevel(kind) ?: 1
         return sp.getInt("up_${droneId}_${kind.key}", 1).coerceIn(1, cap)
@@ -172,13 +187,20 @@ class SaveManager(context: Context) {
 
     var endlessBest: Int
         get() = sp.getInt("endless_best", 0)
-        set(v) = sp.edit().putInt("endless_best", v).apply()
+        set(v) = sp.edit().putInt("endless_best", v.coerceAtLeast(0)).apply()
 
     var dailyBest: Int
         get() = if (sp.getString("daily_day", "") == today()) sp.getInt("daily_best", 0) else 0
         set(v) = sp.edit().putString("daily_day", today()).putInt("daily_best", v).apply()
 
     val dailyDone: Boolean get() = sp.getString("daily_day", "") == today()
+
+    /** آیا جایزهٔ دوبرابر چالش روزانهٔ امروز پرداخت شده؟ (ضد فارم تکراری) */
+    val dailyRewardClaimed: Boolean get() = sp.getString("daily_reward_day", "") == today()
+
+    fun claimDailyReward() {
+        sp.edit().putString("daily_reward_day", today()).apply()
+    }
 
     fun today(): String =
         SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())

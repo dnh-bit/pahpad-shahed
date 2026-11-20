@@ -21,6 +21,7 @@ class UiButton(
     var enabled = true
     var visible = true
     var pressed = false
+    var playClickSound = true
     var subLabel: String? = null
     var icon: String? = null
     var tag: Any? = null
@@ -109,19 +110,23 @@ class Ui(val context: Context, val density: Float) {
     fun wrap(str: String, size: Float, maxWidth: Float, bold: Boolean = false): List<String> {
         textPaint.typeface = if (bold) boldFace else regularFace
         textPaint.textSize = size
-        val words = str.split(' ')
         val lines = ArrayList<String>()
-        var line = StringBuilder()
-        for (w in words) {
-            val candidate = if (line.isEmpty()) w else "$line $w"
-            if (textPaint.measureText(candidate) <= maxWidth || line.isEmpty()) {
-                line = StringBuilder(candidate)
-            } else {
-                lines.add(line.toString())
-                line = StringBuilder(w)
+        val line = StringBuilder()
+        for (para in str.split('\n')) {
+            line.setLength(0)
+            for (w in para.split(' ')) {
+                val candidate = if (line.isEmpty()) w else "$line $w"
+                if (textPaint.measureText(candidate) <= maxWidth || line.isEmpty()) {
+                    if (line.isNotEmpty()) line.append(' ')
+                    line.append(w)
+                } else {
+                    lines.add(line.toString())
+                    line.setLength(0)
+                    line.append(w)
+                }
             }
+            if (line.isNotEmpty()) lines.add(line.toString())
         }
-        if (line.isNotEmpty()) lines.add(line.toString())
         return lines
     }
 
@@ -184,10 +189,10 @@ class Ui(val context: Context, val density: Float) {
             gx += step * 2f
         }
         // نوار نور افق، درخشش پایین و سایه‌ی لبه‌ها
+        fill.alpha = 255
         fill.shader = bgBand
         c.drawRect(0f, h * .58f, w, h * .82f, fill)
         fill.shader = bgGlow
-        fill.alpha = 255
         c.drawRect(0f, 0f, w, h, fill)
         fill.shader = bgVignette
         c.drawRect(0f, 0f, w, h, fill)
@@ -216,9 +221,11 @@ class Ui(val context: Context, val density: Float) {
             stroke.color = strokeColor
             stroke.strokeWidth = strokeWidth
             c.drawRoundRect(r, radius, radius, stroke)
-            stroke.color = Theme.withAlpha(Theme.TEXT, hiA * 1.6f)
-            stroke.strokeWidth = dp(1f)
-            c.drawLine(r.left + radius, r.top + dp(1.2f), r.right - radius, r.top + dp(1.2f), stroke)
+            if (r.width() > radius * 2f) {
+                stroke.color = Theme.withAlpha(Theme.TEXT, hiA * 1.6f)
+                stroke.strokeWidth = dp(1f)
+                c.drawLine(r.left + radius, r.top + dp(1.2f), r.right - radius, r.top + dp(1.2f), stroke)
+            }
         }
     }
 
@@ -240,6 +247,7 @@ class Ui(val context: Context, val density: Float) {
     /** تصویر از assets/gfx با حافظه‌ی نهان */
     fun image(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float, radius: Float = dp(12f)) {
         val bmp = Gfx.get(context, name) ?: return
+        if (bmp.width <= 0 || bmp.height <= 0 || w <= 0f || h <= 0f) return
         val save = c.save()
         imageClip.rewind()
         imageRect.set(x, y, x + w, y + h)
@@ -261,6 +269,7 @@ class Ui(val context: Context, val density: Float) {
     /** تصویر با حفظ تناسب داخل مستطیل (letterbox) */
     fun imageFit(context: Context, c: Canvas, name: String, x: Float, y: Float, w: Float, h: Float, alpha: Int = 255) {
         val bmp = Gfx.get(context, name) ?: return
+        if (bmp.width <= 0 || bmp.height <= 0 || w <= 0f || h <= 0f) return
         val bw = bmp.width.toFloat(); val bh = bmp.height.toFloat()
         val scale = Math.min(w / bw, h / bh)
         val dw = bw * scale; val dh = bh * scale
@@ -297,11 +306,14 @@ class Ui(val context: Context, val density: Float) {
             c.clipRect(btnRect.left, btnRect.centerY(), btnRect.right, btnRect.bottom)
             c.drawRoundRect(btnRect, radius, radius, fill)
             c.restore()
-            fill.color = Theme.withAlpha(0xFFFFFFFF.toInt(), 0.28f * alpha)
-            c.drawRect(btnRect.left + radius, btnRect.top + dp(1.5f), btnRect.right - radius, btnRect.top + dp(2.5f), fill)
+            if (btnRect.width() > radius * 2f) {
+                fill.color = Theme.withAlpha(0xFFFFFFFF.toInt(), 0.28f * alpha)
+                c.drawRect(btnRect.left + radius, btnRect.top + dp(1.5f), btnRect.right - radius, btnRect.top + dp(2.5f), fill)
+            }
+            val labelSize = fitSize(b.label, dp(16f), (btnRect.width() - dp(12f)).coerceAtLeast(dp(24f)), bold = true, minSize = dp(10f))
             text(
                 c, b.label, btnRect.centerX(), btnRect.centerY() - (if (b.subLabel != null) dp(7f) else 0f),
-                dp(16f), Theme.BG_DEEP, bold = true, alpha = alpha
+                labelSize, Theme.BG_DEEP, bold = true, alpha = alpha
             )
         } else {
             fill.color = Theme.withAlpha(if (b.pressed) Theme.PANEL_HI else Theme.PANEL, alpha * 0.96f)
@@ -318,9 +330,10 @@ class Ui(val context: Context, val density: Float) {
             c.drawRoundRect(btnRect, radius, radius, stroke)
             fill.color = Theme.withAlpha(b.accent, alpha * 0.9f)
             c.drawRect(btnRect.centerX() - dp(10f), btnRect.bottom - dp(2.2f), btnRect.centerX() + dp(10f), btnRect.bottom - dp(0.8f), fill)
+            val labelSize = fitSize(b.label, dp(16f), (btnRect.width() - dp(12f)).coerceAtLeast(dp(24f)), bold = true, minSize = dp(10f))
             text(
                 c, b.label, btnRect.centerX(), btnRect.centerY() - (if (b.subLabel != null) dp(7f) else 0f),
-                dp(16f), if (b.enabled) Theme.TEXT else Theme.TEXT_FAINT, bold = true, alpha = alpha
+                labelSize, if (b.enabled) Theme.TEXT else Theme.TEXT_FAINT, bold = true, alpha = alpha
             )
         }
         b.subLabel?.let {

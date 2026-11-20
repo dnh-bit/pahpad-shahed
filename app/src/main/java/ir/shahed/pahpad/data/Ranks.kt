@@ -6,7 +6,7 @@ object Ranks {
     class Rank(val title: String, val minXp: Int, val maxXp: Int) {
         /** پیشرفت در رتبه فعلی بین ۰ و ۱ */
         fun progress(xp: Int): Float {
-            if (maxXp <= minXp) return 1f
+            if (maxXp == Int.MAX_VALUE || maxXp <= minXp) return 1f
             return ((xp - minXp).toFloat() / (maxXp - minXp).toFloat()).coerceIn(0f, 1f)
         }
     }

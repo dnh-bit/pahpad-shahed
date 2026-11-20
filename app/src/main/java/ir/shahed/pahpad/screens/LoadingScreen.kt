@@ -107,9 +107,14 @@ class LoadingScreen(
 
     // ------------------------------------------------------------ گام‌ها
 
+    private var steppedThisFrame = false
+    private var leaving = false
+    private var handedOff = false
+
     override fun update(dt: Float) {
         appear = (appear + dt * 3f).coerceAtMost(1f)
-        if (ready) return
+        if (ready || steppedThisFrame) return
+        steppedThisFrame = true
 
         when (stepIndex) {
             0 -> {
@@ -238,11 +243,16 @@ class LoadingScreen(
         // گرم‌کردن روی بوم سخت‌افزاری خود ویو — پیش از کشیدن رابط کاربری،
         // چون UI باید روی آن بیاید. خروجی دور ریخته می‌شود ولی GPU همان
         // آپلود بافت و کامپایل شیدر مسیر واقعی بازی را انجام داده است.
+        steppedThisFrame = false
         if (!ready && stepIndex == 4 && warmFrames >= 6 && hwWarm > 0) {
             val m = mission
             val r = renderer
             if (m != null && r != null && vw > 0f && vh > 0f) {
                 r.draw(c, m, vw, vh)
+                ui.fill.shader = null
+                ui.fill.alpha = 255
+                ui.fill.color = Theme.BG
+                c.drawRect(0f, 0f, vw, vh, ui.fill)
             }
         }
         ui.fill.shader = glow
@@ -284,8 +294,10 @@ class LoadingScreen(
     }
 
     override fun onTouchDown(x: Float, y: Float, pointerId: Int): Boolean {
-        if (!ready) return true
+        if (!ready || leaving) return true
         val m = mission ?: return true
+        leaving = true
+        handedOff = true
         // رفتن به بازی — از همان mission و renderer آماده‌شده استفاده می‌شود،
         // پس فریم اول بازی هیچ کاری جز رسم ندارد.
         game.show(GameScreen(game, level, mode, seed, m, renderer))
@@ -293,15 +305,19 @@ class LoadingScreen(
     }
 
     override fun onExit() {
-        // بیت‌مپ دور ریختنی حتماً آزاد شود
+        // بیت‌مپ دور ریختنی و رندرر تحویل‌داده‌نشده حتماً آزاد شوند
         warm?.recycle()
         warm = null
         warmCanvas = null
+        if (!handedOff) renderer?.release()
+        renderer = null
+        mission = null
     }
 
     /** بازگشت: تا وقتی آماده نشده، دکمهٔ بازگشت بی‌اثر است. */
     override fun onBack(): Boolean {
-        if (!ready) return true
+        if (!ready || leaving) return true
+        leaving = true
         game.show(BriefingScreen(game, level, mode))
         return true
     }
