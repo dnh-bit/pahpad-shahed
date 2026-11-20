@@ -28,6 +28,16 @@ class BriefingScreen(
     private val map = RectF()
 
     /**
+     * ناحیهٔ ترسیم نقشه (بدون نوار راهنمای رنگی پایین).
+     *
+     * چرا جدا شد: نقطهٔ پرتاب روی `my(0)` می‌نشیند که نزدیک لبهٔ پایین
+     * نقشه است، و نوار راهنما هم همان‌جا بود. هر جای‌گیری برچسب یا روی
+     * آیکون می‌افتاد یا روی «قرمز: پدافند…». با کنار گذاشتن یک نوار
+     * اختصاصی، برچسب همیشه جای آزاد دارد.
+     */
+    private val plot = RectF()
+
+    /**
      * جعبه‌های رسم‌شده برای تست — «چه چیزی واقعاً کشیده شد و کجا».
      *
      * چرا لازم است: سه باگ این صفحه (کارت پهبادِ غایب، زیرنویسِ بریده،
@@ -72,6 +82,7 @@ class BriefingScreen(
 
     override fun layoutUi(w: Float, h: Float) {
         map.set(dp(16f), h * 0.16f, w * 0.44f, h - dp(70f))
+        plot.set(map.left, map.top, map.right, map.bottom - dp(30f))
         val bw = (w * 0.52f - dp(20f)) / 3f
         val by = h - dp(62f)
         val x = w * 0.47f
@@ -82,14 +93,14 @@ class BriefingScreen(
 
     private fun mx(worldX: Float): Float {
         val span = 900f
-        return map.centerX() + (worldX / span) * map.width()
+        return plot.centerX() + (worldX / span) * plot.width()
     }
 
     private fun my(worldZ: Float): Float {
         val minZ = -120f
         val maxZ = level.distance + 260f
         val t = ((worldZ - minZ) / (maxZ - minZ)).coerceIn(-0.2f, 1.2f)
-        return map.bottom - t * map.height()
+        return plot.bottom - t * plot.height()
     }
 
     /**
@@ -102,7 +113,7 @@ class BriefingScreen(
      * شده». مقیاس X همان چیزی است که در نسخهٔ ۰.۲.۷ بود و به‌نظر خودش
      * بهتر بود؛ فقط شکل باید گرد بماند.
      */
-    private fun radiusPx(meters: Float): Float = meters * (map.width() / 900f)
+    private fun radiusPx(meters: Float): Float = meters * (plot.width() / 900f)
 
     override fun render(c: Canvas) {
         debugBoxes.clear()
@@ -233,20 +244,17 @@ class BriefingScreen(
         //
         // چرا برچسب قبلاً دیده نمی‌شد: با `my(0f)` که نزدیک لبهٔ پایین نقشه
         // است، `+dp(22f)` برچسب را **بیرون** از `clipRect` می‌انداخت و
-        // کاملاً بریده می‌شد. حالا اگر جای پایین نبود، برچسب بالای آیکون
-        // می‌رود؛ و آیکون همان اسپرایت واقعی پهباد است نه شکل ساده.
+        // کاملاً بریده می‌شد. آیکون هم اسپرایت واقعی پهباد است، نه شکل ساده.
         //
         // جای‌گیری برچسب باید از نوار راهنمای رنگی (پایین نقشه، تمام عرض)
         // دور بماند؛ وگرنه متن روی «قرمز: پدافند…» می‌افتد. تا وقتی
         // «پایین آیکون» با آن نوار برخورد نکند همان‌جا می‌ماند، وگرنه
-        // می‌رود بالای آیکون — نه اینکه با محدودکردن y روی خود آیکون بیفتد.
         val lx = mx(0f)
         val ly = my(0f)
         Deco.droneMapIcon(this, c, lx, ly, dp(9f), Theme.MINT, save.selectedDroneId, 0f)
-        val legendTop = map.bottom - dp(26f)
-        val belowY = ly + dp(24f)
-        val aboveY = ly - dp(19f)
-        val labelY = if (belowY + dp(3f) <= legendTop) belowY else aboveY.coerceAtMost(legendTop - dp(3f))
+        // plot از قبل نوار راهنما را کنار گذاشته، پس «پایین آیکون»
+        // همیشه داخل ناحیهٔ ترسیم است و به نوار رنگی نمی‌رسد.
+        val labelY = (ly + dp(22f)).coerceAtMost(plot.bottom - dp(4f))
         mark("droneIcon", lx - dp(12f), ly - dp(12f), lx + dp(12f), ly + dp(12f))
         val dW = ui.measure("پهباد شاهد", dp(10.5f))
         mark("droneLabel", lx - dW / 2f, labelY - dp(10.5f), lx + dW / 2f, labelY + dp(3f))
