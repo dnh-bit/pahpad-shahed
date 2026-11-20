@@ -93,20 +93,16 @@ class BriefingScreen(
     }
 
     /**
-     * مقیاس افقی و عمودی نقشه جدا هستند (چون نقشه کشیده است)، ولی **شعاع
-     * مناطق باید گرد بماند**.
+     * شعاع مناطق روی نقشه — **دقیقاً همان مقیاس نسخهٔ ۰.۲.۷ (محور X)**.
      *
-     * چرا: نسخهٔ قبل شعاع را با مقیاس X می‌کشید و روی محور Z کشیده می‌شد.
-     * یک‌بار با `drawOval` و مقیاس دو محور «درست» شد، ولی نتیجه‌اش همان
-     * بیضی‌های پهن و درهم بود که خواندن نقشه را خراب کرد (شکایت کاربر:
-     * «این بخش عکس اهداف خیلی بدتر شده»). راه درست: یک شعاع یکنواخت با
-     * **کوچک‌ترین** مقیاس دو محور — نه بیضی، نه بزرگ‌نمایی.
+     * چرا برنگشتیم به مقیاس محور Z یا میانگین دو محور: نقشه در محور Z
+     * فشرده‌تر است (چون کل مسیر پرواز در ارتفاع صفحه جا می‌شود). اگر
+     * شعاع را با مقیاس Z بگیریم، حلقه‌ها کوچک و ناخوانا می‌شوند و اگر
+     * بیضی بکشیم همان بیضی‌های پهنِ درهم می‌شوند که کاربر گفت «بدتر
+     * شده». مقیاس X همان چیزی است که در نسخهٔ ۰.۲.۷ بود و به‌نظر خودش
+     * بهتر بود؛ فقط شکل باید گرد بماند.
      */
-    private fun radiusPx(meters: Float): Float {
-        val sx = map.width() / 900f
-        val sy = map.height() / (level.distance + 380f)
-        return meters * minOf(sx, sy)
-    }
+    private fun radiusPx(meters: Float): Float = meters * (map.width() / 900f)
 
     override fun render(c: Canvas) {
         debugBoxes.clear()
@@ -239,11 +235,18 @@ class BriefingScreen(
         // است، `+dp(22f)` برچسب را **بیرون** از `clipRect` می‌انداخت و
         // کاملاً بریده می‌شد. حالا اگر جای پایین نبود، برچسب بالای آیکون
         // می‌رود؛ و آیکون همان اسپرایت واقعی پهباد است نه شکل ساده.
+        //
+        // جای‌گیری برچسب باید از نوار راهنمای رنگی (پایین نقشه، تمام عرض)
+        // دور بماند؛ وگرنه متن روی «قرمز: پدافند…» می‌افتد. تا وقتی
+        // «پایین آیکون» با آن نوار برخورد نکند همان‌جا می‌ماند، وگرنه
+        // می‌رود بالای آیکون — نه اینکه با محدودکردن y روی خود آیکون بیفتد.
         val lx = mx(0f)
         val ly = my(0f)
         Deco.droneMapIcon(this, c, lx, ly, dp(9f), Theme.MINT, save.selectedDroneId, 0f)
-        val labelAbove = ly + dp(28f) > map.bottom - dp(30f)
-        val labelY = if (labelAbove) ly - dp(20f) else ly + dp(24f)
+        val legendTop = map.bottom - dp(26f)
+        val belowY = ly + dp(24f)
+        val aboveY = ly - dp(19f)
+        val labelY = if (belowY + dp(3f) <= legendTop) belowY else aboveY.coerceAtMost(legendTop - dp(3f))
         mark("droneIcon", lx - dp(12f), ly - dp(12f), lx + dp(12f), ly + dp(12f))
         val dW = ui.measure("پهباد شاهد", dp(10.5f))
         mark("droneLabel", lx - dW / 2f, labelY - dp(10.5f), lx + dW / 2f, labelY + dp(3f))
