@@ -464,7 +464,7 @@ class ShopScreen(
             val tx = r.right - dp(12f)
             val maxW = r.width() - dp(110f)
             ui.text(c, m.name, tx, r.top + dp(23f),
-                fitSize(m.name, dp(13.5f), maxW, bold = true),
+                ui.fitSize(m.name, dp(13.5f), maxW, bold = true),
                 if (unlocked) Theme.TEXT else Theme.TEXT_FAINT, bold = true, align = Paint.Align.RIGHT)
 
             val status = when {
@@ -482,7 +482,7 @@ class ShopScreen(
             // خط مشخصات پایهٔ بدنه — مقایسهٔ سریع بین پهبادها بدون انتخاب
             val stats = statsLine(m)
             ui.text(c, stats, tx, r.top + dp(56f),
-                fitSize(stats, dp(9.5f), r.width() - dp(64f)),
+                ui.fitSize(stats, dp(9.5f), r.width() - dp(64f)),
                 Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
 
             // نشان انتخاب: خطِ عمودی سمت راست کارت (جدا از همهٔ متن‌ها)
@@ -517,14 +517,14 @@ class ShopScreen(
 
             // خط ۱ — عنوان (بالا، راست‌چین)
             ui.text(c, k.title, textRight, r.top + dp(17f),
-                fitSize(k.title, dp(12.5f), tW, bold = true),
+                ui.fitSize(k.title, dp(12.5f), tW, bold = true),
                 Theme.TEXT, bold = true, align = Paint.Align.RIGHT)
 
             // خط ۲ — مقدار فعلی و (تا سقف) مقدار سطح بعد (وسط، راست‌چین)
             val valueNow = if (lvl < cap) k.valueAt(lvl, viewing) + " ← " + k.valueAt(lvl + 1, viewing)
                 else k.valueAt(lvl, viewing)
             ui.text(c, valueNow, textRight, r.top + dp(33f),
-                fitSize(valueNow, dp(11.5f), tW),
+                ui.fitSize(valueNow, dp(11.5f), tW),
                 if (unlocked) Theme.MINT else Theme.TEXT_FAINT, align = Paint.Align.RIGHT)
 
             // خط ۳ — توضیح (پایین، رو به چپ از ناحیهٔ متن)
