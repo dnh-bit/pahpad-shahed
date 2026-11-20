@@ -72,7 +72,6 @@ class BriefingScreen(
 
     override fun layoutUi(w: Float, h: Float) {
         map.set(dp(16f), h * 0.16f, w * 0.44f, h - dp(70f))
-        mark("map", map.left, map.top, map.right, map.bottom)
         val bw = (w * 0.52f - dp(20f)) / 3f
         val by = h - dp(62f)
         val x = w * 0.47f
@@ -167,6 +166,7 @@ class BriefingScreen(
     // ------------------------------------------------------------- نقشه
 
     private fun drawMap(c: Canvas) {
+        mark("map", map.left, map.top, map.right, map.bottom)
         ui.panel(c, map, Theme.withAlpha(Theme.PANEL, 0.92f), Theme.LINE, dp(14f))
         c.save()
         c.clipRect(map)
