@@ -31,9 +31,6 @@ class Particle {
  * flames bloom instead of turning into an opaque orange blob.
  */
 class Fx(capacity: Int = 900) {
-    companion object {
-        const val SOLID=0; const val SMOKE=1; const val FIRE=2; const val VAPOR=3; const val GLOW=4
-    }
     private val pool=Array(capacity) { Particle() }
     private val rnd=Random()
     private val proj=FloatArray(3)
@@ -47,6 +44,7 @@ class Fx(capacity: Int = 900) {
 
     // ------------------------------------------------------------ sprites (مشترک و کش‌شده بین ماموریت‌ها)
     companion object {
+        const val SOLID=0; const val SMOKE=1; const val FIRE=2; const val VAPOR=3; const val GLOW=4
         private val RING_COS = FloatArray(41) { i -> cos(i * 2f * PI.toFloat() / 40f) }
         private val RING_SIN = FloatArray(41) { i -> sin(i * 2f * PI.toFloat() / 40f) }
 

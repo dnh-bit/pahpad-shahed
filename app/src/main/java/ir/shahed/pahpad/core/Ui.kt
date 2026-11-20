@@ -106,6 +106,24 @@ class Ui(val context: Context, val density: Float) {
         return textPaint.measureText(str)
     }
 
+    /**
+     * بزرگ‌ترین اندازه‌ای که متن در عرض [maxW] جا شود.
+     *
+     * چرا در Ui و نه در هر صفحه: سه صفحه (فروشگاه، فهرست فصل‌ها، دکمه‌ها)
+     * به این نیاز دارند. وقتی در ShopScreen خصوصی بود، ChapterSelectScreen
+     * به نسخهٔ خودش دسترسی نداشت و بیلد می‌شکست.
+     */
+    fun fitSize(
+        text: String, start: Float, maxW: Float,
+        bold: Boolean = false, minSize: Float = 9f
+    ): Float {
+        if (maxW <= 0f) return start
+        var s = start
+        val floor = minSize.coerceAtMost(start)
+        while (s > floor && measure(text, s, bold) > maxW) s -= start * 0.02f + 0.25f
+        return s.coerceAtLeast(floor)
+    }
+
     /** شکستن متن فارسی به چند خط با عرض مشخص */
     fun wrap(str: String, size: Float, maxWidth: Float, bold: Boolean = false): List<String> {
         textPaint.typeface = if (bold) boldFace else regularFace

@@ -614,11 +614,4 @@ class ShopScreen(
             " · سرعت ×" + Fa.num(m.speedAt(1) / 150f, 2) +
             " · هدایت ×" + Fa.num(m.guidanceAt(1), 2) +
             " · مقاومت " + Fa.num(m.armorAt(1)) + " ضربه"
-
-    /** بزرگ‌ترین اندازه‌ای که متن در آن جا شود (کف ۹dp) */
-    private fun fitSize(text: String, start: Float, maxW: Float, bold: Boolean = false): Float {
-        var s = start
-        while (s > dp(9f) && ui.measure(text, s, bold) > maxW) s -= dp(0.5f)
-        return s
-    }
 }
