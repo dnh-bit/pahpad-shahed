@@ -152,7 +152,8 @@ class BriefingLayoutTest {
             val colors = screen.debugBoxes().firstOrNull { it.name == "mapLegendColors" }
             if (colors != null) {
                 val overlap = RectF(label.rect).apply { intersect(colors.rect) }
-                assertTrue("$tag: برچسب پهباد روی راهنمای رنگی افتاد",
+                assertTrue("$tag: برچسب پهباد روی راهنمای رنگی افتاد " +
+                    "label=${label.rect} colors=${colors.rect}",
                     overlap.isEmpty)
             }
         }
