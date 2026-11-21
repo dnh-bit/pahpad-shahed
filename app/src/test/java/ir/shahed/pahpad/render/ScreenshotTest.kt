@@ -106,6 +106,13 @@ class ScreenshotTest {
             shoot("briefing", ir.shahed.pahpad.screens.BriefingScreen(activity,
                 ir.shahed.pahpad.data.Levels.all.first { it.chapter == 1 },
                 ir.shahed.pahpad.game.MissionMode.STORY), w, h, tag)
+            // همان ماموریتی که کاربر اسکرین‌شات کرد (۲-۴): مناطق پدافند/رادار/
+            // جنگ الکترونیک دارد، پس شکل حلقه‌ها اینجا سنجیده می‌شود.
+            ir.shahed.pahpad.data.Levels.all.firstOrNull { it.chapter == 2 && it.index == 4 }
+                ?.let { lv ->
+                    shoot("briefing_zones", ir.shahed.pahpad.screens.BriefingScreen(activity,
+                        lv, ir.shahed.pahpad.game.MissionMode.STORY), w, h, tag)
+                }
             shoot("leaderboard", LeaderboardScreen(activity), w, h, tag)
             shoot("game", ir.shahed.pahpad.screens.GameScreen(activity,
                 ir.shahed.pahpad.data.Levels.all.first { it.chapter == 1 },
