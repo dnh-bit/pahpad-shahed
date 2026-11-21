@@ -88,6 +88,11 @@ class ScreenshotTest {
             shoot("levels_c3", LevelSelectScreen(activity, 3), w, h, tag)
             shoot("shop", ShopScreen(activity), w, h, tag)
             shoot("settings", SettingsScreen(activity), w, h, tag)
+            // صفحهٔ بریفینگ — نقشهٔ اهداف، کارت پهباد و زیرنویس بنر باید
+            // با چشم دیده شوند، نه فقط با assert.
+            shoot("briefing", ir.shahed.pahpad.screens.BriefingScreen(activity,
+                ir.shahed.pahpad.data.Levels.all.first { it.chapter == 1 },
+                ir.shahed.pahpad.game.MissionMode.STORY), w, h, tag)
             shoot("leaderboard", LeaderboardScreen(activity), w, h, tag)
             shoot("game", ir.shahed.pahpad.screens.GameScreen(activity,
                 ir.shahed.pahpad.data.Levels.all.first { it.chapter == 1 },
