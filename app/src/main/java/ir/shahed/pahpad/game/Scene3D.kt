@@ -307,6 +307,10 @@ class Scene3D {
             if(qin){ val o=clipped[count++]; for(k in 0..2)o[k]=q[k] }
         }
         if(count<3)return
+        // کلید از چندضلعیِ «بریده‌نشده» (input) حساب می‌شود، نه نسخهٔ بریده‌شده:
+        // وقتی یک رأس از صفحهٔ نزدیک می‌گذرد، برش، مجموعهٔ رأس‌ها را ناگهانی
+        // عوض می‌کند و اگر کلید از بریده‌شده بیاید، کلید و مه از فریمی به
+        // فریم دیگر می‌پرند (سوسو در فاصلهٔ نزدیک).
         var depth=0f
         if (maxDepth) {
             // کلید مرتب‌سازی = دورترین رأس، نه میانگین. برای یک سطحِ بزرگِ
@@ -318,11 +322,11 @@ class Scene3D {
             // نقطه‌ای از سازهٔ رویش از دورترین لبهٔ سطح دورتر نیست (تا وقتی
             // دوربین بالای صفحهٔ سطح است — در بازی همیشه همین‌طور است).
             var m=Float.NEGATIVE_INFINITY
-            for(i in 0 until count) if(clipped[i][2]>m)m=clipped[i][2]
+            for(i in 0 until n) if(input[i][2]>m)m=input[i][2]
             depth=m
         } else {
-            for(i in 0 until count)depth+=clipped[i][2]
-            depth/=count.toFloat()
+            for(i in 0 until n)depth+=input[i][2]
+            depth/=n.toFloat()
         }
         if(depth>fogEnd*1.4f)return
         val f=next(); f.count=count; f.depth=depth; f.fog=fogFactor(depth); f.depthBias=bias

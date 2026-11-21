@@ -577,7 +577,8 @@ class Rig(private val scene: Scene3D) {
         cx: Float, baseY: Float, cz: Float,
         hx0: Float, hz0: Float, hx1: Float, hz1: Float, height: Float,
         color: Int, side: Bitmap? = null, top: Bitmap? = side,
-        shiftX: Float = 0f, shiftZ: Float = 0f, bottom: Boolean = true
+        shiftX: Float = 0f, shiftZ: Float = 0f, bottom: Boolean = true,
+        seatBias: Float = 0f, surfaceX: Float = 0f, surfaceY: Float = 0f, surfaceZ: Float = 0f
     ) {
         val ty = baseY + height
         ref(cx, baseY + height * 0.5f, cz)
@@ -589,7 +590,7 @@ class Rig(private val scene: Scene3D) {
         setCorner(5, cx + hx1 + shiftX, ty, cz - hz1 + shiftZ)
         setCorner(6, cx + hx1 + shiftX, ty, cz + hz1 + shiftZ)
         setCorner(7, cx - hx1 + shiftX, ty, cz + hz1 + shiftZ)
-        hexa(corner, color, side, top, bottom)
+        hexa(corner, color, side, top, bottom, seatBias = seatBias, surfaceX = surfaceX, surfaceY = surfaceY, surfaceZ = surfaceZ)
     }
 
     /**

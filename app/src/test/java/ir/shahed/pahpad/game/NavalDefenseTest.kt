@@ -106,6 +106,40 @@ class NavalDefenseTest {
         }
     }
 
+    @Test fun warshipSitesSitOnTheHelipad() {
+        // رگرسیون بچ ۲۹: روی ناوشکن/ناو، سامانه باید در نوار سکوی پد (نیمهٔ
+        // عقبی عرشه) بنشیند: lz بین ‎-۰٫۵d و ‎-۰٫۳۴d با تلورانس ۱ متر —
+        // نه روی جزیرهٔ فرمان و نه داخل برجک‌ها.
+        var checked = 0
+        for (id in listOf("L2_5", "L4_4")) {
+            val level = Levels.byId(id)!!
+            for (seed in 1L..10L) {
+                val world = World(level, seed)
+                for (a in world.aaSites) {
+                    val host = a.hostProp
+                    if (host != null && host.kind == PropKind.SHIP) {
+                        val dx = a.x - host.x; val dz = a.z - host.z
+                        val s = kotlin.math.sin(host.rot); val c = kotlin.math.cos(host.rot)
+                        val lz = -dx * s + dz * c
+                        val d = host.d
+                        assertTrue("seed=$seed ship-prop site off the pad band (lz=$lz, d=$d)",
+                            -0.50f * d - 1f <= lz && lz <= -0.34f * d + 1f)
+                        checked++
+                    }
+                    val t = a.hostTarget
+                    if (t != null && t.shape == TargetShape.SHIP) {
+                        val d = t.d
+                        assertTrue("seed=$seed ship-target site off the pad band (hostLZ=${a.hostLZ}, d=$d)",
+                            -0.50f * d - 1f <= a.hostLZ && a.hostLZ <= -0.34f * d + 1f)
+                        checked++
+                    }
+                }
+            }
+        }
+        // ضدخلأ: تست نباید بی‌صدا از کنار هیچ سامانه‌ای رد شود.
+        assertTrue("no warship-hosted site was checked", checked > 0)
+    }
+
     @Test fun landLevelsKeepDefensesOnTheGround() {
         val world = World(Levels.byId("L1_1")!!, 3L)
         for (a in world.aaSites) {

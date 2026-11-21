@@ -452,7 +452,17 @@ class Vehicles(private val context: Context) {
         for (tier in 0..2) {
             val th = height * (0.34f - tier * 0.05f)
             rig.beginPart(Rig.PART_ISLAND_TIER + tier)
-            rig.taper(0f, sy, sz, sw, sl * 0.5f, sw * 0.86f, sl * 0.45f, th, supC, hullT, hullT)
+            // طبقه‌های ۱ و ۲ روی مرکزِ بامِ طبقهٔ قبلی می‌نشینند: بامِ هر طبقه
+            // از تهِ طبقهٔ بالایی پهن‌تر است و حلقهٔ دفن‌شدهٔ بام با دیوارهای
+            // طبقهٔ بالا در کلید مرتب‌سازی تقریباً برابر می‌شوند و در
+            // ارتفاع‌های نزدیکِ دوربین می‌لرزند. sz بعد از طبقهٔ قبلی
+            // کم شده، پس sz + 0.012·length مرکز طبقهٔ زیرین است.
+            if (tier > 0) {
+                rig.taper(0f, sy, sz, sw, sl * 0.5f, sw * 0.86f, sl * 0.45f, th, supC, hullT, hullT,
+                    seatBias = 1.5f, surfaceX = 0f, surfaceY = sy, surfaceZ = sz + length * 0.012f)
+            } else {
+                rig.taper(0f, sy, sz, sw, sl * 0.5f, sw * 0.86f, sl * 0.45f, th, supC, hullT, hullT)
+            }
             rig.endPart()
             if (tier == 1) {
                 // پنجره‌های پل روی وجه‌های طبقه. پنل نازک است و دیوار میزبانش
@@ -532,10 +542,15 @@ class Vehicles(private val context: Context) {
         }
 
         // --- دودکش مایل به عقب
-        val fz = -half * 0.16f
+        // دودکش روی عرشه پشت جزیره می‌ایستد، نه داخل آن: نسخهٔ قبل یک‌سوم
+        // جلویی‌اش در شیب پشتی جزیره فرو رفته بود و پایه‌اش هم معلق بود.
+        // حجم‌های متقاطع زیر مرتب‌ساز نقاشی سوسو می‌زنند. ارتفاع بالا طوری
+        // تنظیم شده که نوکش در همان ارتفاع قبلی (deckY + 0.94h) بماند و
+        // درپوش موجود دقیقاً رویش بنشیند.
+        val fz = -half * 0.26f
         rig.beginPart(Rig.PART_ATTACH)
-        rig.taper(0f, deckY + height * 0.42f, fz, b * 0.58f, length * 0.045f, b * 0.42f, length * 0.032f,
-            height * 0.52f, Theme.shade(supC, 0.94f), hullT, hullT, 0f, -length * 0.020f)
+        rig.taper(0f, deckY + 0.22f, fz, b * 0.58f, length * 0.045f, b * 0.42f, length * 0.032f,
+            height * 0.72f, Theme.shade(supC, 0.94f), hullT, hullT, 0f, -length * 0.020f)
         rig.box(0f, deckY + height * 0.94f, fz - length * 0.020f, b * 0.90f, height * 0.04f, length * 0.075f,
             DARK)
         rig.endPart()
@@ -545,12 +560,16 @@ class Vehicles(private val context: Context) {
         rig.box(0f, deckY + 0.22f, -half * 0.52f, b * 1.30f, height * 0.32f, length * 0.16f, supC, hullT, hullT)
         rig.endPart()
         // صفحه‌ی پد حجم نشسته روی عرشه است (مرجع = مرکز روی عرشه).
+        // اندازه و جای پد طوری تنظیم شده که لبهٔ جلویی‌اش دقیقاً به وجهٔ
+        // عقبی آشیانه برسد و دیگر داخل حجم آشیانه فرو نرود (قبلاً ۰٫۰۳ طول
+        // کشتی هم‌پوشانی داشت و حجم‌های متقاطع سوسو می‌زدند): بازهٔ پد
+        // حالا ‎[-۰٫۵۰، ‎-۰٫۳۴]‎ طول کشتی است.
         val deckRefX = 0f; val deckRefY = deckY + 0.22f; val deckRefZ = -half * 0.05f
         rig.beginPart(Rig.PART_SEATED)
         // وجه رویی صفحهٔ پد برچسب «سطح» می‌گیرد تا تست بتواند حلقه‌ها را
         // دقیقاً با همان وجه بسنجد (نه با درپوش VLS که جای دیگری است).
         rig.markNextTop(Rig.TAG_PAD)
-        rig.boxSeated(0f, deckY + 0.24f, -half * 0.82f, b * 1.55f, 0.10f, length * 0.20f,
+        rig.boxSeated(0f, deckY + 0.24f, -half * 0.84f, b * 1.55f, 0.10f, length * 0.16f,
             Theme.shade(deckC, 0.86f), deckT, deckT, seatBias = 2.2f,
             surfaceX = deckRefX, surfaceY = deckRefY, surfaceZ = deckRefZ)
         rig.clearTopMark()
@@ -560,8 +579,8 @@ class Vehicles(private val context: Context) {
             // تا با آن چشمک نزنند و همیشه رویش بمانند.
             rig.beginPart(Rig.PART_PAD_RING)
             rig.beginBias(2.8f, deckRefX, deckRefY, deckRefZ)
-            rig.disc(0f, deckY + 0.46f, -half * 0.82f, 0f, 1f, 0f, b * 0.62f, 12, 0xFF8C8F82.toInt())
-            rig.disc(0f, deckY + 0.52f, -half * 0.82f, 0f, 1f, 0f, b * 0.42f, 12, Theme.shade(deckC, 0.7f))
+            rig.disc(0f, deckY + 0.46f, -half * 0.84f, 0f, 1f, 0f, b * 0.62f, 12, 0xFF8C8F82.toInt())
+            rig.disc(0f, deckY + 0.52f, -half * 0.84f, 0f, 1f, 0f, b * 0.42f, 12, Theme.shade(deckC, 0.7f))
             rig.endBias()
             rig.endPart()
         }
@@ -647,16 +666,17 @@ class Vehicles(private val context: Context) {
         rig.beginPart(Rig.PART_DECK_PLATE)
         rig.box(0f, deckY, 0f, db * 2f, height * 0.06f, length * 0.98f, deckC, hullT, deckT,
             topFace = false, allFarBox = shipBox, allFarMargin = 3f)
-        // برچسب تشخیصی روی وجه‌های رویی عرشهٔ سگمنتی (فقط برای تست)
+        // برچسب تشخیصی روی وجه رویی عرشهٔ پرواز (فقط برای تست)
         rig.markBlock(Rig.TAG_SHIP_DECK)
-        for (seg in 0..3) {
-            val z0 = -half * 0.98f + seg * (length * 0.98f) / 4f
-            val z1 = z0 + (length * 0.98f) / 4f
-            // کلید عمق هر سگمنت عرشه از دورترین رأسش + لنگر به دورترین گوشهٔ
-            // کل کشتی (رگرسیون ShipDeckOrderTest).
-            rig.face(-db, deckTopY, z0, db, deckTopY, z0, db, deckTopY, z1, -db, deckTopY, z1,
-                deckC, deckT, farBox = shipBox)
-        }
+        // عرشهٔ پرواز یک چهارضلعیِ یکپارچه است: سگمنت‌بندیِ قبلی لازم بود
+        // چون کلید هر قطعه میانگینِ مرکز خودش بود؛ حالا کلید عرشه به
+        // دورترین گوشهٔ کل کشتی لنگر است و یک وجه همان کلید را دارد —
+        // و بافت هم دیگر سر هر درز از اول شروع نمی‌شود (حس «تیکه‌تیکه»).
+        // کلید عمق عرشه از دورترین رأس + لنگر به دورترین گوشهٔ
+        // کل کشتی (رگرسیون ShipDeckOrderTest).
+        rig.face(-db, deckTopY, -half * 0.98f, db, deckTopY, -half * 0.98f,
+            db, deckTopY, half * 0.98f, -db, deckTopY, half * 0.98f,
+            deckC, deckT, farBox = shipBox)
         rig.unmarkBlock()
         rig.endPart()
         rig.markBlock(Rig.TAG_SHIP_PART)
@@ -711,8 +731,16 @@ class Vehicles(private val context: Context) {
         for (tier in 0..3) {
             val th = height * (0.26f - tier * 0.035f)
             rig.beginPart(Rig.PART_ISLAND_TIER + tier)
-            rig.taper(ix, sy, iz, sw, sl * 0.5f, sw * 0.88f, sl * 0.46f, th,
-                Theme.shade(hullC, 1.06f), hullT, hullT)
+            // طبقه‌های ۱ تا ۳ مثل ناوشکن روی بام طبقهٔ زیرین می‌نشینند تا
+            // حلقهٔ دفن‌شدهٔ بام با دیوارهای طبقهٔ بالا نجنگد.
+            if (tier > 0) {
+                rig.taper(ix, sy, iz, sw, sl * 0.5f, sw * 0.88f, sl * 0.46f, th,
+                    Theme.shade(hullC, 1.06f), hullT, hullT,
+                    seatBias = 1.5f, surfaceX = ix, surfaceY = sy, surfaceZ = iz)
+            } else {
+                rig.taper(ix, sy, iz, sw, sl * 0.5f, sw * 0.88f, sl * 0.46f, th,
+                    Theme.shade(hullC, 1.06f), hullT, hullT)
+            }
             rig.endPart()
             if (tier == 1) {
                 // پنجره‌های پل: پنل نازکی که وجه جلویی طبقه را سوراخ می‌کند.
@@ -734,7 +762,8 @@ class Vehicles(private val context: Context) {
         val capH = height * 0.16f
         rig.beginPart(Rig.PART_ISLAND_CAP)
         rig.taper(ix, sy, iz, sw, sl * 0.5f, sw * 0.86f, sl * 0.44f, capH,
-            Theme.shade(hullC, 0.96f), hullT, hullT)
+            Theme.shade(hullC, 0.96f), hullT, hullT,
+            seatBias = 1.5f, surfaceX = ix, surfaceY = sy, surfaceZ = iz)
         rig.endPart()
         val capTop = sy + capH
         if (detail <= 1) {
@@ -848,8 +877,11 @@ class Vehicles(private val context: Context) {
         rig.endBias()
         rig.endPart()
         rig.beginPart(Rig.PART_ATTACH)
+        // دودکش روی بامِ خانهٔ سکان می‌نشیند (مثل طبقه‌های جزیره): از دور
+        // حلقهٔ بام با دیوار دودکش هم‌کلید می‌شد و می‌لرزید.
         rig.taper(0f, deckY + height * 1.1f, -half * 0.72f, b * 0.3f, length * 0.025f, b * 0.24f, length * 0.02f,
-            height * 0.5f, 0xFF4E4A44.toInt(), metal, metal)
+            height * 0.5f, 0xFF4E4A44.toInt(), metal, metal,
+            seatBias = 1.5f, surfaceX = 0f, surfaceY = deckY + 0.2f + height * 0.9f, surfaceZ = -half * 0.66f)
         rig.endPart()
         // کانتینرها روی عرشه — باکس ساده با کلید عمق واقعی خودش.
         // قبلاً boxSeated بودند با مرجعِ مرکز عرشه: کلید هر ۱۲ کانتینر به

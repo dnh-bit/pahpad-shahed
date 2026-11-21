@@ -200,7 +200,10 @@ class LoadingScreen(
                     cam.fov = 74f
                     cam.viewport(cw, ch)
                     // یک‌بار ظرفیت استخر را برای این وضوح رزرو کن
-                    r.scene.reserveFaces(2600)
+                    // ۶۰۰۰ به‌جای ۲۶۰۰: اوج شهرهای شلوغ از ۲۶۰۰ می‌گذرد و
+                    // رشد استخر در میانهٔ پرواز باعث تیک خوردن GC در ثانیه‌های
+                    // اول می‌شد؛ رزرو یک‌جای بزرگ‌تر این هزینه را حذف می‌کند.
+                    r.scene.reserveFaces(6000)
                     r.draw(warmCanvas!!, m, cw, ch)
                     warmFrames++
                     progress = ((doneWeight + steps[stepIndex].second * warmFrames / warmSpots.toFloat())

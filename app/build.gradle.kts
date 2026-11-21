@@ -23,8 +23,8 @@ android {
         resValue("string", "app_name", if (testBuild) "پهپاد شاهد تست" else "پهپاد شاهد")
         minSdk = 24
         targetSdk = 34
-        versionCode = 28
-        versionName = "0.2.8"
+        versionCode = 29
+        versionName = "0.2.9"
         resourceConfigurations += listOf("fa")
 
         // حالت مود: همهٔ مراحل و پهبادها باز؛ فقط با

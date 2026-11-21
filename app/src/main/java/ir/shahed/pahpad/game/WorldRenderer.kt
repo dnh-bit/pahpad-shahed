@@ -434,6 +434,12 @@ class WorldRenderer(private val gfxContext: Context) {
         /** فاصلهٔ ساختمان از مرکز صحنه (نه از دوربین) — برای پایداری پنجره‌ها */
         worldDist: Float = 0f
     ) {
+        // پنجره‌ها از ۹۵۰ متر به بعد کلاً حذف می‌شوند: در آن دوردست یک
+        // پنجره زیر ~۲ پیکسل زیرِ ~۵۰٪ مه است و رسمش فقط هزینه دارد؛
+        // بدنه و بام همچنان تا مرز ۱۷۰۰ متری رسم می‌شوند.
+        val camDx = x - scene.cam.x
+        val camDz = z - scene.cam.z
+        val camDist = Math.sqrt((camDx * camDx + camDz * camDz).toDouble()).toFloat()
         rig.place(x, 0f, z, yaw, 1f)
         val color = if (destroyed) 0xFF393A36.toInt() else baseColor
         val wall = Gfx.get(gfxContext, if (destroyed) "material_rust" else "material_wall")
@@ -612,7 +618,7 @@ class WorldRenderer(private val gfxContext: Context) {
             // LOD دور (detail > 1): پنجره‌ها بمانند ولی قاب‌ها حذف شوند تا
             // وجه‌ها نصف شوند و فریم نیفتد.
             val drawFrames = detail <= 1
-            if (winFade > 0.001f) {
+            if (camDist <= 950f && winFade > 0.001f) {
                 val inset = 0.06f     // بیرون‌زدگی پنجره از دیوار (متر)
                 // پنجره‌ها با بایاس عمق مرتب می‌شوند، پس لازم نیست چندان
                 // بیرون بزنند؛ ۶ سانتی‌متر برای جلوگیری از z-fight کافی است.
@@ -676,7 +682,16 @@ class WorldRenderer(private val gfxContext: Context) {
                     }
                 }
                 if (d >= 6f) {
-                    val baysX = ((baysZ.toFloat() * d / w).toInt()).coerceIn(2, 10)
+                    var baysX = ((baysZ.toFloat() * d / w).toInt()).coerceIn(2, 10)
+                    // رخ‌های کناری هم در همان بودجهٔ ۳۲ پنجره (مثل دیوار
+                    // جلو/پشت) مهار می‌شوند: تا حالا شبکهٔ کناری بی‌سقف بود و
+                    // ساختمان‌های پهن هزینهٔ وجه‌ها را دو برابر می‌کردند.
+                    if (baysX * floorsEff > maxWindows) {
+                        // فقط یک محور آزاد است (طبقه‌ها ثابت‌اند)، پس ضریب
+                        // خطیِ بودجه/محصول لازم است تا حاصل واقعاً ≤ ۳۲ شود.
+                        baysX = (baysX * (maxWindows.toFloat() / (baysX * floorsEff).toFloat()))
+                            .toInt().coerceAtLeast(2)
+                    }
                     val usableD = (d * 0.90f).coerceAtLeast(2f)
                     val slotD = (usableD / baysX).coerceAtLeast(0.9f)
                     val pwD = (slotD * 0.66f).coerceAtLeast(0.5f)
@@ -746,7 +761,9 @@ class WorldRenderer(private val gfxContext: Context) {
     }
 
     private fun zone(c: Canvas, x: Float, z: Float, radius: Float, color: Int, alpha: Float = .36f, width: Float = 1.4f) {
-        val segments = 48
+        // ۳۲ ضلع به‌جای ۴۸: حلقه‌ها در فاصلهٔ بازی یکسان خوانده می‌شوند و
+        // خط‌های immediate-mode کمتری در هر فریم کشیده می‌شود.
+        val segments = 32
         var px = x + radius
         var pz = z
         for (i in 1..segments) {
