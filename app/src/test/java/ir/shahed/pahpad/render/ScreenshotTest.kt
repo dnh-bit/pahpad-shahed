@@ -70,6 +70,15 @@ class ScreenshotTest {
         // محیط تست موجود نیست؛ صفحه‌ها فقط save/audio/show می‌خواهند، پس
         // همان دو فیلد را دستی پر می‌کنیم و onCreate را اجرا نمی‌کنیم.
         val activity = Robolectric.buildActivity(MainActivity::class.java).get()
+        // چگالی واقعی: Robolectric پیش‌فرض density=1 می‌گذارد، یعنی
+        // ۱۹۲۰px را ۱۹۲۰dp می‌بیند (سه برابر عریض‌تر از یک گوشی). با این
+        // کار همهٔ اندازه‌های dp مثل گوشی واقعی می‌شوند و تصویر artifact
+        // دیگر «همه‌چیز ریز در گوشهٔ چپ» نیست.
+        activity.resources.displayMetrics.apply {
+            density = 2.75f
+            scaledDensity = 2.75f
+            densityDpi = 440
+        }
         val save = ir.shahed.pahpad.core.SaveManager(activity)
         fun fill(name: String) {
             val f = MainActivity::class.java.getDeclaredField(name)

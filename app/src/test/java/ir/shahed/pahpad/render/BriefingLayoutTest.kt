@@ -49,6 +49,13 @@ class BriefingLayoutTest {
 
     private fun drawOnce(w: Int, h: Int): BriefingScreen {
         val activity = Robolectric.buildActivity(MainActivity::class.java).get()
+        // همان چگالی گوشی واقعی که ScreenshotTest هم می‌گذارد؛ وگرنه
+        // ۱۹۲۰px = ۱۹۲۰dp می‌شود و چیدمان واقعی آزموده نمی‌شود.
+        activity.resources.displayMetrics.apply {
+            density = 2.75f
+            scaledDensity = 2.75f
+            densityDpi = 440
+        }
         val save = SaveManager(activity)
         for (name in listOf("save", "audio")) {
             val f = MainActivity::class.java.getDeclaredField(name)
