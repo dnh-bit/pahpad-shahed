@@ -35,11 +35,15 @@ class ScreenshotTest {
     private val outDir = File("build/screens").apply { mkdirs() }
 
     /** اندازه‌های واقعی landscape اندروید (رزولوشن فیزیکی) */
+    ///
+    /// چگالی هر اندازه باید با وضوحش بخواند، وگرنه dp غلط می‌شود:
+    /// ۱۲۸۰×۷۲۰ با density=2.75 می‌شود ۴۶۵×۲۶۲dp — کوتاه‌تر از هر گوشی
+    /// واقعی، و چیدمانی که آزموده می‌شود چیدمان واقعی نیست.
     private val sizes = listOf(
-        "720x360" to (1280 to 720),    // گوشی ارزان
-        "1080p" to (1920 to 1080),     // رایج
-        "20x9" to (2340 to 1080),      // بلند
-        "tablet" to (2560 to 1440),
+        "720x360" to Triple(1280, 720, 2.0f),    // گوشی ارزان → 640×360dp
+        "1080p" to Triple(1920, 1080, 2.75f),    // رایج → 698×393dp
+        "20x9" to Triple(2340, 1080, 2.75f),     // بلند → 851×393dp
+        "tablet" to Triple(2560, 1440, 2.0f),    // تبلت → 1280×720dp
     )
 
     private fun shoot(
@@ -74,11 +78,6 @@ class ScreenshotTest {
         // ۱۹۲۰px را ۱۹۲۰dp می‌بیند (سه برابر عریض‌تر از یک گوشی). با این
         // کار همهٔ اندازه‌های dp مثل گوشی واقعی می‌شوند و تصویر artifact
         // دیگر «همه‌چیز ریز در گوشهٔ چپ» نیست.
-        activity.resources.displayMetrics.apply {
-            density = 2.75f
-            scaledDensity = 2.75f
-            densityDpi = 440
-        }
         val save = ir.shahed.pahpad.core.SaveManager(activity)
         fun fill(name: String) {
             val f = MainActivity::class.java.getDeclaredField(name)
@@ -91,7 +90,12 @@ class ScreenshotTest {
         fill("save"); fill("audio")
 
         for ((tag, dims) in sizes) {
-            val (w, h) = dims
+            val (w, h, dens) = dims
+            activity.resources.displayMetrics.apply {
+                density = dens
+                scaledDensity = dens
+                densityDpi = (dens * 160).toInt()
+            }
             shoot("menu", MainMenuScreen(activity), w, h, tag)
             shoot("chapters", ChapterSelectScreen(activity), w, h, tag)
             shoot("levels_c3", LevelSelectScreen(activity, 3), w, h, tag)

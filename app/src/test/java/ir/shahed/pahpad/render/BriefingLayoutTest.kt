@@ -40,21 +40,22 @@ import org.robolectric.annotation.GraphicsMode
 class BriefingLayoutTest {
 
     /** اندازه‌های واقعی: کوتاه‌ترین و بلندترین نسبت‌ها بدترین حالت‌اند */
+    /// (عرض, ارتفاع, چگالی) — چگالی باید با وضوح بخواند تا dp واقعی شود.
     private val sizes = listOf(
-        "720x360" to (1280 to 720),
-        "1080p" to (1920 to 1080),
-        "20x9" to (2340 to 1080),
-        "tablet" to (2560 to 1440),
+        "720x360" to Triple(1280, 720, 2.0f),
+        "1080p" to Triple(1920, 1080, 2.75f),
+        "20x9" to Triple(2340, 1080, 2.75f),
+        "tablet" to Triple(2560, 1440, 2.0f),
     )
 
-    private fun drawOnce(w: Int, h: Int): BriefingScreen {
+    private fun drawOnce(w: Int, h: Int, dens: Float): BriefingScreen {
         val activity = Robolectric.buildActivity(MainActivity::class.java).get()
-        // همان چگالی گوشی واقعی که ScreenshotTest هم می‌گذارد؛ وگرنه
-        // ۱۹۲۰px = ۱۹۲۰dp می‌شود و چیدمان واقعی آزموده نمی‌شود.
+        // چگالی متناسب با وضوح؛ وگرنه ۱۹۲۰px = ۱۹۲۰dp می‌شود یا برعکس
+        // صفحه بی‌اندازه کوتاه و چیدمان واقعی آزموده نمی‌شود.
         activity.resources.displayMetrics.apply {
-            density = 2.75f
-            scaledDensity = 2.75f
-            densityDpi = 440
+            density = dens
+            scaledDensity = dens
+            densityDpi = (dens * 160).toInt()
         }
         val save = SaveManager(activity)
         for (name in listOf("save", "audio")) {
@@ -88,8 +89,8 @@ class BriefingLayoutTest {
     @Test
     fun zonesAreRoundNotSquashed() {
         for ((tag, dims) in sizes) {
-            val (w, h) = dims
-            val screen = drawOnce(w, h)
+            val (w, h, dens) = dims
+            val screen = drawOnce(w, h, dens)
             val mapBox = screen.debugBoxes().firstOrNull { it.name == "map" }
                 ?: fail("$tag: جعبهٔ نقشه رسم نشد")
             val zone = screen.debugBoxes().firstOrNull { it.name == "zone0" }
@@ -109,8 +110,8 @@ class BriefingLayoutTest {
     @Test
     fun droneCardIsAlwaysDrawn() {
         for ((tag, dims) in sizes) {
-            val (w, h) = dims
-            val screen = drawOnce(w, h)
+            val (w, h, dens) = dims
+            val screen = drawOnce(w, h, dens)
             val card = screen.debugBoxes().firstOrNull { it.name == "droneCard" || it.name == "droneY" }
                 ?: fail("$tag: کارت «پهباد انتخابی» رسم نشد — همان باگ «اون پایینش باید پهباد باشه»")
             assertTrue("$tag: ارتفاع کارت پهباد ${card.rect.height().toInt()} کم است",
@@ -125,8 +126,8 @@ class BriefingLayoutTest {
     @Test
     fun subtitleIsInsideBanner() {
         for ((tag, dims) in sizes) {
-            val (w, h) = dims
-            val screen = drawOnce(w, h)
+            val (w, h, dens) = dims
+            val screen = drawOnce(w, h, dens)
             val banner = screen.debugBoxes().firstOrNull { it.name == "banner" }
                 ?: fail("$tag: بنر رسم نشد")
             val sub = screen.debugBoxes().firstOrNull { it.name == "subtitle" }
@@ -146,8 +147,8 @@ class BriefingLayoutTest {
     @Test
     fun droneLabelIsInsideMap() {
         for ((tag, dims) in sizes) {
-            val (w, h) = dims
-            val screen = drawOnce(w, h)
+            val (w, h, dens) = dims
+            val screen = drawOnce(w, h, dens)
             val mapBox = screen.debugBoxes().firstOrNull { it.name == "map" }
                 ?: fail("$tag: جعبهٔ نقشه رسم نشد")
             val label = screen.debugBoxes().firstOrNull { it.name == "droneLabel" }
