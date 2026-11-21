@@ -287,8 +287,10 @@ class BriefingScreen(
      */
     private fun drawDroneCard(
         c: Canvas, x: Float, y: Float, w: Float, right: Float, h: Float,
-        model: DroneModels.Model
+        model: DroneModels.Model, k: Float = 1f
     ) {
+        fun v(value: Float): Float = value * k
+        fun fs(value: Float): Float = (value * k).coerceAtLeast(value * 0.62f)
         mark("droneCard", x, y, x + w, y + h)
         ui.panel(c, x, y, w, h)
         val sideName = when (model.id) {
@@ -297,10 +299,10 @@ class BriefingScreen(
             "shahedx" -> "drone_x_side"
             else -> "drone_131_side"
         }
-        val imgW = dp(86f)
-        ui.imageFit(ui.context, c, sideName, x + dp(6f), y + dp(3f), imgW, h - dp(6f))
-        ui.text(c, "پهباد انتخابی: " + model.name, right - dp(12f), y + dp(15f), dp(12.5f), model.color,
-            bold = true, align = Paint.Align.RIGHT)
+        val imgW = dp(86f) * k.coerceAtLeast(0.72f)
+        ui.imageFit(ui.context, c, sideName, x + dp(6f), y + v(dp(3f)), imgW, h - v(dp(6f)))
+        ui.text(c, "پهباد انتخابی: " + model.name, right - dp(12f), y + v(dp(15f)), fs(dp(12.5f)),
+            model.color, bold = true, align = Paint.Align.RIGHT)
         val stats = listOf(
             Pair("برد", UpgradeKind.RANGE),
             Pair("سرعت", UpgradeKind.SPEED),
@@ -308,14 +310,14 @@ class BriefingScreen(
             Pair("مقاومت", UpgradeKind.ARMOR)
         )
         val colW = (w - imgW - dp(28f)) / stats.size
-        val showLevel = h >= dp(66f)
+        val showLevel = h >= dp(66f) * k
         for ((i, st) in stats.withIndex()) {
             val cxs = right - dp(12f) - colW * i - colW / 2f
-            ui.text(c, st.first, cxs, y + dp(34f), dp(9.5f), Theme.TEXT_FAINT)
+            ui.text(c, st.first, cxs, y + v(dp(34f)), fs(dp(9.5f)), Theme.TEXT_FAINT)
             val lvl = save.upgradeLevel(model.id, st.second)
-            ui.text(c, st.second.valueAt(lvl, model), cxs, y + dp(50f), dp(10.5f), Theme.TEXT)
+            ui.text(c, st.second.valueAt(lvl, model), cxs, y + v(dp(50f)), fs(dp(10.5f)), Theme.TEXT)
             if (showLevel) {
-                ui.text(c, "سطح " + Fa.num(lvl), cxs, y + dp(64f), dp(9f), Theme.TEXT_DIM)
+                ui.text(c, "سطح " + Fa.num(lvl), cxs, y + v(dp(64f)), fs(dp(9f)), Theme.TEXT_DIM)
             }
         }
     }
@@ -325,80 +327,82 @@ class BriefingScreen(
         val w = vw - x - dp(16f)
         val right = x + w
         val bottom = vh - dp(74f)
-        val gap = dp(6f)
+        val top = dp(76f)
 
-        // ------------------------------------------------------- اولویت‌بندی
-        //
-        // ترتیب رسم از بالا به پایین است، ولی **بودجه** را از پایین به بالا
-        // می‌بندیم: کارت پهباد همیشه جای رزرو دارد، چون کاربر صریح گفت
-        // «اون پایینش باید پهباد شاهد باشه». قبلاً هر پنل با `fits()` سهم
-        // خودش را از بالا برمی‌داشت و کارت پهباد ته صف، در صفحهٔ کوتاه
-        // هیچ سهمی نمی‌گرفت و کلاً رسم نمی‌شد.
         val model = save.effectiveDrone()
-        val droneH = dp(70f)
 
-        // ارتفاع‌های مطلوب سه پنل اول
-        val briefLines = ui.wrap(level.briefing, dp(11f), w - dp(26f))
-        val briefWant = dp(30f) + briefLines.size * dp(15f)
-
+        // ------------------------------------------------------ ضریب تناسب
+        //
+        // چرا لازم شد: با چگالی واقعی (۲.۷۵) در گوشی ۷۲۰×۳۶۰ مجموع ارتفاع
+        // چهار پنل از فضای ستون بیشتر می‌شد و کارت پهباد — که کاربر صریح
+        // گفت باید باشد — ته صف می‌افتاد و حذف می‌شد.
+        //
+        // راه: اول ارتفاع «طبیعی» همهٔ پنل‌ها حساب می‌شود، بعد یک ضریب k
+        // که همهٔ ارتفاع‌ها و فونت‌ها را با هم کوچک می‌کند تا در فضای موجود
+        // جا شوند. کوچک‌کردن **همه‌چیز با هم** چیدمان را به‌هم نمی‌ریزد،
+        // برخلاف حذف یک پنل یا فشردن فقط فاصله‌ها.
+        val briefLinesAll = ui.wrap(level.briefing, dp(11f), w - dp(26f))
         val cruise = model.speedAt(save.upgradeLevel(model.id, UpgradeKind.SPEED)) * 0.8f / 3.6f
         val par = StarRules.parTime(level.distance, cruise, level.targets)
         val preview = StarRules.preview(level.targets, par, world.bonuses.size)
-        val starsWant = dp(24f) + preview.size * dp(22f)
-        val chipsWant = dp(58f)
-
         val hint = level.tutorial
         val hintLines = if (hint != null && save.showHints) ui.wrap("راهنما: " + hint, dp(11f), w - dp(24f)) else emptyList()
 
-        // فضای آزاد بعد از رزرو کارت پهباد
-        val top = dp(78f)
-        val avail = bottom - top - droneH - gap
-        val need = briefWant + gap + starsWant + gap + chipsWant
-        val slack = avail - need
+        val gUnit = dp(6f)
+        val briefUnit = dp(30f) + briefLinesAll.size * dp(15f)
+        val starsUnit = dp(24f) + preview.size * dp(22f)
+        val chipsUnit = dp(58f)
+        val droneUnit = dp(70f)
+        val hintUnit = if (hintLines.isEmpty()) 0f else dp(16f) + hintLines.size * dp(15f)
+        val needUnit = briefUnit + starsUnit + chipsUnit + droneUnit + hintUnit + gUnit * 4
+        val availUnit = bottom - top
+        val k = (availUnit / needUnit).coerceIn(0.60f, 1f)
+
+        // هر ارتفاع/فونت عمودی از این دو عبور می‌کند
+        fun v(value: Float): Float = value * k
+        fun fs(value: Float): Float = (value * k).coerceAtLeast(value * 0.62f)
+        val gap = v(6f)
 
         var y = top
 
         // ---------------------------------------------------------- بریفینگ
-        // اگر فضا کم بود، بریفینگ تا ۲ سطر کوتاه می‌شود (نه حذف کامل)؛
-        // متن بلندتر از ۲ سطر در این صفحه فقط نقشه را شلوغ می‌کند.
-        val briefMaxLines = if (slack < -dp(20f)) 2 else briefLines.size
-        val shownBrief = briefLines.take(briefMaxLines)
-        val briefH = dp(30f) + shownBrief.size * dp(15f)
+        val briefLines = briefLinesAll
+        val briefH = v(dp(30f)) + briefLines.size * v(dp(15f))
         ui.panel(c, x, y, w, briefH)
-        ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + dp(17f), dp(13.5f), Theme.AMBER,
-            bold = true, align = Paint.Align.RIGHT)
-        var ty = y + dp(36f)
-        for (line in shownBrief) {
-            ui.text(c, line, right - dp(14f), ty, dp(11f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
-            ty += dp(15f)
+        ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + v(dp(17f)), fs(dp(13.5f)),
+            Theme.AMBER, bold = true, align = Paint.Align.RIGHT)
+        var ty = y + v(dp(36f))
+        for (line in briefLines) {
+            ui.text(c, line, right - dp(14f), ty, fs(dp(11f)), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
+            ty += v(dp(15f))
         }
         y += briefH + gap
 
         // ------------------------------------------------------ شرط ستاره‌ها
-        ui.panel(c, x, y, w, starsWant, Theme.withAlpha(Theme.AMBER, 0.08f),
+        ui.panel(c, x, y, w, starsUnit * k, Theme.withAlpha(Theme.AMBER, 0.08f),
             Theme.withAlpha(Theme.AMBER, 0.35f))
-        ui.text(c, "شرط ستاره‌ها", right - dp(12f), y + dp(14f), dp(12f), Theme.AMBER, bold = true,
-            align = Paint.Align.RIGHT)
-        ui.text(c, "ستاره‌ی خودت را قبل از پرواز بشناس", x + dp(12f), y + dp(14f), dp(9.5f),
+        ui.text(c, "شرط ستاره‌ها", right - dp(12f), y + v(dp(14f)), fs(dp(12f)), Theme.AMBER,
+            bold = true, align = Paint.Align.RIGHT)
+        ui.text(c, "ستاره‌ی خودت را قبل از پرواز بشناس", x + dp(12f), y + v(dp(14f)), fs(dp(9.5f)),
             Theme.TEXT_FAINT, align = Paint.Align.LEFT)
-        var sy = y + dp(32f)
+        var sy = y + v(dp(32f))
         for (rule in preview) {
-            ui.star(c, right - dp(16f), sy, dp(6f), true, Theme.withAlpha(Theme.AMBER, 0.75f))
-            ui.text(c, rule.requirement, right - dp(30f), sy, dp(10f), Theme.TEXT,
+            ui.star(c, right - dp(16f), sy, v(dp(6f)), true, Theme.withAlpha(Theme.AMBER, 0.75f))
+            ui.text(c, rule.requirement, right - dp(30f), sy, fs(dp(10f)), Theme.TEXT,
                 align = Paint.Align.RIGHT)
-            sy += dp(22f)
+            sy += v(dp(22f))
         }
-        y += starsWant + gap
+        y += starsUnit * k + gap
 
         // ------------------------------------------------------------ چالش‌ها
-        ui.panel(c, x, y, w, chipsWant)
-        ui.text(c, "چالش این ماموریت", right - dp(14f), y + dp(15f), dp(11f), Theme.TEXT, bold = true,
-            align = Paint.Align.RIGHT)
+        ui.panel(c, x, y, w, chipsUnit * k)
+        ui.text(c, "چالش این ماموریت", right - dp(14f), y + v(dp(15f)), fs(dp(11f)), Theme.TEXT,
+            bold = true, align = Paint.Align.RIGHT)
         // لهجه نازک بالای پنل
         ui.fill.color = Theme.withAlpha(Theme.MINT, 0.22f)
-        c.drawRoundRect(x + dp(10f), y + dp(7f), x + w - dp(10f), y + dp(9f), dp(2f), dp(2f), ui.fill)
+        c.drawRoundRect(x + dp(10f), y + v(dp(7f)), x + w - dp(10f), y + v(dp(9f)), dp(2f), dp(2f), ui.fill)
         var cxChip = right - dp(46f)
-        val chipY = y + dp(38f)
+        val chipY = y + v(dp(38f))
         val chips = ArrayList<Pair<String, Int>>()
         chips.add(Pair(level.newChallenge, Theme.difficultyColor(level.difficulty)))
         if (level.aaSites > 0) chips.add(Pair("پدافند " + Fa.num(level.aaSites), Theme.RED))
@@ -408,33 +412,30 @@ class BriefingScreen(
         if (level.wind > 0.3f) chips.add(Pair("باد شدید", Theme.TEXT_DIM))
         if (level.timeLimit > 0f) chips.add(Pair("زمان " + Fa.num(level.timeLimit, 0) + " ثانیه", Theme.AMBER))
         for (ch in chips) {
-            val cw = ui.measure(ch.first, dp(10.5f)) + dp(20f)
+            val cw = ui.measure(ch.first, fs(dp(10.5f))) + dp(20f)
             if (cxChip - cw < x + dp(10f)) break
-            ui.chip(c, cxChip - cw / 2f, chipY, ch.first, ch.second, dp(10.5f))
+            ui.chip(c, cxChip - cw / 2f, chipY, ch.first, ch.second, fs(dp(10.5f)))
             cxChip -= cw + dp(8f)
         }
-        y += chipsWant + gap
+        y += chipsUnit * k + gap
 
         // ------------------------------------------------------ پهباد انتخابی
-        // همیشه رسم می‌شود. اگر فضای باقی‌مانده از ارتفاع مطلوب بیشتر باشد
-        // همان‌جا می‌نشیند؛ اگر کمتر، تا پایین کادر کشیده/کوتاه می‌شود و
-        // **هیچ‌وقت** حذف نمی‌شود.
-        val droneY = minOf(y, bottom - droneH)
-        drawDroneCard(c, x, droneY, w, right, droneH, model)
-        y = droneY + droneH + gap
+        // با ضریب k همیشه جا می‌شود و **هرگز** حذف نمی‌شود.
+        val droneH = droneUnit * k
+        mark("droneY", x, y, x + w, y + droneH)
+        drawDroneCard(c, x, y, w, right, droneH, model, k)
+        y += droneH + gap
 
         // ----------------------------------------------------------- راهنما
-        // فقط اگر بعد از کارت پهباد جا ماند (کمترین اولویت، ولی هرگز
-        // جای کارت پهباد را نمی‌گیرد).
         if (hintLines.isNotEmpty()) {
-            val hintH = dp(16f) + hintLines.size * dp(15f)
+            val hintH = v(dp(16f)) + hintLines.size * v(dp(15f))
             if (y + hintH <= bottom + dp(1f)) {
                 ui.panel(c, x, y, w, hintH, Theme.withAlpha(Theme.MINT, 0.1f),
                     Theme.withAlpha(Theme.MINT, 0.4f))
-                var hy = y + dp(15f)
+                var hy = y + v(dp(15f))
                 for (line in hintLines) {
-                    ui.text(c, line, right - dp(12f), hy, dp(11f), Theme.MINT, align = Paint.Align.RIGHT)
-                    hy += dp(15f)
+                    ui.text(c, line, right - dp(12f), hy, fs(dp(11f)), Theme.MINT, align = Paint.Align.RIGHT)
+                    hy += v(dp(15f))
                 }
             }
         }

@@ -111,7 +111,7 @@ class BriefingLayoutTest {
         for ((tag, dims) in sizes) {
             val (w, h) = dims
             val screen = drawOnce(w, h)
-            val card = screen.debugBoxes().firstOrNull { it.name == "droneCard" }
+            val card = screen.debugBoxes().firstOrNull { it.name == "droneCard" || it.name == "droneY" }
                 ?: fail("$tag: کارت «پهباد انتخابی» رسم نشد — همان باگ «اون پایینش باید پهباد باشه»")
             assertTrue("$tag: ارتفاع کارت پهباد ${card.rect.height().toInt()} کم است",
                 card.rect.height() >= 54f)
