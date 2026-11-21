@@ -104,12 +104,16 @@ class InfoScreenTest {
             val (w, h, dens) = dims
             val (_, screen) = build(w, h, dens)
             draw(screen, w, h)
-            assertTrue("$tag: متن حریم خصوصی خالی است", screen.allLines().size >= 12)
-            // اگر متن از صفحه بلندتر است، باید اسکرول داشته باشد
+            // روی صفحهٔ پهن، متن در خطوط کمتری جا می‌شود — پس معیار
+            // «تعداد خط» نیست، «محتوا رسیده» است. ۷ بلوک داریم، پس دست‌کم
+            // ۷ خط باید باشد (هر بلوک حداقل یک خط).
+            val all = screen.allLines()
+            assertTrue("$tag: متن حریم خصوصی خالی است", all.size >= 7)
+            val joined = all.joinToString(" ")
+            assertTrue("$tag: متن بریده/ناقص است (${joined.length} کاراکتر)",
+                joined.length >= 400)
             val content = screen.contentRect()
             assertTrue("$tag: ناحیهٔ متن ارتفاع ندارد", content.height() > 0f)
-            // scrollRange == 0 یعنی همه‌چیز جا شده؛ > 0 یعنی راه رسیدن هست.
-            // هر دو حالت درست است، ولی منفی‌شدن غلط است.
             assertTrue("$tag: scrollRange منفی شد", screen.scrollRange() >= 0f)
         }
     }
