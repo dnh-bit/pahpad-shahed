@@ -254,7 +254,10 @@ class BriefingScreen(
         Deco.droneMapIcon(this, c, lx, ly, dp(9f), Theme.MINT, save.selectedDroneId, 0f)
         // plot از قبل نوار راهنما را کنار گذاشته، پس «پایین آیکون»
         // همیشه داخل ناحیهٔ ترسیم است و به نوار رنگی نمی‌رسد.
-        val labelY = (ly + dp(22f)).coerceAtMost(plot.bottom - dp(4f))
+        // برچسب همیشه **بالای** آیکون. پایین آیکون لبهٔ ناحیهٔ ترسیم و
+        // نوار راهنمای رنگی است؛ هر تلاشی برای جا دادن برچسب آنجا یا روی
+        // نوار می‌افتاد یا با clamp روی خود آیکون (باگ تست).
+        val labelY = (ly - dp(16f)).coerceAtLeast(plot.top + dp(12f))
         mark("droneIcon", lx - dp(12f), ly - dp(12f), lx + dp(12f), ly + dp(12f))
         val dW = ui.measure("پهباد شاهد", dp(10.5f))
         mark("droneLabel", lx - dW / 2f, labelY - dp(10.5f), lx + dW / 2f, labelY + dp(3f))
