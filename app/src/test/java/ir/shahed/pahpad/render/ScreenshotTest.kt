@@ -101,6 +101,9 @@ class ScreenshotTest {
             shoot("levels_c3", LevelSelectScreen(activity, 3), w, h, tag)
             shoot("shop", ShopScreen(activity), w, h, tag)
             shoot("settings", SettingsScreen(activity), w, h, tag)
+            // صفحه‌های «درباره» و «حریم خصوصی» — شرط فروشگاه: متن آفلاین و خوانا
+            shoot("about", ir.shahed.pahpad.screens.InfoPages.about(activity), w, h, tag)
+            shoot("privacy", ir.shahed.pahpad.screens.InfoPages.privacy(activity), w, h, tag)
             // صفحهٔ بریفینگ — نقشهٔ اهداف، کارت پهباد و زیرنویس بنر باید
             // با چشم دیده شوند، نه فقط با assert.
             shoot("briefing", ir.shahed.pahpad.screens.BriefingScreen(activity,

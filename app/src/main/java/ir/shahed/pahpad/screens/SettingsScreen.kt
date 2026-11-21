@@ -50,11 +50,17 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
         }
     }
 
+    // ── برنامه ──
+    private val about = UiButton("درباره", Theme.BLUE) { game.show(InfoPages.about(game)) }
+    private val privacy = UiButton("حریم خصوصی", Theme.BLUE) { game.show(InfoPages.privacy(game)) }
+
     private val back = UiButton("بازگشت", Theme.TEXT_DIM) { game.show(MainMenuScreen(game)) }
 
     private val audioItems = listOf(sound, vibrate, control, invert, hints)
     private val gfxItems = listOf(quality, effects, fps, showFps)
-    private val items = audioItems + gfxItems + listOf(reset)
+    private val appItems = listOf(about, privacy)
+    private val items = audioItems + gfxItems + listOf(reset) + appItems
+
 
     init {
         // دکمه‌های اسکرول‌شونده فقط از طریق viewport هندل می‌شوند
@@ -121,7 +127,8 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
 
         val contentH = sectionHeight(audioItems.size) +
             sectionHeight(gfxItems.size) +
-            sectionHeight(1)
+            sectionHeight(1) +
+            sectionHeight(appItems.size)
 
         maxScroll = (contentH - viewport.height()).coerceAtLeast(0f)
         scrollY = scrollY.coerceIn(0f, maxScroll)
@@ -148,6 +155,7 @@ class SettingsScreen(game: MainActivity) : BaseScreen(game) {
         placeSection("صدا و کنترل", audioItems, Theme.MINT)
         placeSection("گرافیک", gfxItems, Theme.VIOLET)
         placeSection("پیشرفت", listOf(reset), Theme.RED)
+        placeSection("برنامه", appItems, Theme.BLUE)
 
         sectionTitles = titles
 
