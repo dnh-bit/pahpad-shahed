@@ -325,104 +325,110 @@ class BriefingScreen(
         val w = vw - x - dp(16f)
         val right = x + w
         val bottom = vh - dp(74f)
-        var y = dp(78f)
         val gap = dp(6f)
 
-        fun fits(height: Float): Boolean = y + height <= bottom
-
-        // ---------------------------------------------------------- بریفینگ
+        // ------------------------------------------------------- اولویت‌بندی
         //
-        // چرا ارتفاع پنل‌ها فشرده شد: در گوشی‌های ۲۰:۹ ستون اطلاعات از
-        // بنر تا نوار دکمه‌ها فقط ~dp(560) جا دارد و چهار پنل با اندازه‌های
-        // قبلی روی هم ~dp(600) می‌شدند. آخرین پنل («پهباد انتخابی») با
-        // `fits()` رد می‌شد و **کلاً کشیده نمی‌شد** — همان چیزی که کاربر
-        // دید: «اون پایینش باید پهباد شاهد باشه». فشرده‌کردن فاصله‌ها
-        // جای کارت پهباد را باز می‌کند؛ ترتیب اولویت هم حفظ می‌شود.
-        val briefLines = ui.wrap(level.briefing, dp(11f), w - dp(26f))
-        val briefH = dp(30f) + briefLines.size * dp(15f)
-        if (fits(briefH)) {
-            ui.panel(c, x, y, w, briefH)
-            ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + dp(17f), dp(13.5f), Theme.AMBER,
-                bold = true, align = Paint.Align.RIGHT)
-            var ty = y + dp(36f)
-            for (line in briefLines) {
-                ui.text(c, line, right - dp(14f), ty, dp(11f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
-                ty += dp(15f)
-            }
-            y += briefH + gap
-        }
-
-        // ------------------------------------------------------ شرط ستاره‌ها
+        // ترتیب رسم از بالا به پایین است، ولی **بودجه** را از پایین به بالا
+        // می‌بندیم: کارت پهباد همیشه جای رزرو دارد، چون کاربر صریح گفت
+        // «اون پایینش باید پهباد شاهد باشه». قبلاً هر پنل با `fits()` سهم
+        // خودش را از بالا برمی‌داشت و کارت پهباد ته صف، در صفحهٔ کوتاه
+        // هیچ سهمی نمی‌گرفت و کلاً رسم نمی‌شد.
         val model = save.effectiveDrone()
+        val droneH = dp(70f)
+
+        // ارتفاع‌های مطلوب سه پنل اول
+        val briefLines = ui.wrap(level.briefing, dp(11f), w - dp(26f))
+        val briefWant = dp(30f) + briefLines.size * dp(15f)
+
         val cruise = model.speedAt(save.upgradeLevel(model.id, UpgradeKind.SPEED)) * 0.8f / 3.6f
         val par = StarRules.parTime(level.distance, cruise, level.targets)
         val preview = StarRules.preview(level.targets, par, world.bonuses.size)
-        val starsH = dp(24f) + preview.size * dp(22f)
-        if (fits(starsH)) {
-            ui.panel(c, x, y, w, starsH, Theme.withAlpha(Theme.AMBER, 0.08f),
-                Theme.withAlpha(Theme.AMBER, 0.35f))
-            ui.text(c, "شرط ستاره‌ها", right - dp(12f), y + dp(14f), dp(12f), Theme.AMBER, bold = true,
-                align = Paint.Align.RIGHT)
-            ui.text(c, "ستاره‌ی خودت را قبل از پرواز بشناس", x + dp(12f), y + dp(14f), dp(9.5f),
-                Theme.TEXT_FAINT, align = Paint.Align.LEFT)
-            var sy = y + dp(32f)
-            for (rule in preview) {
-                ui.star(c, right - dp(16f), sy, dp(6f), true, Theme.withAlpha(Theme.AMBER, 0.75f))
-                ui.text(c, rule.requirement, right - dp(30f), sy, dp(10f), Theme.TEXT,
-                    align = Paint.Align.RIGHT)
-                sy += dp(22f)
-            }
-            y += starsH + gap
+        val starsWant = dp(24f) + preview.size * dp(22f)
+        val chipsWant = dp(58f)
+
+        val hint = level.tutorial
+        val hintLines = if (hint != null && save.showHints) ui.wrap("راهنما: " + hint, dp(11f), w - dp(24f)) else emptyList()
+
+        // فضای آزاد بعد از رزرو کارت پهباد
+        val top = dp(78f)
+        val avail = bottom - top - droneH - gap
+        val need = briefWant + gap + starsWant + gap + chipsWant
+        val slack = avail - need
+
+        var y = top
+
+        // ---------------------------------------------------------- بریفینگ
+        // اگر فضا کم بود، بریفینگ تا ۲ سطر کوتاه می‌شود (نه حذف کامل)؛
+        // متن بلندتر از ۲ سطر در این صفحه فقط نقشه را شلوغ می‌کند.
+        val briefMaxLines = if (slack < -dp(20f)) 2 else briefLines.size
+        val shownBrief = briefLines.take(briefMaxLines)
+        val briefH = dp(30f) + shownBrief.size * dp(15f)
+        ui.panel(c, x, y, w, briefH)
+        ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + dp(17f), dp(13.5f), Theme.AMBER,
+            bold = true, align = Paint.Align.RIGHT)
+        var ty = y + dp(36f)
+        for (line in shownBrief) {
+            ui.text(c, line, right - dp(14f), ty, dp(11f), Theme.TEXT_DIM, align = Paint.Align.RIGHT)
+            ty += dp(15f)
         }
+        y += briefH + gap
+
+        // ------------------------------------------------------ شرط ستاره‌ها
+        ui.panel(c, x, y, w, starsWant, Theme.withAlpha(Theme.AMBER, 0.08f),
+            Theme.withAlpha(Theme.AMBER, 0.35f))
+        ui.text(c, "شرط ستاره‌ها", right - dp(12f), y + dp(14f), dp(12f), Theme.AMBER, bold = true,
+            align = Paint.Align.RIGHT)
+        ui.text(c, "ستاره‌ی خودت را قبل از پرواز بشناس", x + dp(12f), y + dp(14f), dp(9.5f),
+            Theme.TEXT_FAINT, align = Paint.Align.LEFT)
+        var sy = y + dp(32f)
+        for (rule in preview) {
+            ui.star(c, right - dp(16f), sy, dp(6f), true, Theme.withAlpha(Theme.AMBER, 0.75f))
+            ui.text(c, rule.requirement, right - dp(30f), sy, dp(10f), Theme.TEXT,
+                align = Paint.Align.RIGHT)
+            sy += dp(22f)
+        }
+        y += starsWant + gap
 
         // ------------------------------------------------------------ چالش‌ها
-        val chipsH = dp(58f)
-        if (fits(chipsH)) {
-            ui.panel(c, x, y, w, chipsH)
-            ui.text(c, "چالش این ماموریت", right - dp(14f), y + dp(15f), dp(11f), Theme.TEXT, bold = true,
-                align = Paint.Align.RIGHT)
-            // لهجه نازک بالای پنل
-            ui.fill.color = Theme.withAlpha(Theme.MINT, 0.22f)
-            c.drawRoundRect(x + dp(10f), y + dp(7f), x + w - dp(10f), y + dp(9f), dp(2f), dp(2f), ui.fill)
-            var cxChip = right - dp(46f)
-            val chipY = y + dp(38f)
-            val chips = ArrayList<Pair<String, Int>>()
-            chips.add(Pair(level.newChallenge, Theme.difficultyColor(level.difficulty)))
-            if (level.aaSites > 0) chips.add(Pair("پدافند " + Fa.num(level.aaSites), Theme.RED))
-            if (level.radarZones > 0) chips.add(Pair("رادار", Theme.BLUE))
-            if (level.ewZones > 0) chips.add(Pair("جنگ الکترونیک", Theme.VIOLET))
-            if (level.movingTarget) chips.add(Pair("هدف متحرک", Theme.ORANGE))
-            if (level.wind > 0.3f) chips.add(Pair("باد شدید", Theme.TEXT_DIM))
-            if (level.timeLimit > 0f) chips.add(Pair("زمان " + Fa.num(level.timeLimit, 0) + " ثانیه", Theme.AMBER))
-            for (ch in chips) {
-                val cw = ui.measure(ch.first, dp(10.5f)) + dp(20f)
-                if (cxChip - cw < x + dp(10f)) break
-                ui.chip(c, cxChip - cw / 2f, chipY, ch.first, ch.second, dp(10.5f))
-                cxChip -= cw + dp(8f)
-            }
-            y += chipsH + gap
+        ui.panel(c, x, y, w, chipsWant)
+        ui.text(c, "چالش این ماموریت", right - dp(14f), y + dp(15f), dp(11f), Theme.TEXT, bold = true,
+            align = Paint.Align.RIGHT)
+        // لهجه نازک بالای پنل
+        ui.fill.color = Theme.withAlpha(Theme.MINT, 0.22f)
+        c.drawRoundRect(x + dp(10f), y + dp(7f), x + w - dp(10f), y + dp(9f), dp(2f), dp(2f), ui.fill)
+        var cxChip = right - dp(46f)
+        val chipY = y + dp(38f)
+        val chips = ArrayList<Pair<String, Int>>()
+        chips.add(Pair(level.newChallenge, Theme.difficultyColor(level.difficulty)))
+        if (level.aaSites > 0) chips.add(Pair("پدافند " + Fa.num(level.aaSites), Theme.RED))
+        if (level.radarZones > 0) chips.add(Pair("رادار", Theme.BLUE))
+        if (level.ewZones > 0) chips.add(Pair("جنگ الکترونیک", Theme.VIOLET))
+        if (level.movingTarget) chips.add(Pair("هدف متحرک", Theme.ORANGE))
+        if (level.wind > 0.3f) chips.add(Pair("باد شدید", Theme.TEXT_DIM))
+        if (level.timeLimit > 0f) chips.add(Pair("زمان " + Fa.num(level.timeLimit, 0) + " ثانیه", Theme.AMBER))
+        for (ch in chips) {
+            val cw = ui.measure(ch.first, dp(10.5f)) + dp(20f)
+            if (cxChip - cw < x + dp(10f)) break
+            ui.chip(c, cxChip - cw / 2f, chipY, ch.first, ch.second, dp(10.5f))
+            cxChip -= cw + dp(8f)
         }
+        y += chipsWant + gap
 
         // ------------------------------------------------------ پهباد انتخابی
-        //
-        // ارتفاع ۷۴dp است نه ۸۴dp تا با فشرده‌سازی بالای صفحه در همهٔ
-        // نسبت‌های تصویر جا شود. اگر حتی الان هم جا نشد، به‌جای حذف کامل
-        // فقط ارتفاع را تا سقف فضای مانده کوتاه می‌کنیم — کارت پهباد
-        // آخرین چیزی است که می‌تواند غیب شود.
-        val droneWant = dp(74f)
-        val droneSpace = bottom - y
-        if (droneSpace >= dp(54f)) {
-            val droneH = minOf(droneWant, droneSpace)
-            drawDroneCard(c, x, y, w, right, droneH, model)
-            y += droneH + gap
-        }
+        // همیشه رسم می‌شود. اگر فضای باقی‌مانده از ارتفاع مطلوب بیشتر باشد
+        // همان‌جا می‌نشیند؛ اگر کمتر، تا پایین کادر کشیده/کوتاه می‌شود و
+        // **هیچ‌وقت** حذف نمی‌شود.
+        val droneY = minOf(y, bottom - droneH)
+        drawDroneCard(c, x, droneY, w, right, droneH, model)
+        y = droneY + droneH + gap
 
         // ----------------------------------------------------------- راهنما
-        val hint = level.tutorial
-        if (hint != null && save.showHints) {
-            val hintLines = ui.wrap("راهنما: " + hint, dp(11f), w - dp(24f))
+        // فقط اگر بعد از کارت پهباد جا ماند (کمترین اولویت، ولی هرگز
+        // جای کارت پهباد را نمی‌گیرد).
+        if (hintLines.isNotEmpty()) {
             val hintH = dp(16f) + hintLines.size * dp(15f)
-            if (fits(hintH)) {
+            if (y + hintH <= bottom + dp(1f)) {
                 ui.panel(c, x, y, w, hintH, Theme.withAlpha(Theme.MINT, 0.1f),
                     Theme.withAlpha(Theme.MINT, 0.4f))
                 var hy = y + dp(15f)
