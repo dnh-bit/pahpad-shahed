@@ -454,7 +454,15 @@ class World(val level: LevelDef, seed: Long, private val difficultyScale: Float 
             TargetShape.TRAIN -> 24f + rnd.nextFloat() * 8f
             else -> 0f
         }
-        val label = if (index == 0) level.targetName else "هدف فرعی " + Fa.num(index + 1)
+        val label = if (index == 0) level.targetName else {
+            val faction = when {
+                "آمریکا" in level.targetName && "اسرائیل" in level.targetName -> " ارتش‌های تروریستی آمریکا و اسرائیل"
+                "اسرائیل" in level.targetName -> " ارتش تروریستی اسرائیل"
+                "آمریکا" in level.targetName -> " ارتش تروریستی آمریکا"
+                else -> ""
+            }
+            "هدف فرعی " + Fa.num(index + 1) + faction
+        }
         return when (shape) {
             TargetShape.BUNKER -> Target(x, z, shape, 26f, 9f, 26f, 15f, false, 0f, 0f, label)
             TargetShape.BUILDING -> Target(x, z, shape, 40f, 26f, 34f, 22f, false, 0f, 0f, label)

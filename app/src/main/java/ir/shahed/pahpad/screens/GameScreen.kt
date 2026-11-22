@@ -1089,13 +1089,17 @@ class GameScreen(
         ui.text(c, "آماده پرتاب", cx, y, titleSize, Theme.MINT, bold = true)
         y += titleSize * 1.6f
 
-        val targetSize = dp(14f)
-        var target = "هدف: " + (mission.world.activeTarget()?.label ?: level.targetName)
-        val maxLineW = vw * 0.62f
+        val targetFull = "هدف: " + (mission.world.activeTarget()?.label ?: level.targetName)
+        val maxLineW = vw * 0.80f
+        var targetSize = dp(14f)
+        while (targetSize > dp(10.5f) && ui.measure(targetFull, targetSize) > maxLineW) {
+            targetSize -= dp(0.5f)
+        }
+        var target = targetFull
         while (ui.measure(target, targetSize) > maxLineW && target.length > 12) {
             target = target.dropLast(2)
         }
-        if (target != "هدف: " + (mission.world.activeTarget()?.label ?: level.targetName)) target += "…"
+        if (target != targetFull) target += "…"
         ui.text(c, target, cx, y, targetSize, Theme.TEXT)
         y += targetSize * 1.9f
 

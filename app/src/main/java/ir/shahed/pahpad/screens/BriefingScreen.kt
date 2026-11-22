@@ -369,7 +369,21 @@ class BriefingScreen(
         val briefLines = briefLinesAll
         val briefH = v(dp(30f)) + briefLines.size * v(dp(15f))
         ui.panel(c, x, y, w, briefH)
-        ui.text(c, "هدف: " + level.targetName, right - dp(14f), y + v(dp(17f)), fs(dp(13.5f)),
+        val targetRaw = "هدف: " + level.targetName
+        val targetMaxW = w - dp(28f)
+        var targetSize = fs(dp(13.5f))
+        val targetMinSize = dp(8.5f)
+        while (targetSize > targetMinSize && ui.measure(targetRaw, targetSize, bold = true) > targetMaxW) {
+            targetSize -= dp(0.5f)
+        }
+        val targetText = if (ui.measure(targetRaw, targetSize, bold = true) > targetMaxW) {
+            var t = targetRaw
+            while (t.length > 6 && ui.measure(t + "…", targetSize, bold = true) > targetMaxW) {
+                t = t.dropLast(1)
+            }
+            t + "…"
+        } else targetRaw
+        ui.text(c, targetText, right - dp(14f), y + v(dp(17f)), targetSize,
             Theme.AMBER, bold = true, align = Paint.Align.RIGHT)
         var ty = y + v(dp(36f))
         for (line in briefLines) {
