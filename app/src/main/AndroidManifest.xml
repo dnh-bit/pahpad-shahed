@@ -7,12 +7,17 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- appCategory="game" برنامه را در «گیمینگ هاب/Game Dashboard» اندروید
-         (12+) و در گروه‌بندی OEM به‌عنوان بازی نشان می‌دهد و مسیر Game Mode
-         API را باز می‌کند (Android 13+). بدون این خط، سیستم برنامه را
-         «کاربردی» می‌بیند. -->
+    <!-- دو نشانهٔ «بازی بودن» با هم:
+         - appCategory="game" → مسیر رسمی (API 26+؛ Game Mode API و
+           Game Dashboard اندروید ۱۲+، Display Compatibility).
+         - isGame="true" → نشانهٔ قدیمی که برخی لانچرها/هاب‌های OEM
+           (MIUI Game Turbo، ColorOS Game Space) هنوز می‌خوانند.
+         گوگل می‌گوید appCategory جایگزین isGame است، ولی حذف isGame روی
+         دستگاه‌های قدیمی‌تر تشخیص را از دست می‌دهد؛ نگه داشتن هر دو ضرری
+         ندارد و سازگاری را بیشتر می‌کند. -->
     <application
         android:appCategory="game"
+        android:isGame="true"
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
