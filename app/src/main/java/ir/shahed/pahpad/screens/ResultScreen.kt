@@ -33,6 +33,10 @@ class ResultScreen(
     private val nextLevel = if (mode == MissionMode.STORY) Levels.next(level) else null
     private val rules = res.starRules()
 
+    /** برای سیاست تبلیغ در MainActivity — باخت/لغو، بدون باز کردن کل نتیجه */
+    val lost: Boolean get() = !res.success
+    val aborted: Boolean get() = res.aborted
+
     private val again = UiButton("تلاش مجدد", Theme.AMBER) {
         // از صفحهٔ آماده‌سازی برو تا لگ فریم اول برنگردد.
         game.show(LoadingScreen(game, level, mode, Seeds.forMission(level, mode, save)))

@@ -65,10 +65,14 @@ class MainActivity : Activity() {
         if (isFinishing || isDestroyed) return
         // پایان ماموریت → خروج از صفحهٔ نتیجه: اینترستيشال با سقف نمایش،
         // سپس جابه‌جایی صفحه؛ در آفلاین/عدم آمادگی مستقیم جابه‌جا می‌شود.
-        if (current is ResultScreen && screen !is ResultScreen) {
+        val prev = current
+        if (prev is ResultScreen && screen !is ResultScreen) {
             if (transitioning) return
             transitioning = true
-            AdManager.maybeShowInterstitial(this) { reallyShow(screen) }
+            // سیاست: باخت → بنر آنی، هر چند برد → آنی ویدیو، لغو → هیچ
+            AdManager.onMissionFinished(this, lost = prev.lost, aborted = prev.aborted) {
+                reallyShow(screen)
+            }
         } else {
             reallyShow(screen)
         }
