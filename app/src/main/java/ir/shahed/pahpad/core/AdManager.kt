@@ -31,11 +31,13 @@ object AdManager {
     private const val TAG = "AdManager"
 
     // ────────────────────────────────────────────────────────────────────────
-    // ⚠️ TODO(Release): این سه مقدار «کلید تست رسمی تپسل» هستند. قبل از ریلیز
-    //    سری تولیدی، کلیدهای اپ و زون‌های واقعی از پنل app.tapsell.ir بگذار.
-    //    (کلید تست = کلید رسمی نمونهٔ گیت‌هاب تپسل‌پلاس؛ زون‌های تست هم همان‌اند)
+    // کلید اپ: از پنل app.tapsell.ir همین برنامه (ثبت‌شده روی ir.shahed.pahpad).
+    // ⚠️ TODO(Release): ZONE_INTERSTITIAL و ZONE_REWARDED هنوز شناسهٔ زون‌های
+    //    «تست» تپسل‌پلاس‌اند؛ با کلید واقعی کار نمی‌کنند و باید با شناسهٔ دو
+    //    زون ساخته‌شده در همین پنل جایگزین شوند (یک ویدیویی‌جایزه‌ای، یک
+    //    تمام‌صفحه). تا آن موقع هیچ تبلیغی سرو نمی‌شود — عمداً بیلد نمی‌گیریم.
     // ────────────────────────────────────────────────────────────────────────
-    private const val APP_KEY = "alsoatsrtrotpqacegkehkaiieckldhrgsbspqtgqnbrrfccrtbdomgjtahflchkqtqosa"
+    private const val APP_KEY = "shfqoffnjakntlkglqrmrtfagmfbmccjdmpkreqdlipnkimlohabbkjsttmbjeecbodhgb"
     private const val ZONE_INTERSTITIAL = "5cfaa942e8d17f0001ffb292"
     private const val ZONE_REWARDED = "5cfaa802e8d17f0001ffb28e"
 
