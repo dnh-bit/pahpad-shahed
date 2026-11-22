@@ -21,9 +21,8 @@ import ir.tapsell.plus.model.TapsellPlusErrorModel
  * - هیچ درخواست شبکه‌ای در مسیر رسم/حلقهٔ بازی نیست؛ همه‌چیز async است.
  * - درخواست/نمایش فقط بعد از init موفق انجام می‌شود؛ آفلاین چیزی نمی‌شکند
  *   (init fail ساکن است و کال‌بک‌ها همیشه به کاربر برمی‌گردند).
- * - تولید اعلان با کلید تست تا پیش از انتشار؛ قبل از ریلیز نهایی سه ثابت
- *   [APP_KEY]، [ZONE_INTERSTITIAL] و [ZONE_REWARDED] با کلیدهای واقعی
- *   پنل تپسل‌پلاس جایگزین شوند (TODO پایین).
+ * - کلید اپ و هر دو زون از پنل واقعی همین برنامه می‌آیند؛ اگر زون‌ها جابه‌جا
+ *   شوند SDK خطا می‌دهد و هیچ تبلیغی کش نمی‌شود.
  *
  * صفحه‌های بازی فقط با لامبداها با این شیء کار می‌کنند.
  */
@@ -31,15 +30,15 @@ object AdManager {
     private const val TAG = "AdManager"
 
     // ────────────────────────────────────────────────────────────────────────
-    // کلید اپ: از پنل app.tapsell.ir همین برنامه (ثبت‌شده روی ir.shahed.pahpad).
-    // ⚠️ TODO(Release): ZONE_INTERSTITIAL و ZONE_REWARDED هنوز شناسهٔ زون‌های
-    //    «تست» تپسل‌پلاس‌اند؛ با کلید واقعی کار نمی‌کنند و باید با شناسهٔ دو
-    //    زون ساخته‌شده در همین پنل جایگزین شوند (یک ویدیویی‌جایزه‌ای، یک
-    //    تمام‌صفحه). تا آن موقع هیچ تبلیغی سرو نمی‌شود — عمداً بیلد نمی‌گیریم.
+    // کلید و هر دو زون از پنل app.tapsell.ir همین برنامه (ir.shahed.pahpad).
+    //   rewarded_main     → «ویدیو جایزه‌ای (Reward based)»      = ZONE_REWARDED
+    //   interstitial_main → «آنی ویدیو (Interstitial video)»      = ZONE_INTERSTITIAL
+    // اگر این دو جابه‌جا شوند، SDK خطای «zone type mismatch» می‌دهد و هیچ
+    // تبلیغی کش نمی‌شود؛ پس نگاشت بالا مرجع است، نه حدس.
     // ────────────────────────────────────────────────────────────────────────
     private const val APP_KEY = "shfqoffnjakntlkglqrmrtfagmfbmccjdmpkreqdlipnkimlohabbkjsttmbjeecbodhgb"
-    private const val ZONE_INTERSTITIAL = "5cfaa942e8d17f0001ffb292"
-    private const val ZONE_REWARDED = "5cfaa802e8d17f0001ffb28e"
+    private const val ZONE_REWARDED = "6b028cfa6cbc4169d6c38649"
+    private const val ZONE_INTERSTITIAL = "6b028db86cbc4169d6c3864a"
 
     @Volatile private var initialized = false
     @Volatile private var initAttempted = false
